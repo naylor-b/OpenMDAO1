@@ -1111,33 +1111,6 @@ class Problem(System):
 
         return mode
 
-    def _json_system_tree(self):
-        """ Returns a json representation of the system hierarchy for the
-        model in root.
-
-        Returns
-        -------
-        json string
-        """
-
-        def _tree_dict(system):
-            dct = OrderedDict()
-            for s in system.subsystems(recurse=True):
-                if isinstance(s, Group):
-                    dct[s.name] = _tree_dict(s)
-                else:
-                    dct[s.name] = OrderedDict()
-                    for vname, meta in s.unknowns.items():
-                        dct[s.name][vname] = m = meta.copy()
-                        for mname in m:
-                            if isinstance(m[mname], np.ndarray):
-                                m[mname] = m[mname].tolist()
-            return dct
-
-        tree = OrderedDict()
-        tree['root'] = _tree_dict(self.root)
-        return json.dumps(tree)
-
     def _json_dependencies(self):
         """ Returns a json representation of the data dependency graph for
         the model in root..
@@ -1203,6 +1176,33 @@ class Problem(System):
                 self._unit_diffs[(source, target)] = (smeta.get('units'),
                                                       tmeta.get('units'))
 
+def system_tree(system):
+    """ Returns a dict representation of the system hierarchy with
+    this System as root.
+
+    Returns
+    -------
+    dict
+    """
+
+    def _tree_dict(ss):
+        dct = { 'name': ss.name }
+        children = [_tree_dict(s) for s in ss.subsystems()]
+
+        if isinstance(ss, Component):
+            for vname, meta in ss.unknowns.items():
+                size = meta['size'] if meta['size'] else 1
+                children.append({'name': vname, 'size': size })
+
+        dct['children'] = children
+
+        return dct
+
+    tree = _tree_dict(system)
+    if not tree['name']:
+        tree['name'] = 'root'
+
+    return tree  #json.dump(tree, stream)
 
 def _assign_parameters(connections):
     """Map absolute system names to the absolute names of the

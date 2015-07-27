@@ -639,6 +639,7 @@ class System(object):
             return '.'.join((self.pathname, name))
         return name
 
+
 def _get_relname_map(unknowns, unknowns_dict, child_name):
     """
     Args

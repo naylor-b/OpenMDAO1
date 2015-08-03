@@ -339,8 +339,7 @@ class Component(System):
         for group, vois in iteritems(relevance.groups):
             if group is not None:
                 for voi in vois:
-                    self._create_views(top_unknowns, parent, [],
-                                       voi)
+                    self._create_views(top_unknowns, parent, [], voi)
 
         # we don't get non-deriv vecs (u, p, r) unless we have a None group,
         # so force their creation here

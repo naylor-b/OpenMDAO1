@@ -126,7 +126,7 @@ class Problem(System):
         # find any promoted but not connected inputs
         for p, meta in iteritems(params_dict):
             prom = meta['promoted_name']
-            if prom in prom_noconns:
+            if prom != p and prom in prom_noconns:
                 input_sets.setdefault(meta['pathname'], set()).update(prom_noconns[prom])
 
         to_add = []

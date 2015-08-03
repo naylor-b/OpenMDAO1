@@ -703,6 +703,8 @@ class Group(System):
         """
 
         for voi in vois:
+            if not self._relevance.is_relevant_system(voi, system):
+                continue
 
             dresids = system.drmat[voi]
             dunknowns = system.dumat[voi]

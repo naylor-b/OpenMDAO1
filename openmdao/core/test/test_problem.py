@@ -11,10 +11,10 @@ from openmdao.core.component import Component
 from openmdao.core.problem import Problem
 from openmdao.core.checks import ConnectError
 from openmdao.core.group import Group
-from openmdao.components.paramcomp import ParamComp
-from openmdao.components.execcomp import ExecComp
-from openmdao.test.examplegroups import ExampleGroup, ExampleGroupWithPromotes, ExampleByObjGroup
-from openmdao.test.simplecomps import SimpleComp, SimpleImplicitComp, RosenSuzuki, FanIn
+from openmdao.components.param_comp import ParamComp
+from openmdao.components.exec_comp import ExecComp
+from openmdao.test.example_groups import ExampleGroup, ExampleGroupWithPromotes, ExampleByObjGroup
+from openmdao.test.simple_comps import SimpleComp, SimpleImplicitComp, RosenSuzuki, FanIn
 
 
 if PY3:
@@ -51,7 +51,7 @@ class TestProblem(unittest.TestCase):
         try:
             prob.setup(check=False)
         except Exception as error:
-            msg = "Target 'G3.C4.x' is connected to multiple unknowns: ['G3.C3.y', 'G2.C1.x']"
+            msg = "Target 'G3.C4.x' is connected to multiple unknowns: ['G2.C1.x', 'G3.C3.y']"
             self.assertEqual(text_type(error), msg)
         else:
             self.fail("Error expected")

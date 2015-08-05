@@ -1,15 +1,18 @@
 """ Defines the base class for a Component in OpenMDAO."""
+from __future__ import print_function
 
 import sys
+import os
 import re
-from collections import OrderedDict
-from six import iteritems
+from six import iteritems, itervalues, iterkeys
 
 import numpy as np
 
-from openmdao.core.basicimpl import BasicImpl
+from openmdao.core.basic_impl import BasicImpl
 from openmdao.core.system import System
-from openmdao.util.types import is_differentiable
+from openmdao.core.mpi_wrap import MPI
+from collections import OrderedDict
+from openmdao.util.type_util import is_differentiable
 
 # Object to represent default value for `add_output`.
 _NotSet = object()
@@ -17,6 +20,8 @@ _NotSet = object()
 # regex to check for valid variable names.
 namecheck_rgx = re.compile(
     '([_a-zA-Z][_a-zA-Z0-9]*)+(\:[_a-zA-Z][_a-zA-Z0-9]*)*')
+
+trace = os.environ.get('TRACE_PETSC')
 
 class Component(System):
     """ Base class for a Component system. The Component can declare
@@ -26,7 +31,7 @@ class Component(System):
 
     def __init__(self):
         super(Component, self).__init__()
-        self._post_setup = False
+        self._post_setup_vars = False
         self._jacobian_cache = {}
 
     def _get_initial_val(self, val, shape):
@@ -121,7 +126,7 @@ class Component(System):
         name : string
             Name of the variable output.
 
-        val : float or ndarray
+        val : float or ndarray or object
             Initial value for the output. While the value is overwritten during
             execution, it is useful for infering size.
         """
@@ -143,10 +148,60 @@ class Component(System):
         args['state'] = True
         self._unknowns_dict[name] = args
 
+    def set_var_indices(self, name, val=_NotSet, shape=None,
+                        src_indices=None):
+        """ Sets the 'src_indices' metadata of an existing variable
+        on this component, as well as its value, size, and shape.
+        This only works for numpy array variables.
+
+        Args
+        ----
+        name : string
+            Name of the variable.
+
+        val : ndarray, optional
+            Initial value for the variable.
+
+        shape : tuple, optional
+            Specifies the shape of the ndarray value
+
+        src_indices : array of indices
+            An index array indicating which entries in the distributed
+            version of this variable are present in this process.
+        """
+        meta = self._params_dict.get(name)
+        if meta is None:
+            meta = self._unknowns_dict[name]
+
+        if src_indices is None:
+            raise ValueError("You must provide src_indices for variable '%s'" %
+                             name)
+
+        if not isinstance(meta['val'], np.ndarray):
+            raise ValueError("resize_var() can only be called for numpy "
+                             "array variables, but '%s' is of type %s" %
+                             (name, type(meta['val'])))
+
+        if val is _NotSet:
+            if shape:
+                val = numpy.zeros(shape, dtype=meta['val'].dtype)
+            else:
+                # assume value is a 1-D array
+                val = numpy.zeros((len(src_indices),), dtype=meta['val'].dtype)
+
+        if val.size != len(src_indices):
+            raise ValueError("The size (%d) of the array '%s' doesn't match the "
+                             "size (%d) of the specified indices." %
+                             (val.size, name, len(src_indices)))
+        meta['val'] = val
+        meta['shape'] = val.shape
+        meta['size'] = val.size
+        meta['src_indices'] = src_indices
+
     def _check_name(self, name):
         """ Verifies that a system name is valid. Also checks for
         duplicates."""
-        if self._post_setup:
+        if self._post_setup_vars:
             raise RuntimeError("%s: can't add variable '%s' because setup has already been called",
                                (self.pathname, name))
         if name in self._params_dict or name in self._unknowns_dict:
@@ -158,12 +213,12 @@ class Component(System):
             raise NameError("%s: '%s' is not a valid variable name." %
                             (self.pathname, name))
 
-    def setup_param_indices(self):
+    def setup_distrib_idxs(self):
         """
         Override this in your Component to set specific indices that will be
         pulled from source variables to fill your parameters.  This method
-        should set the 'src_indices' metadata for any parameters that require
-        it.
+        should set the 'src_indices' metadata for any parameters or
+        unknowns that require it.
         """
         pass
 
@@ -177,7 +232,7 @@ class Component(System):
         list of str
             List of names of params for this `Component` .
         """
-        return [k for k, m in self.params.items() if not m.get('pass_by_obj')]
+        return [k for k, m in iteritems(self.params) if not m.get('pass_by_obj')]
 
     def _get_fd_unknowns(self):
         """
@@ -189,33 +244,61 @@ class Component(System):
         list of str
             List of names of unknowns for this `Component`.
         """
-        return [k for k, m in self.unknowns.items() if not m.get('pass_by_obj')]
+        return [k for k, m in iteritems(self.unknowns) if not m.get('pass_by_obj')]
 
-    def _setup_variables(self):
+    def _setup_variables(self, compute_indices=False):
         """
-        Returns our params and unknowns dictionaries, re-keyed
-        to use absolute variable names
-        """
+        Returns copies of our params and unknowns dictionaries,
+        re-keyed to use absolute variable names.
 
-        self.setup_param_indices()
+        Args
+        ----
+
+        compute_indices : bool, optional
+            If True, call setup_distrib_idxs() to set values of
+            'src_indices' metadata.
+
+        """
+        self._to_abs_unames = {}
+        self._to_abs_pnames = {}
+
+        if MPI and compute_indices:
+            self.setup_distrib_idxs()
+            # now update our distrib_size metadata for any distributed
+            # unknowns
+            sizes = []
+            names = []
+            for name, meta in iteritems(self._unknowns_dict):
+                if 'src_indices' in meta:
+                    sizes.append(len(meta['src_indices']))
+                    names.append(name)
+            if sizes:
+                if trace:
+                    print("allgathering src index sizes:")
+                allsizes = np.zeros((self.comm.size, len(sizes)), dtype=int)
+                self.comm.Allgather(np.array(sizes, dtype=int), allsizes)
+                for i, name in enumerate(names):
+                    self._unknowns_dict[name]['distrib_size'] = np.sum(allsizes[:, i])
 
         # rekey with absolute path names and add promoted names
         _new_params = OrderedDict()
-        for name, meta in self._params_dict.items():
+        for name, meta in iteritems(self._params_dict):
             pathname = self._get_var_pathname(name)
             _new_params[pathname] = meta
             meta['pathname'] = pathname
             meta['promoted_name'] = name
             self._params_dict[name]['promoted_name'] = name
+            self._to_abs_pnames[name] = (pathname,)
 
         _new_unknowns = OrderedDict()
-        for name, meta in self._unknowns_dict.items():
+        for name, meta in iteritems(self._unknowns_dict):
             pathname = self._get_var_pathname(name)
             _new_unknowns[pathname] = meta
             meta['pathname'] = pathname
             meta['promoted_name'] = name
+            self._to_abs_unames[name] = (pathname,)
 
-        self._post_setup = True
+        self._post_setup_vars = True
 
         return _new_params, _new_unknowns
 
@@ -248,9 +331,12 @@ class Component(System):
 
         self._impl_factory = impl
 
+        # create map of relative name in parent to relative name in child
+        self._relname_map = self._get_relname_map(parent.unknowns)
+
         # create storage for the relevant vecwrappers, keyed by
         # variable_of_interest
-        for group, vois in relevance.groups.items():
+        for group, vois in iteritems(relevance.groups):
             if group is not None:
                 for voi in vois:
                     self._create_views(top_unknowns, parent, [],
@@ -261,7 +347,7 @@ class Component(System):
         self._create_views(top_unknowns, parent, [], None)
 
         # create params vec entries for any unconnected params
-        for meta in self._params_dict.values():
+        for meta in itervalues(self._params_dict):
             pathname = meta['pathname']
             name = self.params._scoped_abs_name(pathname)
             if name not in self.params:
@@ -438,7 +524,7 @@ class Component(System):
         uvec = getattr(self, uvecname)
         pvec = getattr(self, pvecname)
 
-        lens = [len(n) for n in uvec.keys()]
+        lens = [len(n) for n in iterkeys(uvec)]
         nwid = max(lens) if lens else 12
 
         commsz = self.comm.size if hasattr(self.comm, 'size') else 0
@@ -506,3 +592,29 @@ class Component(System):
         #finish up docstring
         docstring += '\n\t\"\"\"\n'
         return docstring
+
+    def _get_relname_map(self, parent_unknowns):
+        """
+        Args
+        ----
+        parent_unknowns : `VecWrapper`
+            A dict-like object containing variables keyed using promoted names.
+
+        Returns
+        -------
+        dict
+            Maps promoted name in parent (owner of unknowns) to
+            the corresponding promoted name in the child.
+        """
+        # parent_unknowns is keyed on promoted name relative to the parent system
+        # unknowns_dict is keyed on absolute pathname
+
+        # use an ordered dict here so we can use this smaller dict when looping during get_view.
+        #   (the order of this one matches the order in the parent)
+        umap = OrderedDict()
+
+        for key, meta in iteritems(self._unknowns_dict):
+            # at comp level, promoted and unknowns_dict key are same
+            umap[parent_unknowns.get_promoted_varname('.'.join((self.pathname, key)))] = key
+
+        return umap

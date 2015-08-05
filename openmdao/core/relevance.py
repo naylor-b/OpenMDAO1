@@ -4,7 +4,7 @@ from __future__ import print_function
 
 from collections import OrderedDict
 import json
-from six import string_types
+from six import string_types, itervalues, iteritems
 
 import networkx as nx
 
@@ -59,8 +59,10 @@ class Relevance(object):
     def __getitem__(self, name):
         # if name is None, everything is relevant
         if name is None:
-            return set(self._vgraph.nodes())
-        return self.relevant.get(name, [])
+            return set(self._vgraph.nodes_iter())
+        elif name in self.relevant:
+            return self.relevant[name]
+        return ()
 
     def is_relevant(self, var_of_interest, varname):
         """ Returns True if a variable is relevant to a particular variable
@@ -128,27 +130,31 @@ class Relevance(object):
         # ensure we have system graph nodes even for unconnected subsystems
         sgraph.add_nodes_from([s.pathname for s in group.subsystems(recurse=True)])
 
-        for meta in params_dict.values():
+        for target, source in iteritems(connections):
+            vgraph.add_edge(source, target)
+            sgraph.add_edge(source.rsplit('.', 1)[0], target.rsplit('.', 1)[0])
+
+        for meta in itervalues(params_dict):
             param = meta['pathname']
             tcomp = param.rsplit('.', 1)[0]
             compins.setdefault(tcomp, []).append(param)
-            if param in connections and meta['promoted_name'] != param:
+            if meta['promoted_name'] != param:# and param in connections:
                 promote_map[param] = meta['promoted_name']
+                if param not in vgraph:
+                    vgraph.add_node(param)
 
-        for meta in unknowns_dict.values():
+        for meta in itervalues(unknowns_dict):
             unknown = meta['pathname']
             scomp = unknown.rsplit('.', 1)[0]
             compouts.setdefault(scomp, []).append(unknown)
             if meta['promoted_name'] != unknown:
                 promote_map[unknown] = meta['promoted_name']
-
-        for target, source in connections.items():
-            vgraph.add_edge(source, target)
-            sgraph.add_edge(source.rsplit('.', 1)[0], target.rsplit('.', 1)[0])
+                if unknown not in vgraph:
+                    vgraph.add_node(unknown)
 
         # connect inputs to outputs on same component in order to fully
         # connect the variable graph.
-        for comp, inputs in compins.items():
+        for comp, inputs in iteritems(compins):
             for inp in inputs:
                 for out in compouts.get(comp, ()):
                     vgraph.add_edge(inp, out)
@@ -207,7 +213,7 @@ class Relevance(object):
         """
         idxs = OrderedDict()
         matrix = []
-        size = len(self._vgraph.nodes())
+        size = len(self._vgraph)
 
         for i, node in enumerate(self._vgraph.nodes_iter()):
             idxs[node] = i

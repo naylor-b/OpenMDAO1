@@ -1,16 +1,16 @@
 """ Base class for all systems in OpenMDAO."""
 
 import sys
-from collections import OrderedDict
 from fnmatch import fnmatch
 from itertools import chain
-from six import string_types, iteritems
+from six import string_types, iteritems, itervalues
 
 import numpy as np
 
-from openmdao.core.mpiwrap import MPI
+from openmdao.core.mpi_wrap import MPI
 from openmdao.core.options import OptionsDictionary
-from openmdao.core.vecwrapper import PlaceholderVecWrapper
+from collections import OrderedDict
+from openmdao.core.vec_wrapper import _PlaceholderVecWrapper
 
 
 class System(object):
@@ -31,12 +31,12 @@ class System(object):
         self.comm = None
 
         # create placeholders for all of the vectors
-        self.unknowns = PlaceholderVecWrapper('unknowns')
-        self.resids = PlaceholderVecWrapper('resids')
-        self.params = PlaceholderVecWrapper('params')
-        self.dunknowns = PlaceholderVecWrapper('dunknowns')
-        self.dresids = PlaceholderVecWrapper('dresids')
-        self.dparams = PlaceholderVecWrapper('dparams')
+        self.unknowns = _PlaceholderVecWrapper('unknowns')
+        self.resids = _PlaceholderVecWrapper('resids')
+        self.params = _PlaceholderVecWrapper('params')
+        self.dunknowns = _PlaceholderVecWrapper('dunknowns')
+        self.dresids = _PlaceholderVecWrapper('dresids')
+        self.dparams = _PlaceholderVecWrapper('dparams')
 
         # dicts of vectors used for parallel solution of multiple RHS
         self.dumat = {}
@@ -103,8 +103,8 @@ class System(object):
 
         for prom in self._promotes:
             if fnmatch(name, prom):
-                for meta in chain(self._params_dict.values(),
-                                  self._unknowns_dict.values()):
+                for meta in chain(itervalues(self._params_dict),
+                                  itervalues(self._unknowns_dict)):
                     if name == meta.get('promoted_name'):
                         return True
 
@@ -139,11 +139,15 @@ class System(object):
                             (self.name, self._promotes))
 
         for prom in self._promotes:
-            found = False
-            for name, meta in chain(self._params_dict.items(), self._unknowns_dict.items()):
-                if fnmatch(meta.get('promoted_name', name), prom):
-                    found = True
-            if not found:
+            for name, meta in chain(iteritems(self._params_dict),
+                                    iteritems(self._unknowns_dict)):
+                if 'promoted_name' in meta:
+                    pname = meta['promoted_name']
+                else:
+                    pname = name
+                if fnmatch(pname, prom):
+                    break
+            else:
                 msg = "'%s' promotes '%s' but has no variables matching that specification"
                 raise RuntimeError(msg % (self.name, prom))
 
@@ -267,14 +271,15 @@ class System(object):
         """
         Set 'remote' attribute in metadata of all variables for this subsystem.
         """
-        for meta in self._params_dict.values():
+        for meta in itervalues(self._params_dict):
             meta['remote'] = True
 
-        for meta in self._unknowns_dict.values():
+        for meta in itervalues(self._unknowns_dict):
             meta['remote'] = True
 
     def fd_jacobian(self, params, unknowns, resids, step_size=None, form=None,
-                    step_type=None, total_derivs=False):
+                    step_type=None, total_derivs=False, fd_params=None,
+                    fd_unknowns=None):
         """Finite difference across all unknowns in this system w.r.t. all
         incoming params.
 
@@ -304,6 +309,16 @@ class System(object):
             Set to true to calculate total derivatives. Otherwise, partial
             derivatives are returned.
 
+        fd_params : list of strings, optional
+            List of parameter name strings with respect to which derivatives
+            are desired. This is used by problem to limit the derivatives that
+            are taken.
+
+        fd_unknowns : list of strings, optional
+            List of output or state name strings for derivatives to be
+            calculated. This is used by problem to limit the derivatives that
+            are taken.
+
         Returns
         -------
         dict
@@ -313,8 +328,10 @@ class System(object):
         """
 
         # Params and Unknowns that we provide at this level.
-        fd_params = self._get_fd_params()
-        fd_unknowns = self._get_fd_unknowns()
+        if fd_params is None:
+            fd_params = self._get_fd_params()
+        if fd_unknowns is None:
+            fd_unknowns = self._get_fd_unknowns()
 
         # Function call arguments have precedence over the system dict.
         step_size = self.fd_options.get('step_size', step_size)
@@ -329,7 +346,8 @@ class System(object):
             run_model = self.apply_nonlinear
             cache1 = resids.vec.copy()
             resultvec = resids
-            states = [name for name, meta in self.unknowns.items() if meta.get('state')]
+            states = [name for name, meta in iteritems(self.unknowns)
+                           if meta.get('state')]
         else:
             run_model = self.solve_nonlinear
             cache1 = unknowns.vec.copy()
@@ -338,13 +356,6 @@ class System(object):
 
         # Compute gradient for this param or state.
         for p_name in chain(fd_params, states):
-
-            if p_name in states:
-                inputs = unknowns
-            else:
-                inputs = params
-
-            target_input = inputs.flat[p_name]
 
             # If our input is connected to a Paramcomp, then we need to twiddle
             # the unknowns vector instead of the params vector.
@@ -357,11 +368,21 @@ class System(object):
 
                 target_input = unknowns.flat[param_src]
 
+            else:
+                # Cases where the paramcomp is somewhere above us.
+                if p_name in states:
+                    inputs = unknowns
+                else:
+                    inputs = params
+
+                target_input = inputs.flat[p_name]
+
             mydict = {}
-            for val in self._params_dict.values():
-                if val['promoted_name'] == p_name:
-                    mydict = val
-                    break
+            if p_name in self._to_abs_pnames:
+                for val in itervalues(self._params_dict):
+                    if val['promoted_name'] == p_name:
+                        mydict = val
+                        break
 
             # Local settings for this var trump all
             fdstep = mydict.get('fd_step_size', step_size)
@@ -369,19 +390,19 @@ class System(object):
             fdform = mydict.get('fd_form', form)
 
             # Size our Inputs
-            p_size = np.size(inputs[p_name])
+            p_size = np.size(target_input)
 
             # Size our Outputs
             for u_name in fd_unknowns:
                 u_size = np.size(unknowns[u_name])
-                jac[u_name, p_name] = np.ones((u_size, p_size))
+                jac[u_name, p_name] = np.zeros((u_size, p_size))
 
             # Finite Difference each index in array
             for idx in range(p_size):
 
                 # Relative or Absolute step size
                 if fdtype == 'relative':
-                    step = inputs.flat[p_name][idx] * fdstep
+                    step = target_input[idx] * fdstep
                     if step < fdstep:
                         step = fdstep
                 else:
@@ -472,42 +493,6 @@ class System(object):
             else:
                 arg_vec[param] += J.T.dot(result.flat).reshape(arg_vec[param].shape)
 
-    def _create_vecs(self, my_params, var_of_interest, impl):
-        """ This creates our vecs and mats."""
-        comm = self.comm
-        sys_pathname = self.pathname
-        params_dict = self._params_dict
-        unknowns_dict = self._unknowns_dict
-        relevance = self._relevance
-
-        self.comm = comm
-
-        # create implementation specific VecWrappers
-        if var_of_interest is None:
-            self.unknowns = impl.create_src_vecwrapper(sys_pathname, comm)
-            self.resids = impl.create_src_vecwrapper(sys_pathname, comm)
-            self.params = impl.create_tgt_vecwrapper(sys_pathname, comm)
-
-            # populate the VecWrappers with data
-            self.unknowns.setup(unknowns_dict, store_byobjs=True)
-            self.resids.setup(unknowns_dict)
-            self.params.setup(None, params_dict, self.unknowns,
-                              my_params, self.connections, store_byobjs=True)
-
-        dunknowns = impl.create_src_vecwrapper(sys_pathname, comm)
-        dresids = impl.create_src_vecwrapper(sys_pathname, comm)
-        dparams = impl.create_tgt_vecwrapper(sys_pathname, comm)
-
-        dunknowns.setup(unknowns_dict, relevant_vars=relevance[var_of_interest])
-        dresids.setup(unknowns_dict, relevant_vars=relevance[var_of_interest])
-        dparams.setup(None, params_dict, self.unknowns, my_params,
-                      self.connections,
-                      relevant_vars=relevance[var_of_interest])
-
-        self.dumat[var_of_interest] = dunknowns
-        self.drmat[var_of_interest] = dresids
-        self.dpmat[var_of_interest] = dparams
-
     def _create_views(self, top_unknowns, parent, my_params,
                       var_of_interest=None):
         """
@@ -547,25 +532,22 @@ class System(object):
         relevance = self._relevance
 
         # map promoted name in parent to corresponding promoted name in this view
-        umap = _get_relname_map(parent.unknowns, unknowns_dict, self.pathname)
+        umap = self._relname_map
 
         if voi is None:
-            self.unknowns = parent.unknowns.get_view(self.pathname, comm, umap, relevance,
-                                                     voi)
-            self.resids = parent.resids.get_view(self.pathname, comm, umap, relevance,
-                                                 voi)
+            self.unknowns = parent.unknowns.get_view(self.pathname, comm, umap)
+            self.resids = parent.resids.get_view(self.pathname, comm, umap)
             self.params = parent._impl_factory.create_tgt_vecwrapper(self.pathname, comm)
             self.params.setup(parent.params, params_dict, top_unknowns,
-                              my_params, self.connections, store_byobjs=True)
+                              my_params, self.connections, relevance=relevance,
+                              store_byobjs=True)
 
-        self.dumat[voi] = parent.dumat[voi].get_view(self.pathname, comm, umap,
-                                                     relevance, voi)
-        self.drmat[voi] = parent.drmat[voi].get_view(self.pathname, comm, umap,
-                                                     relevance, voi)
+        self.dumat[voi] = parent.dumat[voi].get_view(self.pathname, comm, umap)
+        self.drmat[voi] = parent.drmat[voi].get_view(self.pathname, comm, umap)
         self.dpmat[voi] = parent._impl_factory.create_tgt_vecwrapper(self.pathname, comm)
         self.dpmat[voi].setup(parent.dpmat[voi], params_dict, top_unknowns,
                               my_params, self.connections,
-                              relevant_vars=relevance[voi])
+                              relevance=relevance, var_of_interest=voi)
 
     #def get_combined_jac(self, J):
         #"""
@@ -595,8 +577,8 @@ class System(object):
         #tups = []
 
         ## Gather a list of local tuples for J.
-        #for output, dct in J.items():
-            #for param, value in dct.items():
+        #for output, dct in iteritems(J):
+            #for param, value in iteritems(dct):
 
                 ## Params are already only on this process. We need to add
                 ## only outputs of components that are on this process.
@@ -614,17 +596,17 @@ class System(object):
                         #tupdict[tup] = rank
 
             ##get rid of tups from the root proc before bcast
-            #for tup, rank in tupdict.items():
+            #for tup, rank in iteritems(tupdict):
                 #if rank == 0:
                     #del tupdict[tup]
 
         #tupdict = comm.bcast(tupdict, root=0)
 
         #if myrank == 0:
-            #for (param, output), rank in tupdict.items():
+            #for (param, output), rank in iteritems(tupdict):
                 #J[param][output] = comm.recv(source=rank, tag=0)
         #else:
-            #for (param, output), rank in tupdict.items():
+            #for (param, output), rank in iteritems(tupdict):
                 #if rank == myrank:
                     #comm.send(J[param][output], dest=0, tag=0)
 
@@ -638,39 +620,3 @@ class System(object):
         if self.pathname:
             return '.'.join((self.pathname, name))
         return name
-
-
-def _get_relname_map(unknowns, unknowns_dict, child_name):
-    """
-    Args
-    ----
-    unknowns : `VecWrapper`
-        A dict-like object containing variables keyed using promoted names.
-
-    unknowns_dict : `OrderedDict`
-        An ordered mapping of absolute variable name to its metadata.
-
-    child_name : str
-        The pathname of the child for which to get promoted name.
-
-    Returns
-    -------
-    dict
-        Maps promoted name in parent (owner of unknowns and unknowns_dict) to
-        the corresponding promoted name in the child.
-    """
-    # unknowns is keyed on promoted name relative to the parent system
-    # unknowns_dict is keyed on absolute pathname
-    umap = {}
-    for rel, meta in unknowns.items():
-        abspath = meta['pathname']
-        if abspath.startswith(child_name+'.'):
-            for m in unknowns_dict.values():
-                if abspath == m['pathname']:
-                    newrel = m['promoted_name']
-                    break
-            else:
-                newrel = rel
-            umap[rel] = newrel
-
-    return umap

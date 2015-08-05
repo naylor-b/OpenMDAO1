@@ -6,20 +6,20 @@ import numpy as np
 
 from openmdao.core.problem import Problem
 from openmdao.core.group import Group
-from openmdao.core.parallelgroup import ParallelGroup
+from openmdao.core.parallel_group import ParallelGroup
 from openmdao.core.component import Component
-from openmdao.core.mpiwrap import MPI, MultiProcFailCheck
+from openmdao.core.mpi_wrap import MPI, MultiProcFailCheck
 
-from openmdao.components.paramcomp import ParamComp
+from openmdao.components.param_comp import ParamComp
 
-from openmdao.test.mpiunittest import MPITestCase
+from openmdao.test.mpi_util import MPITestCase
 
 if MPI:
-    from openmdao.core.petscimpl import PetscImpl as impl
+    from openmdao.core.petsc_impl import PetscImpl as impl
 else:
-    from openmdao.core.basicimpl import BasicImpl as impl
+    from openmdao.core import BasicImpl as impl
 
-from openmdao.test.testutil import assert_rel_error
+from openmdao.test.util import assert_rel_error
 
 
 class ABCDArrayComp(Component):
@@ -152,7 +152,6 @@ class MPITests1(MPITestCase):
                              np.ones(size)*-.1, 1.e-10)
 
 
-
 if __name__ == '__main__':
-    from openmdao.test.mpiunittest import mpirun_tests
+    from openmdao.test.mpi_util import mpirun_tests
     mpirun_tests()

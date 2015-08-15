@@ -899,10 +899,45 @@ class Group(System):
         sz = len(self.pathname)+1 if self.pathname else 0
         return [n[sz:] for n in order]
 
+    # def _get_sys_graph(self):
+    #     return self._get_sub_graph(self._relevance._sgraph, self.pathname)
+
+    def _get_var_graph(self):
+        g = nx.DiGraph()
+
+        mypath = self.pathname + '.' if self.pathname else ''
+
+        # add all immediate children as nodes
+        g.add_nodes_from((s.name for s in self.subsystems()))
+
+        children = set(g.nodes_iter())
+
+        for tgt, src in iteritems(self._connections):
+            tprom = self._params_dict[tgt]['promoted_name']
+            sprom = self._unknowns_dict[src]['promoted_name']
+            if '.' in tprom:
+                tsys, tvar = tprom.rsplit('.', 1)
+            else:
+                tsys = None
+                tvar = tprom
+
+            if '.' in sprom:
+                ssys, svar = sprom.rsplit('.', 1)
+            else:
+                ssys = None
+                svar = sprom
+
+            trel = tgt[len(mypath):]
+            srel = src[len(mypath):]
+
+            
+
+
     def _get_sys_graph(self):
         """Return the subsystem graph for this Group."""
 
         sgraph = self._relevance._sgraph
+
         if self.pathname:
             path = self.pathname.split('.')
             start = self.pathname + '.'

@@ -680,9 +680,10 @@ class TestProblem(unittest.TestCase):
         prob.setup(check=False)
         prob.run()
 
-        #from openmdao.devtools.d3graph import view_plot
-        #from openmdao.core.problem import system_tree
-        #view_plot(system_tree(prob.root), d3page='circlepack.html')
+        from openmdao.devtools.d3graph import view_tree, view_graph
+        from openmdao.core.problem import system_tree
+        #view_tree(system_tree(prob.root), d3page='collapse_tree.html')
+        view_graph(prob.root)
         self.assertAlmostEqual(prob['G3.C4.y'], 40.)
 
     def test_byobj_run(self):

@@ -165,12 +165,12 @@ function tick() {
   //        return d.telem.getBBox().width * 0.6;
   //     });
 
-  node.attr("transform", function(d) { 
+  node.attr("transform", function(d) {
     //var w = Number(svg.style("width").split("p")[0]);
     //var h = Number(svg.style("height").split("p")[0]);
     var w = window.innerWidth;
     var h = window.innerHeight;
-    
+
     if (d.x > w) {
       d.x = w;
     }
@@ -196,4 +196,3 @@ function dragstart(d) {
 </script>
 </body>
 </html>
-

@@ -105,7 +105,10 @@ def view_dagre(graph, port=8001):
     dlist = []
     for node, data in graph.nodes_iter(data=True):
         dlist.append(data.copy())
-        dlist[-1]['label'] = node
+        dlist[-1]['id'] = node
+        dlist[-1]['label'] = node.rsplit('.', 1)[-1]
+        if '.' in node:
+            dlist[-1]['parent'] = node.rsplit('.', 1)[0]
     g['nodes'] = dlist
 
     dlist = []
@@ -114,6 +117,54 @@ def view_dagre(graph, port=8001):
         dlist[-1]['src'] = u
         dlist[-1]['tgt'] = v
     g['links'] = dlist
+
+    try:
+        startdir = os.getcwd()
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+        # write out the json as a javascript var
+        # so we we're not forced to start our own webserver
+        # to avoid cross-site issues
+        with open('__graph.json', 'w') as f:
+            json.dump(g, f)
+
+        httpd = SocketServer.TCPServer(("localhost", port),
+                           SimpleHTTPServer.SimpleHTTPRequestHandler)
+
+        print("starting server on port %d" % port)
+
+        serve_thread  = _startThread(httpd.serve_forever)
+        launch_thread = _startThread(lambda: _launch_browser(port, page))
+
+        while serve_thread.isAlive():
+            serve_thread.join(timeout=1)
+
+    finally:
+        os.chdir(startdir)
+
+def view_cyto(graph, port=8001, compound=False):
+    page = 'cyto.html'
+
+    # get json version of graph
+    g = {}
+    dlist = []
+    for node, data in graph.nodes_iter(data=True):
+        data = data.copy()
+        data['id'] = node
+        data['name'] = node.rsplit('.', 1)[-1]
+        if compound and '.' in node:
+            data['parent'] = node.rsplit('.', 1)[0]
+        dlist.append({'data': data})
+    g['nodes'] = dlist
+
+    dlist = []
+    for u,v,data in graph.edges_iter(data=True):
+        data = data.copy()
+        data['id'] = u+v
+        data['source'] = u
+        data['target'] = v
+        dlist.append({'data': data})
+    g['edges'] = dlist
 
     try:
         startdir = os.getcwd()

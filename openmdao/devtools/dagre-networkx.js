@@ -1,25 +1,51 @@
 
 (function(){
-    dagre.networkx = {};
+    dagre_networkx = {};
 
-    dagre.networkx.create_graph = function(graph) {
+    dagre_networkx.create_graph = function(graph) {
+        var color = d3.scale.category20();
+
         // Create a new directed graph
-        var g = new dagreD3.graphlib.Graph().setGraph({});
+        var g = new dagreD3.graphlib.Graph({compound:true}).setGraph({});
+        //var g = new dagreD3.graphlib.Graph().setGraph({});
+
+        var color_idx = 0;
+        var colors = {};
+        // first, figure out how many clusters we have and assign
+        // different colors to them
+        graph.nodes.forEach(function(node) {
+            if ( node.parent !== undefined ) {
+                if ( colors[node.parent] == undefined ) {
+                    colors[node.parent] = color(color_idx);
+                    color_idx = color_idx + 1;
+                }
+            }
+        });
 
         // Add states to the graph, set labels, and style
         graph.nodes.forEach(function(node) {
           node.rx = node.ry = 5;
-          g.setNode(node.label, node);
+          if (colors[node.id] !== undefined ) {
+              node.clusterLabelPos = 'top';
+              node.style = 'fill: '+colors[node.id];
+          }
+          g.setNode(node.id, node);
+        });
+
+        graph.nodes.forEach(function(node) {
+            if ( node.parent !== undefined ) {
+                g.setParent(node.id, node.parent)
+            }
         });
 
         graph.links.forEach(function(link) {
-            g.setEdge(link.src, link.tgt, {});
+            g.setEdge(link.src, link.tgt, {lineInterpolate: 'basis'});
         });
 
         return g;
     };
 
-    dagre.networkx.render = function(g) {
+    dagre_networkx.render = function(g) {
         // Create the renderer
         var render = new dagreD3.render();
 
@@ -45,4 +71,4 @@
           .event(svg);
         svg.attr('height', g.graph().height * initialScale + 40);
     };
-});
+})();

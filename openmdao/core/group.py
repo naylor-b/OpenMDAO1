@@ -930,10 +930,10 @@ class Group(System):
             trel = tgt[len(mypath):]
             srel = src[len(mypath):]
 
-            
 
 
-    def _get_sys_graph(self):
+
+    def _get_sys_graph(self, recurse=False):
         """Return the subsystem graph for this Group."""
 
         sgraph = self._relevance._sgraph
@@ -962,6 +962,11 @@ class Group(System):
         # remove self loops created by renaming
         graph.remove_edges_from([(u, v) for u, v in graph.edges_iter()
                                  if u == v])
+
+        if recurse:
+            for s in self.subgroups():
+                graph.node[s.name]['sub'] = s._get_sys_graph()
+
         return graph
 
     def _break_cycles(self, order, graph):

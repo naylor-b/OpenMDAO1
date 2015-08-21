@@ -49,6 +49,18 @@
         // Create the renderer
         var render = new dagreD3.render();
 
+        // // Override drawNodes to set up the click.
+        // var oldDrawNodes = renderer.drawNodes();
+        // renderer.drawNodes(function(g, svg) {
+        //  var svgNodes = oldDrawNodes(g, svg);
+        //
+        //  // on click event handler
+        //  svgNodes.on('click', function(d) { console.log('Clicked on node - ' + d); });
+        //
+        //  return svgNodes;
+        // });
+
+
         // Set up an SVG group so that we can translate the final graph.
         var svg = d3.select("svg"),
             inner = svg.append("g");

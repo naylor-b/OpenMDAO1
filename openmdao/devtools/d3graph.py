@@ -54,7 +54,7 @@ def add_graph_meta(group, graph):
 
     return graph
 
-def view_tree(tree, d3page='circlepack.html', port=8001):
+def view_tree(tree, d3page='collapse_tree.html', port=8001):
     """
     Args
     ----
@@ -190,7 +190,7 @@ def view_cyto(graph, port=8001, compound=False):
     finally:
         os.chdir(startdir)
 
-def view_graph(group, d3page='tree_edge_bundle.html'): #d3page='fixedforce.html'):
+def view_graph(group, d3page='fixedforce.html'):
     """Open up a display of the graph in a browser window."""
 
     tmpdir = tempfile.mkdtemp()
@@ -198,14 +198,22 @@ def view_graph(group, d3page='tree_edge_bundle.html'): #d3page='fixedforce.html'
     d3dir = os.path.join(fdir, 'd3')
     shutil.copy(os.path.join(fdir, 'd3.js'), tmpdir)
     shutil.copy(os.path.join(d3dir, 'd3.layout.js'), tmpdir)
-    shutil.copy(os.path.join(fdir, 'packages.js'), tmpdir)
+    #shutil.copy(os.path.join(fdir, 'packages.js'), tmpdir)
     shutil.copy(os.path.join(fdir, d3page), tmpdir)
 
-    graph = add_graph_meta(group, group._get_sys_graph())
 
-    data = node_link_data(graph)
+    data = { '_subs': {} }
+
+    graph = add_graph_meta(group, group._get_sys_graph())
+    data.update(node_link_data(graph))
     tmp = data.get('graph', [])
     data['graph'] = [dict(tmp)]
+
+    for g in group.subgroups(recurse=True):
+        graph = add_graph_meta(g, g._get_sys_graph())
+        data['_subs'][g.pathname] = node_link_data(graph)
+        tmp = data['_subs'][g.pathname].get('graph', [])
+        data['_subs'][g.pathname]['graph'] = [dict(tmp)]
 
     startdir = os.getcwd()
     os.chdir(tmpdir)

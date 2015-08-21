@@ -59,29 +59,29 @@ var color = d3.scale.category20();
 
 var force = d3.layout.force()
     .size([width, height])
-    .charge(-300)
+    .charge(-100)
     .linkDistance(function(lnk, idx) {
             // source and target are node objects at this point
-            var sparts = lnk.source.id.split(".");
-            var tparts = lnk.target.id.split(".");
-            // make var comp and var to subvar connections shorter
-            if (sparts[0] === tparts[0]) {
-                return 10;
-            }
-            else {
+            // var sparts = lnk.source.id.split(".");
+            // var tparts = lnk.target.id.split(".");
+            // // make var comp and var to subvar connections shorter
+            // if (sparts[0] === tparts[0]) {
+            //     return 10;
+            // }
+            // else {
                 return 40;
-            }
+            //}
     })
     .linkStrength(function(lnk, idx) {
-                var sparts = lnk.source.id.split(".");
-                var tparts = lnk.target.id.split(".");
-                // make var comp and var to subvar connections stronger
-                if (sparts[0] === tparts[0]) {
-                    return 2.8;
-                }
-                else {
+                // var sparts = lnk.source.id.split(".");
+                // var tparts = lnk.target.id.split(".");
+                // // make var comp and var to subvar connections stronger
+                // if (sparts[0] === tparts[0]) {
+                //     return 2.8;
+                // }
+                // else {
                     return 0.7;
-                }
+                //}
     })
     .on("tick", tick);
 
@@ -183,7 +183,6 @@ function tick() {
     else if (d.y < 0) {
       d.y = 0;
     }
-
 
     return "translate(" + d.x + "," + d.y + ")"; });
 }

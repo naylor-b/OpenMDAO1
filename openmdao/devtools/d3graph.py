@@ -97,7 +97,7 @@ def view_tree(tree, d3page='collapse_tree.html', port=8001):
             pass
         os.chdir(startdir)
 
-def view_dagre(graph, port=8001):
+def view_dagre(graph, nested=False, port=8001):
     page = 'dagre.html'
 
     # get json version of graph
@@ -106,9 +106,12 @@ def view_dagre(graph, port=8001):
     for node, data in graph.nodes_iter(data=True):
         dlist.append(data.copy())
         dlist[-1]['id'] = node
-        dlist[-1]['label'] = node.rsplit('.', 1)[-1]
-        if '.' in node:
-            dlist[-1]['parent'] = node.rsplit('.', 1)[0]
+        if nested:
+            dlist[-1]['label'] = node.rsplit('.', 1)[-1]
+            if '.' in node:
+                dlist[-1]['parent'] = node.rsplit('.', 1)[0]
+        else:
+            dlist[-1]['label'] = node
     g['nodes'] = dlist
 
     dlist = []

@@ -556,6 +556,7 @@ function d3_layout_forceLinkDistance(link) {
 function d3_layout_forceLinkStrength(link) {
   return 1;
 }
+
 d3.layout.partition = function() {
   var hierarchy = d3.layout.hierarchy(),
       size = [1, 1]; // width, height
@@ -604,6 +605,7 @@ d3.layout.partition = function() {
 
   return d3_layout_hierarchyRebind(partition, hierarchy);
 };
+
 d3.layout.pie = function() {
   var value = Number,
       sort = d3_layout_pieSortByValue,

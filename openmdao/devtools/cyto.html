@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+  font: 14px helvetica neue, helvetica, arial, sans-serif;
+}
+
+#cy {
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+</style>
+<meta charset=utf-8 />
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js"></script>
+<script src="cytoscape.min.js"></script>
+<script>
+
+$(function(){ // on dom ready
+
+    $.ajax({
+        url: "__graph.json",
+        //force to handle it as text
+        dataType: "text",
+        success: function(data) {
+
+            //data downloaded so we call parseJSON function
+            //and pass downloaded data
+            var json = $.parseJSON(data);
+            var cy = cytoscape({
+              container: document.getElementById('cy'),
+
+              style: [
+                {
+                  selector: 'node',
+                  css: {
+                    'content': 'data(name)',
+                    'text-valign': 'center',
+                    'text-halign': 'center'
+                  }
+                },
+                {
+                  selector: '$node > node',
+                  css: {
+                    'padding-top': '10px',
+                    'padding-left': '10px',
+                    'padding-bottom': '10px',
+                    'padding-right': '10px',
+                    'text-valign': 'top',
+                    'text-halign': 'center'
+                  }
+                },
+                {
+                  selector: 'edge',
+                  css: {
+                    'target-arrow-shape': 'triangle'
+                  }
+                },
+                {
+                  selector: ':selected',
+                  css: {
+                    'background-color': 'black',
+                    'line-color': 'black',
+                    'target-arrow-color': 'black',
+                    'source-arrow-color': 'black'
+                  }
+                }
+              ],
+
+              elements: json,
+
+              layout: {
+                name: 'cose',
+                padding: 1
+              }
+            });
+
+        }
+    });
+
+}); // on dom ready
+
+</script>
+</head>
+<body>
+<div id="cy"></div>
+</body>
+</html>

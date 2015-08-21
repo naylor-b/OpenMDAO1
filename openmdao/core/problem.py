@@ -120,7 +120,7 @@ class Problem(System):
 
         # combine implicit and explicit connections
         for tgt, srcs in iteritems(implicit_conns):
-            connections.setdefault(tgt, set()).update(srcs)
+            connections.setdefault(tgt, []).extend(srcs)
 
         input_graph = nx.Graph()
 
@@ -147,11 +147,11 @@ class Problem(System):
                             to_add.append((t, s))
 
         for t, s in to_add:
-            connections.setdefault(t, set()).add(s)
+            connections.setdefault(t, []).append(s)
 
         newconns = {}
         for tgt, srcs in iteritems(connections):
-            unknown_srcs = srcs.intersection(unknowns_dict.keys())
+            unknown_srcs = set((s for s in srcs if s in unknowns_dict))
             if len(unknown_srcs) > 1:
                 raise RuntimeError("Target '%s' is connected to multiple unknowns: %s" %
                                    (tgt, sorted(unknown_srcs)))
@@ -768,7 +768,10 @@ class Problem(System):
         root = self.root
         unknowns = root.unknowns
         params = root.params
-        iproc = root.comm.rank
+        comm = root.comm
+        iproc = comm.rank
+        nproc = comm.size
+        owned = root._owning_ranks
 
         # Respect choice of mode based on precedence.
         # Call arg > ln_solver option > auto-detect
@@ -856,6 +859,8 @@ class Problem(System):
             rhs = {}
             voi_idxs = {}
 
+            old_size = None
+
             # Allocate all of our Right Hand Sides for this parallel set.
             for voi in params:
                 vkey = voi if len(params) > 1 else None
@@ -865,18 +870,26 @@ class Problem(System):
 
                 voi_srcs[vkey] = voi
                 _, in_idxs = duvec.get_local_idxs(voi, poi_indices)
-                voi_idxs[vkey] = in_idxs
 
-            # TODO: check that all vois are the same size!!!
+                if old_size is None:
+                    old_size = len(in_idxs)
+                elif old_size != len(in_idxs):
+                    raise RuntimeError("Indices within the same VOI group must be the same size, but"
+                                       " in the group %s, %d != %d" % (params,old_size,len(in_idxs)))
+                voi_idxs[vkey] = in_idxs
 
             jbase = j
 
+            # at this point, we know that for all vars in the current
+            # group of interest, the number of indices is the same. We loop
+            # over the *size* of the indices and use the loop index to look
+            # up the actual indices for the current members of the group
+            # of interest.
             for i in range(len(in_idxs)):
                 for voi in params:
                     vkey = voi if len(params) > 1 else None
                     # only set a 1.0 in the entry if that var is 'owned' by this rank
                     if self.root._owning_ranks[voi_srcs[vkey]] == iproc:
-                        #print("setting %s to 1.0 in rank %d" % (voi, iproc))
                         rhs[vkey][voi_idxs[vkey][i]] = 1.0
 
                 # Solve the linear system
@@ -895,19 +908,26 @@ class Problem(System):
                     i = 0
                     for item in output_list:
 
-                        _, out_idxs = self.root.dumat[vkey].get_local_idxs(item,
+                        if mode=='fwd' or owned[item] == iproc:
+                            _, out_idxs = self.root.dumat[vkey].get_local_idxs(item,
                                                                            qoi_indices)
-                        nk = len(out_idxs)
+                            dxval = dx[out_idxs]
+                        else:
+                            dxval = None
+                        if nproc > 1 and mode=='rev':
+                            dxval = comm.bcast(dxval, root=owned[item])
+
+                        nk = len(dxval)
 
                         if return_format == 'dict':
                             if mode == 'fwd':
                                 if J[item][param] is None:
                                     J[item][param] = np.zeros((nk, len(in_idxs)))
-                                J[item][param][:, j-jbase] = dx[out_idxs]
+                                J[item][param][:, j-jbase] = dxval
                             else:
                                 if J[param][item] is None:
                                     J[param][item] = np.zeros((len(in_idxs), nk))
-                                J[param][item][j-jbase, :] = dx[out_idxs]
+                                J[param][item][j-jbase, :] = dxval
                         else:
                             if mode == 'fwd':
                                 J[i:i+nk, j] = dx[out_idxs]
@@ -931,12 +951,20 @@ class Problem(System):
 
         Returns
         -------
-        Dict of Dicts of Dicts of Tuples of Floats.
+        Dict of Dicts of Dicts
 
-        First key is the component name; 2nd key is the (output, input) tuple
-        of strings; third key is one of ['rel error', 'abs error',
-        'magnitude', 'fdstep']; Tuple contains norms for forward - fd,
-        adjoint - fd, forward - adjoint using the best case fdstep.
+        First key is the component name;
+        2nd key is the (output, input) tuple of strings;
+        third key is one of ['rel error', 'abs error', 'magnitude', 'J_fd', 'J_fwd', 'J_rev'];
+
+        For 'rel error', 'abs error', 'magnitude' the value is:
+
+            A tuple containing norms for forward - fd, adjoint - fd, forward - adjoint using the best case fdstep
+
+        For 'J_fd', 'J_fwd', 'J_rev' the value is:
+
+            A numpy array representing the computed Jacobian for the three different methods of computation
+
         """
 
         root = self.root
@@ -948,7 +976,7 @@ class Problem(System):
             out_stream.write('Partial Derivatives Check\n\n')
 
         data = {}
-        skip_keys = []
+        skip_keys = set()
 
         # Derivatives should just be checked without parallel adjoint for now.
         voi = None
@@ -1000,7 +1028,7 @@ class Problem(System):
 
                         # Go no further if we aren't defined.
                         if (u_name, p_name) not in comp._jacobian_cache:
-                            skip_keys.append((u_name, p_name))
+                            skip_keys.add((u_name, p_name))
                             continue
 
                         user = comp._jacobian_cache[(u_name, p_name)].shape
@@ -1303,17 +1331,15 @@ def _assemble_deriv_data(params, resids, cdata, jac_fwd, jac_rev, jac_fd,
 
     for p_name in params:
         for u_name in resids:
+            if (u_name, p_name) in skip_keys:
+                continue
 
             ldata = cdata[(u_name, p_name)] = {}
 
             Jsub_fd = jac_fd[(u_name, p_name)]
 
-            if (u_name, p_name) in skip_keys:
-                Jsub_for = np.zeros(Jsub_fd.shape)
-                Jsub_rev = np.zeros(Jsub_fd.shape)
-            else:
-                Jsub_for = jac_fwd[(u_name, p_name)]
-                Jsub_rev = jac_rev[(u_name, p_name)]
+            Jsub_for = jac_fwd[(u_name, p_name)]
+            Jsub_rev = jac_rev[(u_name, p_name)]
 
             ldata['J_fd'] = Jsub_fd
             ldata['J_fwd'] = Jsub_for
@@ -1331,9 +1357,12 @@ def _assemble_deriv_data(params, resids, cdata, jac_fwd, jac_rev, jac_fd,
 
             ldata['abs error'] = (abs1, abs2, abs3)
 
-            rel1 = np.linalg.norm(Jsub_for - Jsub_fd)/magfd
-            rel2 = np.linalg.norm(Jsub_rev - Jsub_fd)/magfd
-            rel3 = np.linalg.norm(Jsub_for - Jsub_rev)/magfd
+            if magfd == 0.0:
+                rel1 = rel2 = rel3 = float('nan')
+            else:
+                rel1 = np.linalg.norm(Jsub_for - Jsub_fd)/magfd
+                rel2 = np.linalg.norm(Jsub_rev - Jsub_fd)/magfd
+                rel3 = np.linalg.norm(Jsub_for - Jsub_rev)/magfd
 
             ldata['rel error'] = (rel1, rel2, rel3)
 
@@ -1368,7 +1397,7 @@ def _assemble_deriv_data(params, resids, cdata, jac_fwd, jac_rev, jac_fd,
             out_stream.write('\n\n')
             out_stream.write('    Raw FD Derivative (Jfor)\n\n')
             out_stream.write(str(Jsub_fd))
-            out_stream.write('\n\n')
+            out_stream.write('\n')
 
 def _get_implicit_connections(root, params_dict, unknowns_dict):
     """

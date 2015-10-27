@@ -93,3 +93,16 @@ def parse_for_vars(expr, vnames=()):
     scanner = ExprVarScanner(vnames)
     scanner.visit(root)
     return scanner.varnames
+
+def comps_from_vars(vnames):
+    """
+    Args
+    ----
+    vnames : iter of str
+        Names of variables that we want the component names for.
+
+    Returns
+    list of str
+        Names of components corresponding to the given variables.
+    """
+    pass

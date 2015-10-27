@@ -12,7 +12,7 @@ from openmdao.core.mpi_wrap import MPI
 from openmdao.util.options import OptionsDictionary
 from openmdao.recorders.recording_manager import RecordingManager
 from openmdao.util.record_util import create_local_meta, update_local_meta
-
+from openmdao.util.string_util import name_relative_to
 
 class Driver(object):
     """ Base class for drivers in OpenMDAO. Drivers can only be placed in a

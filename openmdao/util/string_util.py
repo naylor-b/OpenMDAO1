@@ -34,8 +34,8 @@ def get_common_ancestor(name1, name2):
         return ''
 
 def name_relative_to(parent_abspath, child_abspath):
-    """ Determine the relative name of a child path with respect to a parent
-    system.
+    """ Determine the name of the immediate child within the given
+    parent that contains the system or variable specified by child_abspath.
 
     Args
     ----
@@ -48,7 +48,7 @@ def name_relative_to(parent_abspath, child_abspath):
     Returns
     -------
     str
-        Name of the child relative to the parent.
+        Name of the nearest child relative to the parent.
     """
     start = len(parent_abspath)+1 if parent_abspath else 0
     return child_abspath[start:].split('.', 1)[0]
@@ -93,16 +93,3 @@ def parse_for_vars(expr, vnames=()):
     scanner = ExprVarScanner(vnames)
     scanner.visit(root)
     return scanner.varnames
-
-def comps_from_vars(vnames):
-    """
-    Args
-    ----
-    vnames : iter of str
-        Names of variables that we want the component names for.
-
-    Returns
-    list of str
-        Names of components corresponding to the given variables.
-    """
-    pass

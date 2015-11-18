@@ -2,7 +2,7 @@
 from six import iteritems
 
 from openmdao.core.driver import Driver
-from openmdao.util.string_util import name_relative_to
+from openmdao.util.string_util import nearest_child
 
 class FakeKona(Driver):
 
@@ -16,12 +16,12 @@ class FakeKona(Driver):
         self._con_xfers = []
         for grp in self.root.subgroups(recurse=True, include_self=True):
             for cname in obj_cnames:
-                tup = (name_relative_to(grp.pathname, cname), 'fwd', None)
+                tup = (nearest_child(grp.pathname, cname), 'fwd', None)
                 if tup in grp._data_xfer:
                     self._obj_xfers.append((grp, grp._data_xfer[tup]))
 
             for cname in con_cnames:
-                tup = (name_relative_to(grp.pathname, cname), 'fwd', None)
+                tup = (nearest_child(grp.pathname, cname), 'fwd', None)
                 if tup in grp._data_xfer:
                     self._con_xfers.append((grp, grp._data_xfer[tup]))
 

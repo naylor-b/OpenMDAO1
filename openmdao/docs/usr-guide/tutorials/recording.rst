@@ -58,8 +58,8 @@ by demonstrating how to save the data generated for future use. Consider the cod
     top.driver = ScipyOptimizer()
     top.driver.options['optimizer'] = 'SLSQP'
 
-    top.driver.add_desvar('p1.x', low=-50, high=50)
-    top.driver.add_desvar('p2.y', low=-50, high=50)
+    top.driver.add_desvar('p1.x', lower=-50, upper=50)
+    top.driver.add_desvar('p2.y', lower=-50, upper=50)
     top.driver.add_objective('p.f_xy')
 
     recorder = SqliteRecorder('paraboloid')
@@ -106,9 +106,9 @@ by demonstrating how to save the data generated for future use. Consider the cod
     root = top.root = Group()
 
 These next four lines are all it takes to record the state of the problem as the
-optimizer progresses. Notice that because by default, recorders only record 
-`Unknowns`, if we also want to record `Parameters` and `metadata`, we must 
-set those recording options. (We could also record `Resids` by using the 
+optimizer progresses. Notice that because by default, recorders only record
+`Unknowns`, if we also want to record `Parameters` and `metadata`, we must
+set those recording options. (We could also record `Resids` by using the
 `record_metadata` option but this problem does not have residuals. )
 
 .. testcode:: recording
@@ -273,8 +273,8 @@ etc. To access the data from our run, we can use the following code:
     top.driver = ScipyOptimizer()
     top.driver.options['optimizer'] = 'SLSQP'
 
-    top.driver.add_desvar('p1.x', low=-50, high=50)
-    top.driver.add_desvar('p2.y', low=-50, high=50)
+    top.driver.add_desvar('p1.x', lower=-50, upper=50)
+    top.driver.add_desvar('p2.y', lower=-50, upper=50)
     top.driver.add_objective('p.f_xy')
 
     recorder = SqliteRecorder('paraboloid')
@@ -395,75 +395,67 @@ sub-dictionary of an interation coordinate. It contains sub-dictionaries for met
    :hide:
    :options: -ELLIPSIS, +NORMALIZE_WHITESPACE
 
-    {'p.f_xy': {'pathname': 'p.f_xy',
-                'promoted_name': 'p.f_xy',
+    {'p.f_xy': {'is_objective': True,
+                'pathname': 'p.f_xy',
                 'shape': 1,
                 'size': 1,
                 'top_promoted_name': 'p.f_xy',
-                'val': array([ 0.])},
-     'p1.x': {'pathname': 'p1.x',
-              'promoted_name': 'p1.x',
+                'val': 0.0},
+     'p1.x': {'is_desvar': True,
+              'pathname': 'p1.x',
               'shape': 1,
               'size': 1,
               'top_promoted_name': 'p1.x',
-              'val': array([ 3.])},
-     'p2.y': {'pathname': 'p2.y',
-              'promoted_name': 'p2.y',
+              'val': 3.0},
+     'p2.y': {'is_desvar': True,
+              'pathname': 'p2.y',
               'shape': 1,
               'size': 1,
               'top_promoted_name': 'p2.y',
-              'val': array([-4.])}}
-    {'p.x': {'owned': True,
-             'pathname': 'p.x',
-             'promoted_name': 'p.x',
+              'val': -4.0}}
+    {'p.x': {'pathname': 'p.x',
              'shape': 1,
              'size': 1,
              'top_promoted_name': 'p.x',
-             'val': array([ 0.])},
-     'p.y': {'owned': True,
-             'pathname': 'p.y',
-             'promoted_name': 'p.y',
+             'val': 0.0},
+     'p.y': {'pathname': 'p.y',
              'shape': 1,
              'size': 1,
              'top_promoted_name': 'p.y',
-             'val': array([ 0.])}}
+             'val': 0.0}}
 
 This code prints out the following:
 
 ::
 
-    {'p.f_xy': {'pathname': 'p.f_xy',
-                'promoted_name': 'p.f_xy',
+    {'p.f_xy': {'is_objective': True,
+                'pathname': 'p.f_xy',
                 'shape': 1,
                 'size': 1,
                 'top_promoted_name': 'p.f_xy',
-                'val': array([ 0.])},
-     'p1.x': {'pathname': 'p1.x',
-              'promoted_name': 'p1.x',
+                'val': 0.0},
+     'p1.x': {'is_desvar': True,
+              'pathname': 'p1.x',
               'shape': 1,
               'size': 1,
               'top_promoted_name': 'p1.x',
-              'val': array([ 3.])},
-     'p2.y': {'pathname': 'p2.y',
-              'promoted_name': 'p2.y',
+              'val': 3.0},
+     'p2.y': {'is_desvar': True,
+              'pathname': 'p2.y',
               'shape': 1,
               'size': 1,
               'top_promoted_name': 'p2.y',
-              'val': array([-4.])}}
-    {'p.x': {'owned': True,
-             'pathname': 'p.x',
-             'promoted_name': 'p.x',
+              'val': -4.0}}
+    {'p.x': {'pathname': 'p.x',
              'shape': 1,
              'size': 1,
              'top_promoted_name': 'p.x',
-             'val': array([ 0.])},
-     'p.y': {'owned': True,
-             'pathname': 'p.y',
-             'promoted_name': 'p.y',
+             'val': 0.0},
+     'p.y': {'pathname': 'p.y',
              'shape': 1,
              'size': 1,
              'top_promoted_name': 'p.y',
-             'val': array([ 0.])}}
+             'val': 0.0}}
 
 
 .. testcleanup:: reading

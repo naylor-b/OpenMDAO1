@@ -2,11 +2,7 @@
 
 from __future__ import print_function
 
-from openmdao.components.indep_var_comp import IndepVarComp
-from openmdao.components.exec_comp import ExecComp
-from openmdao.core.component import Component
-from openmdao.core.problem import Problem, Group
-from openmdao.drivers.scipy_optimizer import ScipyOptimizer
+from openmdao.api import IndepVarComp, Component, Problem, Group, ExecComp, ScipyOptimizer
 
 class Paraboloid(Component):
     """ Evaluates the equation f(x,y) = (x-3)^2 + xy + (y+4)^2 - 3 """
@@ -59,8 +55,8 @@ if __name__ == "__main__":
     top.driver = ScipyOptimizer()
     top.driver.options['optimizer'] = 'SLSQP'
 
-    top.driver.add_desvar('p1.x', low=-50, high=50)
-    top.driver.add_desvar('p2.y', low=-50, high=50)
+    top.driver.add_desvar('p1.x', lower=-50, upper=50)
+    top.driver.add_desvar('p2.y', lower=-50, upper=50)
     top.driver.add_objective('p.f_xy')
     top.driver.add_constraint('con.c', lower=15.0)
 

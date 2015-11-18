@@ -140,7 +140,7 @@ class ParallelGroup(Group):
             max_requested = sum(max_req_procs)
             limit = min(size, max_requested)
 
-        # first, just use simple round robin assignment of requested CPUs
+        # first, just use simple round robin assignment of requested procs
         # until everybody has what they asked for or we run out
         if requested:
             while assigned < limit:
@@ -181,3 +181,16 @@ class ParallelGroup(Group):
                 sub._setup_communicators(sub_comm)
             else:
                 sub._setup_communicators(MPI.COMM_NULL)
+
+    def list_auto_order(self):
+        """
+        Returns
+        -------
+        list of str
+            Names of subsystems listed in their current order, since
+            order is irrelevant in a ParallelSystem.
+
+        list of str
+            This will always be an empty list.
+        """
+        return [s.name for s in self.subsystems()], []

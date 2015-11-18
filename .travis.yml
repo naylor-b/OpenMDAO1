@@ -13,7 +13,7 @@ os:
 language: generic
 
 env:
-- HDF5=h5py PY=2.7 MPI=1 USE_PROC_FILES=1
+- HDF5=h5py PY=2.7 MPI=1 USE_PROC_FILES=
 - HDF5=h5py PY=2.7 MPI=
 - HDF5=h5py PY=3.4 MPI=
 - HFF5= PY=2.7 MPI=
@@ -22,7 +22,7 @@ env:
 matrix:
   exclude:
   - os: osx
-    env: HDF5=h5py PY=2.7 MPI=1 USE_PROC_FILES=1
+    env: HDF5=h5py PY=2.7 MPI=1 USE_PROC_FILES=
 
 addons:
   apt:
@@ -46,7 +46,12 @@ before_install:
 - if [ "$OS" = "MacOSX" ] && [ "$MPI" ]; then brew install openmpi; fi
 - wget "https://repo.continuum.io/miniconda/Miniconda-latest-$OS-x86_64.sh" -O miniconda.sh
 - chmod +x miniconda.sh
-- ./miniconda.sh -b
+- if [ "$OS" = "Linux" ]; then
+    ./miniconda.sh -b  -p /home/travis/miniconda;
+  fi
+- if [ "$OS" = "MacOSX" ]; then
+    ./miniconda.sh -b  -p /Users/travis/miniconda;
+  fi
 - PATHPREFIX=$(if [[ "$TRAVIS_OS_NAME" = "osx" ]]; then echo "/Users/travis/miniconda/bin"; else echo "/home/travis/miniconda/bin"; fi)
 - export PATH=$PATHPREFIX:$PATH
 - export OPENMDAO_TEST_DOCS=1
@@ -82,7 +87,7 @@ script:
 - if [ "$MPI" ]; then
     testflo . --coverage --coverpkg openmdao -i;
   else
-    testflo . --coverage --coverpkg openmdao;
+    testflo . --coverage --coverpkg openmdao -n 1;
   fi
 
 after_success:

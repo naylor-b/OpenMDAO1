@@ -42,11 +42,8 @@ class FakeKona(Driver):
             comp.solve_nonlinear(comp.params, comp.unknowns, comp.resids)
 
     def _comps_from_vars(self, names):
-        uvec = self.root.unknowns
+        abs_u = self.root._sysdata.to_abs_uname
 
-        # convert to absolute names
-        anames = [uvec._vardict[n]['pathname'] for n in names]
-
-        cnames = set(v.rsplit('.', 1)[0] for v in anames)
+        cnames = set(abs_u[n].rsplit('.', 1)[0] for n in names)
         return cnames, [s for s in self.root.components(recurse=True)
                           if s.pathname in cnames]

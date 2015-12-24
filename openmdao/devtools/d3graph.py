@@ -28,7 +28,7 @@ def _startThread(fn):
     thread.start()
     return thread
 
-def system_tree(system):
+def system_tree_dict(system):
     """ Returns a dict representation of the system hierarchy with
     this System as root.
 
@@ -100,7 +100,7 @@ def view_tree(system, viewer='collapse_tree', port=8001):
     if not viewer.endswith('.html'):
         viewer += '.html'
 
-    tree = system_tree(system)
+    tree = system_tree_dict(system)
     try:
         startdir = os.getcwd()
         os.chdir(os.path.dirname(os.path.abspath(__file__)))

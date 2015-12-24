@@ -30,7 +30,8 @@ def _startThread(fn):
 
 def system_tree_dict(system):
     """ Returns a dict representation of the system hierarchy with
-    this System as root.
+    this System as root.  Unknown variables are included as child
+    nodes of Component systems nodes.
 
     Returns
     -------

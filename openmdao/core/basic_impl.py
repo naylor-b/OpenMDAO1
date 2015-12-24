@@ -2,6 +2,7 @@
 
 from openmdao.core.vec_wrapper import SrcVecWrapper, TgtVecWrapper
 from openmdao.core.data_transfer import DataTransfer
+from openmdao.core.mpi_wrap import FakeComm
 
 
 class BasicImpl(object):
@@ -10,12 +11,19 @@ class BasicImpl(object):
     idx_arr_type = int
 
     @staticmethod
-    def create_src_vecwrapper(pathname, comm):
+    def world_comm():
+        return FakeComm()
+
+    @staticmethod
+    def create_src_vecwrapper(sysdata, comm):
         """
         Create a vecwrapper for source variables.
 
         Args
         ----
+        sysdata : _SysData
+            A data object for System level data.
+
         comm : a fake communicator or None.
             This arg is ignored.
 
@@ -23,15 +31,18 @@ class BasicImpl(object):
         -------
         `SrcVecWrapper`
         """
-        return SrcVecWrapper(pathname, comm)
+        return SrcVecWrapper(sysdata, comm)
 
     @staticmethod
-    def create_tgt_vecwrapper(pathname, comm):
+    def create_tgt_vecwrapper(sysdata, comm):
         """
         Create a vecwrapper for target variables.
 
         Args
         -----
+        sysdata : _SysData
+            A data object for system level data
+
         comm : a fake communicator or None.
             This arg is ignored.
 
@@ -39,12 +50,12 @@ class BasicImpl(object):
         -------
         `TgtVecWrapper`
         """
-        return TgtVecWrapper(pathname, comm)
+        return TgtVecWrapper(sysdata, comm)
 
     @staticmethod
     def create_data_xfer(src_vec, tgt_vec,
                          src_idxs, tgt_idxs, vec_conns, byobj_conns,
-                         mode):
+                         mode, sysdata):
         """
         Create an object for performing data transfer between source
         and target vectors.
@@ -76,9 +87,14 @@ class BasicImpl(object):
         mode : str
             Either 'fwd' or 'rev', indicating a forward or reverse scatter.
 
+        sysdata : `SysData` object
+            The `SysData` object for the Group that will contain the new
+            `DataTransfer` object.
+
         Returns
         -------
         `DataTransfer`
             A `DataTransfer` object.
         """
-        return DataTransfer(src_idxs, tgt_idxs, vec_conns, byobj_conns, mode)
+        return DataTransfer(src_idxs, tgt_idxs, vec_conns, byobj_conns, mode,
+                            sysdata)

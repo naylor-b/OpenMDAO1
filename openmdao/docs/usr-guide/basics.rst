@@ -1,4 +1,3 @@
-
 .. _Basics:
 
 ======
@@ -77,7 +76,7 @@ They are the `Component` class and the `Group` class.
 Component
 ---------
 
-The `Component` class is lowest level system in OpenMDAO. Child classes of
+The `Component` class is the lowest level system in OpenMDAO. Child classes of
 `Component` are the only classes allowed to create parameter, output, and state
 variables. By sub-classing `Component` and defining a *solve_nonlinear* (and
 *apply_nonlinear* if state variables are present), users can build their own
@@ -90,10 +89,9 @@ Variables are added to the class in the constructor (*__init__* method) via the
 
     class MyComp(Component):
         def __init__(self):
+            super(MyComp, self).__init__()
             self.add_param('x', val=0.)
-
             self.add_output('y', shape=1)
-
             self.add_state('z', val=[0., 1.])
 
 .. note::
@@ -144,13 +142,13 @@ Component Derivatives
 ----------------------
 If you want to define analytic derivatives for your components, to help make your
 optimizations faster and more accurate, then your component will also define
-a *jacobian* method, that linearizes the non-linear equations and provides the
+a *linearize* method, that linearizes the non-linear equations and provides the
 partial derivatives (derivatives of unknowns w.r.t parameters for a single component)
 to the framework.
 
 ::
 
-  def jacobian(self, params, unknowns, resids):
+  def linearize(self, params, unknowns, resids):
       J = {}
       J['y','x'] = 2*params['x']
       J['y','y'] = 1
@@ -187,6 +185,13 @@ For example, we can add a `Group` to another `Group` along with some `Components
     g2.add('comp3', c3)
     g2.add('sub_group_1', g1)
 
+.. |playbutton|  image:: ../_images/blueplaybutton.png
+    :height: 20px
+    :target: http://openmdao.org/images/GroupDemo_animated.gif
+
+Visualize this example: |playbutton|
+
+
 Interdependencies between `Systems` in a `Group` are represented as connections
 between the variables in the `Group`'s subsystems.  Connections can be made
 either explicitly or implicitly.
@@ -196,7 +201,13 @@ An explicit connection is made from the output (or state) of one `System` to the
 
 ::
 
-    g1.connect('c1.y', 'c2.x')
+    g2.sub_group_1.connect('comp1.y', 'comp2.x')
+
+.. |playbutton2|  image:: ../_images/blueplaybutton.png
+    :height: 20px
+    :target: http://openmdao.org/images/ExplicitConnection_animated.gif
+
+Visualize this example: |playbutton2|
 
 Alternatively, you can use the *promotion* mechanism to implicitly connect two
 or more variables.  When a `System` is added to a `Group`, you may optionally
@@ -206,7 +217,7 @@ were a variable of the `Group` rather than the subsystem.  For Example:
 
 ::
 
-    g2.add(c3, promotes=['x'])
+    g2.add("comp3", c3, promotes=['x'])
 
 Now you can access the parameter 'x' from 'c3' as if it were a variable of
 the group: 'g2.x'. If you promote multiple subsystem variables with the same
@@ -214,12 +225,19 @@ name, then those variables will be implicitly connected:
 
 ::
 
-    g2.add(g1, promotes=['c1.x'])
+    g2.add("sub_group_1", g1, promotes=['comp1.x'])
 
 Now setting a value for 'g2.x' will set the value for both 'c3.x' and 'g1.c1.x'
 and they are said to be implicitly connected.  If you promote the output from
 one subsystem and the input of another with the same name, then that will have
 the same effect as the explicit connection statement as shown above.
+
+.. |playbutton3|  image:: ../_images/blueplaybutton.png
+    :height: 20px
+    :target: http://openmdao.org/images/Promotion_animated.gif
+
+Visualize this example: |playbutton3|
+
 
 In contrast to a `Component`, which is responsible for defining the variables
 and equations that map between them, a `Group` has the responsibility of assembling
@@ -267,32 +285,74 @@ data transfers that must occur during execution. It will also look for and
 report any potential issues with the `Problem` configuration, including
 unconnected parameters, conflicting units, etc.
 
+.. |playbutton4|  image:: ../_images/blueplaybutton.png
+    :height: 20px
+    :target: http://openmdao.org/images/Problem_animated.gif
+
+Visualize this example: |playbutton4|
+
 Summary
 -------
 
 The general procedure for defining and solving a `Problem` in OpenMDAO is:
-    - define `Components` (including their *solve_nonlinear* and optional *jacobian* functions)
+    - define `Components` (including their *solve_nonlinear* and optional *linearize* functions)
     - assemble `Components` into Groups and make connections (explicitly or implicitly)
     - instantiate a `Problem` with the *root* `Group`
     - perform *setup* on the `Problem` to initialize all vectors and data transfers
     - perform *run* on the Problem
 
-A very basic example of defining and running a `Problem` as discussed here is shown below.
-This example makes use of a couple of convenience components to provide a source for the
-parameter (`ParamComp`) and to quickly define a `Component` for an equation (`ExecComp`).
+A very basic example of defining and running a `Problem` with a custom `Component` is shown below.
+This example makes use of the convenience component `IndepVarComp` to provide a source for the
+input parameter to the custom `MultiplyByTwoComponent`.
 
-::
+.. testcode:: basics
 
-    from openmdao.core import Group, Problem
-    from openmdao.components import ParamComp, ExecComp
+    from __future__ import print_function
+
+    from openmdao.api import Group, Problem, Component, IndepVarComp
+
+    class MultiplyByTwoComponent(Component):
+        def __init__(self):
+            super(MultiplyByTwoComponent, self).__init__() # always call the base class constructor first
+            self.add_param('x_input', val=0.) # the input that will be multiplied by 2
+            self.add_output('y_output', shape=1) # shape=1 => a one dimensional array of length 1 (a scalar)
+
+            # an internal variable that counts the number of times this component was executed
+            self.counter = 0
+
+        def solve_nonlinear(self, params, unknowns, resids):
+            unknowns['y_output'] = params['x_input']*2
+            self.counter += 1
 
     root = Group()
-    root.add('x_param', ParamComp('x', 7.0))
-    root.add('mycomp', ExecComp('y=x*2.0'))
-    root.connect('x_param.x', 'mycomp.x')
+    root.add('indep_var', IndepVarComp('x', 7.0))
+    root.add('my_comp', MultiplyByTwoComponent())
+    root.connect('indep_var.x', 'my_comp.x_input')
 
     prob = Problem(root)
     prob.setup()
     prob.run()
 
-    result = root.unknowns['mycomp.y']
+    result = prob['my_comp.y_output']
+    count = prob.root.my_comp.counter
+    print(result)
+    print(count)
+
+Running this example produces the output:
+
+.. testoutput:: basics
+
+   14.0
+   1
+
+
+.. raw:: html
+
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+    <script type="text/javascript" src="http://openmdao.org/images/lightbox.js"></script>
+
+    <script type="text/javascript">
+        $(document).ready(function() {
+            $("a[href$=.gif]").lightBox();
+        });
+    </script>

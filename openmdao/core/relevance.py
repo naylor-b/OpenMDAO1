@@ -8,6 +8,8 @@ from six import string_types, itervalues, iteritems
 
 import networkx as nx
 
+from openmdao.util.graph import collapse_nodes
+
 
 class Relevance(object):
     """ Object that manages the data connectivity graph for systems."""
@@ -18,38 +20,34 @@ class Relevance(object):
         self.params_dict = params_dict
         self.unknowns_dict = unknowns_dict
         self.mode = mode
+        self._sysdata = group._sysdata
 
-        param_groups = {}
-        output_groups = {}
-        g_id = 0
+        param_groups = []
+        output_groups = []
 
         # turn all inputs and outputs, even singletons, into tuples
         self.inputs = []
         for inp in inputs:
             if isinstance(inp, string_types):
                 inp = (inp,)
-            if len(inp) == 1:
-                param_groups.setdefault(None, []).append(inp[0])
-            else:
-                param_groups[g_id] = tuple(inp)
-                g_id += 1
-
+            param_groups.append(tuple(inp))
             self.inputs.append(tuple(inp))
 
         self.outputs = []
         for out in outputs:
             if isinstance(out, string_types):
                 out = (out,)
-            if len(out) == 1:
-                output_groups.setdefault(None, []).append(out)
-            else:
-                output_groups[g_id] = tuple(out)
-                g_id += 1
-
-            self.outputs.append(out)
+            output_groups.append(tuple(out))
+            self.outputs.append(tuple(out))
 
         self._vgraph, self._sgraph = self._setup_graphs(group, connections)
         self.relevant = self._get_relevant_vars(self._vgraph)
+        # when voi is None, everything is relevant
+        self.relevant[None] = set(m['top_promoted_name']
+                                    for m in itervalues(unknowns_dict))
+        self.relevant[None].update(m['top_promoted_name']
+                                    for m in itervalues(params_dict))
+        self._relevant_systems = self._get_relevant_systems()
 
         if mode == 'fwd':
             self.groups = param_groups
@@ -81,16 +79,17 @@ class Relevance(object):
         -------
         bool: True if varname is in the relevant path of var_of_interest
         """
-        if var_of_interest is None:
+        try:
+            return varname in self.relevant[var_of_interest]
+        except KeyError:
             return True
-        return varname in self.relevant[var_of_interest]
 
     def vars_of_interest(self, mode=None):
         """ Determines our list of var_of_interest depending on mode.
 
         Args
         ----
-        mode : string
+        mode : str
             Derivative mode, can be 'fwd' or 'rev'.
 
         Returns
@@ -105,6 +104,28 @@ class Relevance(object):
             return self.outputs
         else:
             return self.inputs+self.outputs
+
+    def is_relevant_system(self, var_of_interest, system):
+        """
+        Args
+        ----
+        var_of_interest : str
+            Name of a variable of interest (either a parameter or a constraint
+            or objective output, depending on mode.)
+
+        system : `System`
+            The system being checked for relevant w.r.t. the variable of
+            interest.
+
+        Returns
+        -------
+        bool
+            True if the given system is relevant for the given variable of
+            interest.
+        """
+        if var_of_interest is None:
+            return True
+        return system.pathname in self._relevant_systems[var_of_interest]
 
     def _setup_graphs(self, group, connections):
         """
@@ -126,29 +147,30 @@ class Relevance(object):
         compouts = {} # maps output vars to components
 
         promote_map = {}
+        to_prom_name = group._sysdata.to_prom_name
 
         # ensure we have system graph nodes even for unconnected subsystems
         sgraph.add_nodes_from([s.pathname for s in group.subsystems(recurse=True)])
 
-        for target, source in iteritems(connections):
+        for target, (source, idxs) in iteritems(connections):
             vgraph.add_edge(source, target)
             sgraph.add_edge(source.rsplit('.', 1)[0], target.rsplit('.', 1)[0])
 
-        for meta in itervalues(params_dict):
-            param = meta['pathname']
+        for param, meta in iteritems(params_dict):
             tcomp = param.rsplit('.', 1)[0]
             compins.setdefault(tcomp, []).append(param)
-            if meta['promoted_name'] != param:# and param in connections:
-                promote_map[param] = meta['promoted_name']
+            prom = to_prom_name[param]
+            if prom != param:
+                promote_map[param] = prom
                 if param not in vgraph:
                     vgraph.add_node(param)
 
-        for meta in itervalues(unknowns_dict):
-            unknown = meta['pathname']
+        for unknown, meta in iteritems(unknowns_dict):
             scomp = unknown.rsplit('.', 1)[0]
             compouts.setdefault(scomp, []).append(unknown)
-            if meta['promoted_name'] != unknown:
-                promote_map[unknown] = meta['promoted_name']
+            prom = to_prom_name[unknown]
+            if prom != unknown:
+                promote_map[unknown] = prom
                 if unknown not in vgraph:
                     vgraph.add_node(unknown)
 
@@ -160,12 +182,7 @@ class Relevance(object):
                     vgraph.add_edge(inp, out)
 
         # now collapse any var nodes with implicit connections
-        nx.relabel_nodes(vgraph, promote_map, copy=False)
-
-        # remove any self edges created by the relabeling
-        for u, v in vgraph.edges():
-            if u == v:
-                vgraph.remove_edge(u, v)
+        collapse_nodes(vgraph, promote_map, copy=False)
 
         return vgraph, sgraph
 
@@ -182,26 +199,70 @@ class Relevance(object):
             Dictionary that maps a variable name to all other variables in the
             graph that are relevant to it.
         """
+        relevant = {}
         succs = {}
         for nodes in self.inputs:
             for node in nodes:
-                succs[node] = set([v for u, v in nx.dfs_edges(g, node)])
-                succs[node].add(node)
+                relevant[node] = set()
+                succs[node] = set((node,))
+                if node in g:
+                    succs[node].update([v for u, v in nx.dfs_edges(g, node)])
 
-        relevant = {}
         grev = g.reverse()
+        self._outset = set()
         for nodes in self.outputs:
             for node in nodes:
                 relevant[node] = set()
-                preds = set([v for u, v in nx.dfs_edges(grev, node)])
-                preds.add(node)
-                for inps in self.inputs:
-                    for inp in inps:
-                        common = preds.intersection(succs[inp])
-                        relevant[node].update(common)
-                        relevant.setdefault(inp, set()).update(common)
+                self._outset.add(node)
+                if node in g:
+                    preds = set([v for u, v in nx.dfs_edges(grev, node)])
+                    preds.add(node)
+                    for inps in self.inputs:
+                        for inp in inps:
+                            if inp in g:
+                                common = preds.intersection(succs[inp])
+                                relevant[node].update(common)
+                                relevant[inp].update(common)
 
         return relevant
+
+    def _get_relevant_systems(self):
+        """
+        Given the dict that maps relevant vars to each VOI, find the mapping
+        of each VOI to the set of systems that need to run.
+        """
+        relevant_systems = {}
+        grev = self._sgraph.reverse()
+
+        to_abs_uname = self._sysdata.to_abs_uname
+        to_abs_pnames = self._sysdata.to_abs_pnames
+
+        for voi, relvars in iteritems(self.relevant):
+            rev = True if voi in self._outset else False
+            if rev:
+                voicomp = to_abs_uname[voi].rsplit('.', 1)[0]
+                gpath = set([voicomp])
+                gpath.update([v for u,v in nx.dfs_edges(grev, voicomp)])
+            comps = set()
+            for relvar in relvars:
+                if relvar in to_abs_uname:
+                    absvars = (to_abs_uname[relvar],)
+                else:
+                    absvars = iter(to_abs_pnames[relvar])
+                for absvar in absvars:
+                    parts = absvar.split('.')
+                    for i in range(len(parts)-1):
+                        cname = '.'.join(parts[:i+1])
+                        # in rev mode, need to eliminate irrelevant systems that
+                        # have shared promoted vars
+                        if rev:
+                            if cname in gpath:
+                                comps.add(cname)
+                        else:
+                            comps.add(cname)
+            relevant_systems[voi] = tuple(comps)
+
+        return relevant_systems
 
     def json_dependencies(self):
         """ Returns a json representation of a model's data dependency graph.

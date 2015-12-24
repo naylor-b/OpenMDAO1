@@ -1,3 +1,175 @@
+OpenMDAO Version 1.4.1 Alpha Release Notes
+November 24, 2015
+
+Features
+* User now gets an error if passing "promotes" keyword arg into any system.  Should help reduce
+confusion when making models.
+* Newton Solver will respect state variable bounds.
+
+Bugfixes
+* The original check to see if a linear solver with maxiter>1 was needed was too strict
+in some cases where a component had states.  If a component defines its own solve_linear method
+then an iterative solver isn't needed, even if the component has states.
+
+
+---------------------------------------------------------------------------------------------------
+OpenMDAO Version 1.4.0 Alpha Release Notes
+November 18, 2015
+
+API Change
+* When using 'add_desvar' and 'add_constraint', there were inconsistent names for setting
+bounds.  (low, high vs. lower, upper), which was becoming confusing to users.  The new
+standard is that all are consistently set using "lower" and "upper", and the others are deprecated.
+
+Default Setting Changes
+* Recording option 'record_metadata' now defaults to True for all recorders except CSVRecorder.
+* The default linear solver will now be LinearGaussSeidel.
+
+Features
+* OpenMDAO 1.3 and onward will be pip-installable, as the project is now indexed on pypi:
+    https://pypi.python.org/pypi/openmdao/  (installation docs updated)
+* Added a "restart" option to the ScipyGMRES solver.
+* Added a new real-world example problem (beam-sizing) in the User Guide's Tutorials section.
+* Recorders now have an option to turn off recording of Params, Unknowns, Resids.
+* Recorders now include metadata for objectives, design variables, and constraints.
+* Parameters may now be declared without val or shape being given.
+* Users can now turn on 'iprint' recursively for all solvers in a Problem;
+  do this by calling 'print_all_convergence' on a problem after calling setup.
+* Users now receive a check_setup warning about any scalar integer variable or any list value.
+
+Bugfixes
+* Added a much more descriptive error message if a Jacobian item is the incorrect size.
+* Improved shape mismatch errors for connections to be much more specific.
+* Updated everything in the Examples directory to run without error.
+* Fixed a bug with SqliteRecorder that occurred when running in parallel.
+* OpenMDAO's memory footprint has been reduced by removing some data duplication.
+* 'pass_by_obj' vars may now be added to a gradient-free driver.
+
+---------------------------------------------------------------------------------------------------
+OpenMDAO Version 1.3.0 Alpha Release Notes
+November 4, 2015
+
+API Change
+* The function named `jacobian` has been changed everywhere to the clearer, more descriptive,
+more correct `linearize`.  Use of `jacobian` is deprecated, please change your files
+accordingly.
+
+Features
+* Added some explanatory animations to the Basics section of the User Guide.
+* Users can now finite difference in parallel for derivatives.
+* Improved warning/error system for connected input problems.
+* Added ability to capture variable metadata to recorders.
+* User can now set fd mode to complex_step for fd_jacobian method on component.
+* Added new option to recorders to specify to not save Params, Unknowns, Resids.
+
+Bugfixes
+* Fixed a bug in sparse Jacobian so that it no longer computes nor creates knowably zero entries.
+* Fixed some documentation errors in the recorder tutorial.
+* Fixed a bug wherein unknown values were not updated when using Python 3.x
+* Created a more descriptive error message for a user trying to access a variable
+    unavailable in the current process.
+* Components now required to properly initialize their outputs.
+
+---------------------------------------------------------------------------------------------------
+OpenMDAO Version 1.2.0 Alpha Release Notes
+October 15, 2015
+
+API Change
+*The way imports work in OpenMDAO has changed.  Importing things from their parent module
+no longer works.  Importing things directly from their source files still works.
+A new namespace, "openmdao.api" has been created, from which you can import anything
+you previously got from a module file.
+
+Examples:
+#Example 1:  old way, import from module, no longer supported
+from openmdao.core import Component, Group
+from openmdao.components import IndepVarComp
+from openmdao.solvers import ScipyGMRES
+
+#Example 2: directly from source file (still works), to do same as Ex 1.
+from openmdao.core.component import Component
+from openmdao.core.group import Group
+from openmdao.components.indep_var_comp import IndepVarComp
+from openmdao.solvers.scipy_gmres import ScipyGMRES
+
+#Example 3: new way using openmdao.api, to do same as Ex 1.
+from openmdao.api import Component, Group, IndepVarComp, ScipyGMRES
+
+As always, even though we are still in alpha, we apologize if our API changes
+cause any problems.  Feel free to ask questions on our StackOverflow tag if you
+experience any difficulties.
+
+
+Features
+* Users can solve for derivatives with a LinGS solver
+* check_partial_derivatives now loops over all variables in a component.
+* Updated many docstrings and the generate_docstring function to include options.
+
+
+Bugfixes
+* Fixed precedence for fd settings in check_partial_derivatives.
+* Fixed small bug in setup's reporting of unit conversions.
+* Fixed bug regarding Jacobian size disagreement in brachistochrone_slsqp problem.
+* Fixed a bug with scaler and adder in pyoptsparse_driver.
+* Fixed a bug in Jacobian sizing
+* Fix so the Jacobian returned to pyoptsparse reflects sparsity of constraints with
+  respect to the design vars.
+
+---------------------------------------------------------------------------------------------------
+OpenMDAO Version 1.1.1 Alpha Release Notes
+September 22, 2015
+
+* Fixed a problem with a missing dependency for our documentation build on openmdao.readthedocs.org
+
+---------------------------------------------------------------------------------------------------
+OpenMDAO Version 1.1.0 Alpha Release Notes
+September 22, 2015
+
+API Changes
+* Renamed 'ParamComp' to 'IndepVarComp,'' because it’s really just a component that
+supplies one or more independent variables as outputs, and it has no parameters. And
+overuse of term 'param' may have been causing confusion.
+
+* Changed the names of some Driver methods, replacing 'param' with
+'desvar,' which is short for ‘design variable’.  So 'set_param' is now
+'set_desvar,' 'get_params' is now 'get_desvars,' and 'add_param' is now 'add_desvar.'
+
+* ConstraintComp is going away, but user can add constraints directly to an optimizer
+ via driver.add_constraint(‘<var_name>’, lower=xxx, upper=xxx, equals=xxxx)
+
+
+Features
+* Multiple documentation changes and fixes, including:
+    - an example for running check_partial_derivatives,
+    - an MPI parallelization tutorial,
+    - ExecComp example that shows how to handle array vars,
+    - better auto-documentation of our components/drivers (now including Options).
+* User can solve for derivatives with a Petsc KSP solver.
+* User can now create a recorder using SQLlite as the db w/shelve API.
+* GMRES linear solver now uses solve_linear method for preconditioning.
+* Added iprint output to all the linear and nonlinear solvers.
+* Convert CADRE problem for use with the Alpha, including Linear Gauss-Seidel.
+* Added support for distributed components.
+* Added Surrogate Generators
+* Further work on parallel, incuding:
+    - Got parallel working with petsc 3.6.
+    - Got parallel derivs in adjoint when voi are under parallel goups
+    - Get gradient calculation working for constraints that live in (or below) parallel systems under MPI.
+
+
+Bugfixes:
+* Fixed bug where derivative calculation breaks when a parameter sub_slice is added to a driver.
+* pyoptsparse now works with Python 3.4.x
+* Made dump recorder work in parallel for CADRE. Also, updated drivers so that all obj/cons are gathered by the time we record.
+* When calling group.subsystems with local=True, execution order of systems is now preserved.
+* User now gets a clearer error about petscImpl if they try to run under MPI without the petsc_impl
+* ExecComp now raises an exception if any of the kwargs passed to init are not variables found in the ExecComp equations.
+* Driver.set_param no longer ignores 'indices' metadata.
+* Promotion of a non-existent variable now provides full path name in the error message.
+* Fixed a bug in reverse mode when using apply_linear
+* Now skips tests (instead of failing) in test_mpi_derivs.py if petsc4py is not installed on host system.
+
+---------------------------------------------------------------------------------------------------
 OpenMDAO Version 1.0.5 Alpha Release Notes
 August 12, 2015
 

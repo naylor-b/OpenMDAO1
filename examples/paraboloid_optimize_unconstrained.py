@@ -2,10 +2,7 @@
 
 from __future__ import print_function
 
-from openmdao.components.param_comp import ParamComp
-from openmdao.core.component import Component
-from openmdao.core.problem import Problem, Group
-from openmdao.drivers.scipy_optimizer import ScipyOptimizer
+from openmdao.api import IndepVarComp, Component, Problem, Group, ScipyOptimizer
 
 class Paraboloid(Component):
     """ Evaluates the equation f(x,y) = (x-3)^2 + xy + (y+4)^2 - 3 """
@@ -28,7 +25,7 @@ class Paraboloid(Component):
 
         unknowns['f_xy'] = (x-3.0)**2 + x*y + (y+4.0)**2 - 3.0
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """ Jacobian for our paraboloid."""
 
         x = params['x']
@@ -45,8 +42,8 @@ if __name__ == "__main__":
 
     root = top.root = Group()
 
-    root.add('p1', ParamComp('x', 3.0))
-    root.add('p2', ParamComp('y', -4.0))
+    root.add('p1', IndepVarComp('x', 3.0))
+    root.add('p2', IndepVarComp('y', -4.0))
     root.add('p', Paraboloid())
 
     root.connect('p1.x', 'p.x')
@@ -55,8 +52,8 @@ if __name__ == "__main__":
     top.driver = ScipyOptimizer()
     top.driver.options['optimizer'] = 'SLSQP'
 
-    top.driver.add_param('p1.x', low=-50, high=50)
-    top.driver.add_param('p2.y', low=-50, high=50)
+    top.driver.add_desvar('p1.x', lower=-50, upper=50)
+    top.driver.add_desvar('p2.y', lower=-50, upper=50)
     top.driver.add_objective('p.f_xy')
 
     top.setup()

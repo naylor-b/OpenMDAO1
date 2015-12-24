@@ -31,6 +31,23 @@ class ScipyOptimizer(Driver):
     optimizers. Inequality constraints are supported by COBYLA and SLSQP,
     but equality constraints are only supported by COBYLA. None of the other
     optimizers support constraints.
+
+    ScipyOptimizer supports the following:
+        equality_constraints
+
+        inequality_constraints
+
+    Options
+    -------
+    options['disp'] :  bool(True)
+        Set to False to prevent printing of Scipy convergence messages
+    options['maxiter'] :  int(200)
+        Maximum number of iterations.
+    options['optimizer'] :  str('SLSQP')
+        Name of optimizer to use
+    options['tol'] :  float(1e-06)
+        Tolerance for termination. For detailed control, use solver-specific options.
+
     """
 
     def __init__(self):
@@ -46,10 +63,10 @@ class ScipyOptimizer(Driver):
         # User Options
         self.options.add_option('optimizer', 'SLSQP', values=_optimizers,
                                 desc='Name of optimizer to use')
-        self.options.add_option('tol', 1.0e-6,
+        self.options.add_option('tol', 1.0e-6, lower=0.0,
                                 desc='Tolerance for termination. For detailed '
                                 'control, use solver-specific options.')
-        self.options.add_option('maxiter', 200,
+        self.options.add_option('maxiter', 200, lower=0,
                                 desc='Maximum number of iterations.')
         self.options.add_option('disp', True,
                                 desc='Set to False to prevent printing of Scipy '
@@ -61,10 +78,16 @@ class ScipyOptimizer(Driver):
         self.metadata = None
         self._problem = None
         self.result = None
+        self.exit_flag = 0
         self.grad_cache = None
+        self.con_cache = None
         self.con_idx = {}
         self.cons = None
         self.objs = None
+
+    def _setup(self):
+        self.supports['gradients'] = self.options['optimizer'] in _gradient_optimizers
+        super(ScipyOptimizer, self)._setup()
 
     def run(self, problem):
         """Optimize the problem using your choice of Scipy optimizer.
@@ -84,11 +107,12 @@ class ScipyOptimizer(Driver):
         # Initial Run
         problem.root.solve_nonlinear(metadata=self.metadata)
 
-        pmeta = self.get_param_metadata()
+        pmeta = self.get_desvar_metadata()
         self.params = list(iterkeys(pmeta))
         self.objs = list(iterkeys(self.get_objectives()))
         con_meta = self.get_constraint_metadata()
         self.cons = list(iterkeys(con_meta))
+        self.con_cache = self.get_constraints()
 
         self.opt_settings['maxiter'] = self.options['maxiter']
         self.opt_settings['disp'] = self.options['disp']
@@ -107,15 +131,15 @@ class ScipyOptimizer(Driver):
         else:
             bounds = None
 
-        for name, val in iteritems(self.get_params()):
+        for name, val in iteritems(self.get_desvars()):
             size = pmeta[name]['size']
             x_init[i:i+size] = val
             i += size
 
             # Bounds if our optimizer supports them
             if use_bounds:
-                meta_low = pmeta[name]['low']
-                meta_high = pmeta[name]['high']
+                meta_low = pmeta[name]['lower']
+                meta_high = pmeta[name]['upper']
                 for j in range(0, size):
 
                     if isinstance(meta_low, np.ndarray):
@@ -138,10 +162,13 @@ class ScipyOptimizer(Driver):
                 size = meta['size']
                 for j in range(0, size):
                     con_dict = {}
-                    con_dict['type'] = meta['ctype']
-                    con_dict['fun'] = self.confunc
+                    if meta['equals'] is not None:
+                        con_dict['type'] = 'eq'
+                    else:
+                        con_dict['type'] = 'ineq'
+                    con_dict['fun'] = self._confunc
                     if opt in _constraint_grad_optimizers:
-                        con_dict['jac'] = self.congradfunc
+                        con_dict['jac'] = self._congradfunc
                     con_dict['args'] = [name, j]
                     constraints.append(con_dict)
                 self.con_idx[name] = i
@@ -149,13 +176,13 @@ class ScipyOptimizer(Driver):
 
         # Provide gradients for optimizers that support it
         if opt in _gradient_optimizers:
-            jac = self.gradfunc
+            jac = self._gradfunc
         else:
             jac = None
 
         # optimize
         self._problem = problem
-        result = minimize(self.objfunc, x_init,
+        result = minimize(self._objfunc, x_init,
                           #args=(),
                           method=opt,
                           jac=jac,
@@ -169,11 +196,13 @@ class ScipyOptimizer(Driver):
 
         self._problem = None
         self.result = result
+        self.exit_flag = 1 if self.result.success else 0
 
-        print('Optimization Complete')
-        print('-'*35)
+        if self.options['disp']:
+            print('Optimization Complete')
+            print('-'*35)
 
-    def objfunc(self, x_new):
+    def _objfunc(self, x_new):
         """ Function that evaluates and returns the objective function. Model
         is executed here.
 
@@ -193,23 +222,26 @@ class ScipyOptimizer(Driver):
 
         # Pass in new parameters
         i = 0
-        for name, meta in self.get_param_metadata().items():
+        for name, meta in self.get_desvar_metadata().items():
             size = meta['size']
-            self.set_param(name, x_new[i:i+size])
+            self.set_desvar(name, x_new[i:i+size])
             i += size
 
         self.iter_count += 1
         update_local_meta(metadata, (self.iter_count,))
 
         system.solve_nonlinear(metadata=metadata)
-        for recorder in self.recorders:
-            recorder.raw_record(system.params, system.unknowns,
-                                system.resids, metadata)
 
         # Get the objective function evaluations
         for name, obj in self.get_objectives().items():
             f_new = obj
             break
+
+        self.con_cache = self.get_constraints()
+
+        # Record after getting obj and constraints to assure it has been
+        # gathered in MPI.
+        self.recorders.record_iteration(system, metadata)
 
         #print("Functions calculated")
         #print(x_new)
@@ -217,7 +249,7 @@ class ScipyOptimizer(Driver):
 
         return f_new
 
-    def confunc(self, x_new, name, idx):
+    def _confunc(self, x_new, name, idx):
         """ Function that returns the value of the constraint function
         requested in args. Note that this function is called for each
         constraint, so the model is only run when the objective is evaluated.
@@ -226,10 +258,8 @@ class ScipyOptimizer(Driver):
         ----
         x_new : ndarray
             Array containing parameter values at new design point.
-
         name : string
             Name of the constraint to be evaluated.
-
         idx : float
             Contains index into the constraint array.
 
@@ -239,17 +269,30 @@ class ScipyOptimizer(Driver):
             Value of the constraint function.
         """
 
-        cons = self.get_constraints()
+        cons = self.con_cache
+        meta = self._cons[name]
 
-        #print("Constraint returned")
-        #print(x_new)
-        #print(name, idx, cons[name][idx])
+        # Equality constraints
+        bound = meta['equals']
+        if bound is not None:
+            if isinstance(bound, np.ndarray):
+                bound = bound[idx]
+            return bound - cons[name][idx]
 
         # Note, scipy defines constraints to be satisfied when positive,
         # which is the opposite of OpenMDAO.
-        return -cons[name][idx]
+        bound = meta['upper']
+        if bound is not None:
+            if isinstance(bound, np.ndarray):
+                bound = bound[idx]
+            return bound - cons[name][idx]
+        else:
+            bound = meta['lower']
+            if isinstance(bound, np.ndarray):
+                bound = bound[idx]
+            return cons[name][idx] - bound
 
-    def gradfunc(self, x_new):
+    def _gradfunc(self, x_new):
         """ Function that evaluates and returns the objective function.
         Gradients for the constraints are also calculated and cached here.
 
@@ -264,8 +307,8 @@ class ScipyOptimizer(Driver):
             Gradient of objective with respect to parameter array.
         """
 
-        grad = self._problem.calc_gradient(self.params, self.objs+self.cons,
-                                           return_format='array')
+        grad = self.calc_gradient(self.params, self.objs+self.cons,
+                                  return_format='array')
         self.grad_cache = grad
 
         #print("Gradients calculated")
@@ -274,7 +317,7 @@ class ScipyOptimizer(Driver):
 
         return grad[0, :]
 
-    def congradfunc(self, x_new, name, idx):
+    def _congradfunc(self, x_new, name, idx):
         """ Function that returns the cached gradient of the constraint
         function. Note, scipy calls the constraints one at a time, so the
         gradient is cached when the objective gradient is called.
@@ -283,10 +326,8 @@ class ScipyOptimizer(Driver):
         ----
         x_new : ndarray
             Array containing parameter values at new design point.
-
         name : string
             Name of the constraint to be evaluated.
-
         idx : float
             Contains index into the constraint array.
 
@@ -297,12 +338,20 @@ class ScipyOptimizer(Driver):
         """
 
         grad = self.grad_cache
+        meta = self._cons[name]
         grad_idx = self.con_idx[name] + idx + 1
 
         #print("Constraint Gradient returned")
         #print(x_new)
         #print(name, idx, grad[grad_idx, :])
 
+        # Equality constraints
+        if meta['equals'] is not None:
+            return -grad[grad_idx, :]
+
         # Note, scipy defines constraints to be satisfied when positive,
         # which is the opposite of OpenMDAO.
-        return -grad[grad_idx, :]
+        if meta['upper'] is not None:
+            return -grad[grad_idx, :]
+        else:
+            return grad[grad_idx, :]

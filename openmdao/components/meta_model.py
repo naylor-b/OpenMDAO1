@@ -15,6 +15,18 @@ class MetaModel(Component):
     'train:' prepended to the corresponding parameter/output name.
 
     For a Float variable, the training data is an array of length m.
+
+    Options
+    -------
+    fd_options['force_fd'] :  bool(False)
+        Set to True to finite difference this system.
+    fd_options['form'] :  str('forward')
+        Finite difference mode. (forward, backward, central) You can also set to 'complex_step' to peform the complex step method if your components support it.
+    fd_options['step_size'] :  float(1e-06)
+        Default finite difference stepsize
+    fd_options['step_type'] :  str('absolute')
+        Set to absolute, relative
+
     """
 
     def __init__(self):
@@ -44,7 +56,7 @@ class MetaModel(Component):
 
         self._input_size = 0
 
-    def add_param(self, name, val=_NotSet, **kwargs):
+    def add_param(self, name, val=_NotSet, training_data=None, **kwargs):
         """ Add a `param` input to this component and a corresponding
         training parameter.
 
@@ -55,16 +67,23 @@ class MetaModel(Component):
 
         val : float or ndarray or object
             Initial value for the input.
-        """
-        super(MetaModel, self).add_param(name, val, **kwargs)
-        super(MetaModel, self).add_param('train:'+name, val=list(), pass_by_obj=True)
 
-        input_size = self._params_dict[name]['size']
+        training_data : float or ndarray
+            training data for this variable. Optional, can be set
+            by the problem later.
+        """
+        if training_data is None:
+            training_data = list()
+
+        super(MetaModel, self).add_param(name, val, **kwargs)
+        super(MetaModel, self).add_param('train:'+name, val=training_data, pass_by_obj=True)
+
+        input_size = self._init_params_dict[name]['size']
 
         self._surrogate_param_names.append((name, input_size))
         self._input_size += input_size
 
-    def add_output(self, name, val=_NotSet, **kwargs):
+    def add_output(self, name, val=_NotSet, training_data=None, **kwargs):
         """ Add an output to this component and a corresponding
         training output.
 
@@ -76,22 +95,29 @@ class MetaModel(Component):
         val : float or ndarray
             Initial value for the output. While the value is overwritten during
             execution, it is useful for infering size.
+
+        training_data : float or ndarray
+            training data for this variable. Optional, can be set
+            by the problem later.
         """
+        if training_data is None:
+            training_data = list()
+
         super(MetaModel, self).add_output(name, val, **kwargs)
-        super(MetaModel, self).add_output('train:'+name, val=list(), pass_by_obj=True)
+        super(MetaModel, self).add_output('train:'+name, val=training_data, pass_by_obj=True)
 
         try:
-            output_shape = self._unknowns_dict[name]['shape']
+            output_shape = self._init_unknowns_dict[name]['shape']
         except KeyError: #then its some kind of object, and just assume scalar training data
             output_shape = 1
 
         self._surrogate_output_names.append((name, output_shape))
         self._training_output[name] = np.zeros(0)
 
-        if self._unknowns_dict[name].get('surrogate'):
-            self._unknowns_dict[name]['default_surrogate'] = False
+        if self._init_unknowns_dict[name].get('surrogate'):
+            self._init_unknowns_dict[name]['default_surrogate'] = False
         else:
-            self._unknowns_dict[name]['default_surrogate'] = True
+            self._init_unknowns_dict[name]['default_surrogate'] = True
 
     def _setup_variables(self, compute_indices=False):
         """Returns our params and unknowns dictionaries,
@@ -111,9 +137,9 @@ class MetaModel(Component):
         # did not have a surrogate specified
         if self.default_surrogate is not None:
             for name, shape in self._surrogate_output_names:
-                if self._unknowns_dict[name].get('default_surrogate'):
+                if self._init_unknowns_dict[name].get('default_surrogate'):
                     surrogate = deepcopy(self.default_surrogate)
-                    self._unknowns_dict[name]['surrogate'] = surrogate
+                    self._init_unknowns_dict[name]['surrogate'] = surrogate
 
         # training will occur on first execution after setup
         self.train = True
@@ -134,7 +160,7 @@ class MetaModel(Component):
         if self.default_surrogate is None:
             no_sur = []
             for name, shape in self._surrogate_output_names:
-                surrogate = self._unknowns_dict[name].get('surrogate')
+                surrogate = self._init_unknowns_dict[name].get('surrogate')
                 if surrogate is None:
                     no_sur.append(name)
             if len(no_sur) > 0:
@@ -168,7 +194,7 @@ class MetaModel(Component):
         inputs = self._params_to_inputs(params)
 
         for name, shape in self._surrogate_output_names:
-            surrogate = self._unknowns_dict[name].get('surrogate')
+            surrogate = self._init_unknowns_dict[name].get('surrogate')
             if surrogate:
                 unknowns[name] = surrogate.predict(inputs)
             else:
@@ -197,7 +223,7 @@ class MetaModel(Component):
                 idx += 1
         return inputs
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """
         Returns the Jacobian as a dictionary whose keys are tuples of the form
          ('unknown', 'param') and whose values are ndarrays.
@@ -224,8 +250,8 @@ class MetaModel(Component):
         inputs = self._params_to_inputs(params)
 
         for uname, _ in self._surrogate_output_names:
-            surrogate = self._unknowns_dict[uname].get('surrogate')
-            sjac = surrogate.jacobian(inputs)
+            surrogate = self._init_unknowns_dict[uname].get('surrogate')
+            sjac = surrogate.linearize(inputs)
 
             idx = 0
             for pname, sz in self._surrogate_param_names:
@@ -314,7 +340,7 @@ class MetaModel(Component):
                             v = np.array(v)
                         new_output[row_idx, :] = v.flat
 
-            surrogate = self._unknowns_dict[name].get('surrogate')
+            surrogate = self._init_unknowns_dict[name].get('surrogate')
             if surrogate is not None:
                 surrogate.train(self._training_input, self._training_output[name])
 
@@ -330,7 +356,8 @@ class MetaModel(Component):
         list of str
             List of names of params for this `Component` .
         """
-        return [k for k, m in iteritems(self.params) if not (m.get('pass_by_obj') or k.startswith('train'))]
+        return [k for k, acc in iteritems(self.params._dat)
+                   if not (acc.pbo or k.startswith('train'))]
 
     def _get_fd_unknowns(self):
         """
@@ -342,4 +369,5 @@ class MetaModel(Component):
         list of str
             List of names of unknowns for this `Component`.
         """
-        return [k for k, m in iteritems(self.unknowns) if not (m.get('pass_by_obj') or k.startswith('train'))]
+        return [k for k, acc in iteritems(self.unknowns._dat)
+                   if not (acc.pbo or k.startswith('train'))]

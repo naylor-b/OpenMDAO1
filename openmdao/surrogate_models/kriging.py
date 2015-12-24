@@ -140,7 +140,6 @@ class KrigingSurrogate(SurrogateModel):
         X, Y = self.X, self.Y
         thetas = power(10., self.thetas)
         r = exp(-thetas.dot(square((x - X).T)))
-        one = ones(self.n)
 
         if self.R_fact is not None:
             # Cholesky Decomposition
@@ -161,7 +160,7 @@ class KrigingSurrogate(SurrogateModel):
 
         return f, rmse
 
-    def jacobian(self, x):
+    def linearize(self, x):
         """
         Calculates the jacobian of the Kriging surface at the requested point.
 

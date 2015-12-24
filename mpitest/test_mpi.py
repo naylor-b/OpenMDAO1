@@ -1,23 +1,17 @@
-import sys
-from unittest import TestCase
 import time
+
+from six import text_type
 
 import numpy as np
 
-from openmdao.core.problem import Problem
-from openmdao.core.group import Group
-from openmdao.core.parallel_group import ParallelGroup
-from openmdao.core.component import Component
-from openmdao.core.mpi_wrap import MPI, MultiProcFailCheck
-
-from openmdao.components.param_comp import ParamComp
-
+from openmdao.api import Problem, Group, ParallelGroup, Component, IndepVarComp
+from openmdao.core.mpi_wrap import MPI, FakeComm
 from openmdao.test.mpi_util import MPITestCase
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
 else:
-    from openmdao.core import BasicImpl as impl
+    from openmdao.api import BasicImpl as impl
 
 from openmdao.test.util import assert_rel_error
 
@@ -47,33 +41,116 @@ class ABCDArrayComp(Component):
         unknowns['out_string'] = params['in_string'] + '_' + self.name
         unknowns['out_list']   = params['in_list'] + [1.5]
 
+class PBOComp(Component):
+
+    def __init__(self):
+        super(PBOComp, self).__init__()
+        self.add_param('a', [0.,0.,0.,0.,0.])
+        self.add_param('b', [1.,2.,3.,4.,5.])
+
+        self.add_output('c', [1.,2.,3.,4.,5.])
+        self.add_output('d', [-1.,-2.,-3.,-4.,-5.])
+
+    def solve_nonlinear(self, params, unknowns, resids):
+        for i in range(5):
+            unknowns['c'][i] = params['a'][i] + params['b'][i]
+            unknowns['d'][i] = params['a'][i] - params['b'][i]
+
+class PBOTestCase(MPITestCase):
+    N_PROCS=1
+
+    def test_simple(self):
+        prob = Problem(Group(), impl=impl)
+
+        A1 = prob.root.add('A1', IndepVarComp('a', [1.,1.,1.,1.,1.]))
+        B1 = prob.root.add('B1', IndepVarComp('b', [1.,1.,1.,1.,1.]))
+
+        C1 = prob.root.add('C1', PBOComp())
+        C2 = prob.root.add('C2', PBOComp())
+
+        prob.root.connect('A1.a', 'C1.a')
+        prob.root.connect('B1.b', 'C1.b')
+
+        prob.root.connect('C1.c', 'C2.a')
+        prob.root.connect('C1.d', 'C2.b')
+
+        prob.setup(check=False)
+
+        prob.run()
+
+        self.assertEqual(prob['C2.a'], [2.,2.,2.,2.,2.])
+        self.assertEqual(prob['C2.b'], [0.,0.,0.,0.,0.])
+        self.assertEqual(prob['C2.c'], [2.,2.,2.,2.,2.])
+        self.assertEqual(prob['C2.d'], [2.,2.,2.,2.,2.])
+        self.assertEqual(prob.root.unknowns.vec.size, 0)
+
+class PBOTestCase2(MPITestCase):
+    N_PROCS=2
+
+    def test_fan_in(self):
+        prob = Problem(Group(), impl=impl)
+        par = prob.root.add('par', ParallelGroup())
+
+        G1 = par.add('G1', Group())
+        A1 = G1.add('A1', IndepVarComp('a', [1.,1.,1.,1.,1.]))
+        C1 = G1.add('C1', PBOComp())
+
+        G2 = par.add('G2', Group())
+        B1 = G2.add('B1', IndepVarComp('b', [3.,3.,3.,3.,3.]))
+        C2 = G2.add('C2', PBOComp())
+
+        C3 = prob.root.add('C3', PBOComp())
+
+        par.connect('G1.A1.a', 'G1.C1.a')
+        par.connect('G2.B1.b', 'G2.C2.a')
+        prob.root.connect('par.G1.C1.c', 'C3.a')
+        prob.root.connect('par.G2.C2.c', 'C3.b')
+
+        prob.setup(check=False)
+
+        prob.run()
+
+        self.assertEqual(prob['C3.a'], [2.,3.,4.,5.,6.])
+        self.assertEqual(prob['C3.b'], [4.,5.,6.,7.,8.])
+        self.assertEqual(prob['C3.c'], [6.,8.,10.,12.,14.])
+        self.assertEqual(prob['C3.d'], [-2.,-2.,-2.,-2.,-2.])
+        self.assertEqual(prob.root.unknowns.vec.size, 0)
 
 class MPITests1(MPITestCase):
 
-    N_PROCS = 2
+    N_PROCS = 1
+
+    def test_comm(self):
+        prob = Problem(Group(), impl=impl)
+        prob.setup()
+
+        if MPI:
+            assert prob.comm is MPI.COMM_WORLD
+        else:
+            assert isinstance(prob.comm, FakeComm)
 
     def test_simple(self):
         prob = Problem(Group(), impl=impl)
 
         size = 5
-        A1 = prob.root.add('A1', ParamComp('a', np.zeros(size, float)))
-        B1 = prob.root.add('B1', ParamComp('b', np.zeros(size, float)))
-        B2 = prob.root.add('B2', ParamComp('b', np.zeros(size, float)))
-        S1 = prob.root.add('S1', ParamComp('s', ''))
-        L1 = prob.root.add('L1', ParamComp('l', []))
+        A1 = prob.root.add('A1', IndepVarComp('a', np.zeros(size, float)))
+        B1 = prob.root.add('B1', IndepVarComp('b', np.zeros(size, float)))
+        B2 = prob.root.add('B2', IndepVarComp('b', np.zeros(size, float)))
+        S1 = prob.root.add('S1', IndepVarComp('s', ''))
+        L1 = prob.root.add('L1', IndepVarComp('l', []))
 
         C1 = prob.root.add('C1', ABCDArrayComp(size))
         C2 = prob.root.add('C2', ABCDArrayComp(size))
 
         prob.root.connect('A1.a', 'C1.a')
         prob.root.connect('B1.b', 'C1.b')
-        # prob.root.connect('S1:s', 'C1.in_string')
-        # prob.root.connect('L1:l', 'C1.in_list')
+        prob.root.connect('S1.s', 'C1.in_string')
+        prob.root.connect('L1.l', 'C1.in_list')
 
         prob.root.connect('C1.c', 'C2.a')
         prob.root.connect('B2.b', 'C2.b')
-        # prob.root.connect('C1.out_string', 'C2.in_string')
-        # prob.root.connect('C1.out_list',   'C2.in_list')
+        prob.root.connect('C1.out_string', 'C2.in_string')
+        prob.root.connect('C1.out_list',   'C2.in_list')
 
         prob.setup(check=False)
 
@@ -83,15 +160,35 @@ class MPITests1(MPITestCase):
 
         prob.run()
 
-        if not MPI or self.comm.rank == 0:
-            self.assertTrue(all(prob['C2.a']==np.ones(size, float)*10.))
-            self.assertTrue(all(prob['C2.b']==np.ones(size, float)*5.))
-            self.assertTrue(all(prob['C2.c']==np.ones(size, float)*15.))
-            self.assertTrue(all(prob['C2.d']==np.ones(size, float)*5.))
+        self.assertTrue(all(prob['C2.a'] == np.ones(size, float)*10.))
+        self.assertTrue(all(prob['C2.b'] == np.ones(size, float)*5.))
+        self.assertTrue(all(prob['C2.c'] == np.ones(size, float)*15.))
+        self.assertTrue(all(prob['C2.d'] == np.ones(size, float)*5.))
 
-            # TODO: can't do MPI pass_by_object yet
-            # self.assertTrue(prob['C2.out_string']=='_C1_C2')
-            # self.assertTrue(prob['C2.out_list']==[1.5, 1.5])
+        self.assertTrue(prob['C2.out_string']=='_C1_C2')
+        self.assertTrue(prob['C2.out_list']==[1.5, 1.5])
+
+
+class MPITests2(MPITestCase):
+
+    N_PROCS = 2
+
+    def test_too_many_procs(self):
+        prob = Problem(Group(), impl=impl)
+
+        size = 5
+        A1 = prob.root.add('A1', IndepVarComp('a', np.zeros(size, float)))
+        C1 = prob.root.add('C1', ABCDArrayComp(size))
+
+        try:
+            prob.setup(check=False)
+        except Exception as err:
+            self.assertEqual(str(err),
+                             "This problem was given 2 MPI processes, "
+                             "but it requires between 1 and 1.")
+        else:
+            if MPI:
+                self.fail("Exception expected")
 
     def test_parallel_fan_in(self):
         size = 3
@@ -99,8 +196,8 @@ class MPITests1(MPITestCase):
         prob = Problem(Group(), impl=impl)
 
         G1 = prob.root.add('G1', ParallelGroup())
-        G1.add('P1', ParamComp('x', np.ones(size, float) * 1.0))
-        G1.add('P2', ParamComp('x', np.ones(size, float) * 2.0))
+        G1.add('P1', IndepVarComp('x', np.ones(size, float) * 1.0))
+        G1.add('P2', IndepVarComp('x', np.ones(size, float) * 2.0))
 
         prob.root.add('C1', ABCDArrayComp(size))
 
@@ -111,17 +208,35 @@ class MPITests1(MPITestCase):
         prob.run()
 
         if not MPI or self.comm.rank == 0:
-            self.assertTrue(all(prob.root.C1.params['a']==np.ones(size, float)*1.0))
-            self.assertTrue(all(prob.root.C1.params['b']==np.ones(size, float)*2.0))
-            self.assertTrue(all(prob['C1.c']==np.ones(size, float)*3.0))
-            self.assertTrue(all(prob['C1.d']==np.ones(size, float)*-1.0))
+            self.assertTrue(all(prob.root.C1.params['a'] == np.ones(size, float)*1.0))
+            self.assertTrue(all(prob.root.C1.params['b'] == np.ones(size, float)*2.0))
+            self.assertTrue(all(prob['C1.c'] == np.ones(size, float)*3.0))
+            self.assertTrue(all(prob['C1.d'] == np.ones(size, float)*-1.0))
             # TODO: not handling non-flattenable vars yet
+
+        if MPI and self.comm.rank == 1:
+            # check for useful error messages when trying to get/set remote variable
+            try:
+                x = prob['G1.P1.x']
+            except Exception as error:
+                msg = "Cannot access remote Variable 'G1.P1.x' in this process."
+                self.assertEqual(text_type(error), msg)
+            else:
+                self.fail("Error expected")
+
+            try:
+                prob['G1.P1.x'] = 0.
+            except Exception as error:
+                msg = "Cannot access remote Variable 'G1.P1.x' in this process."
+                self.assertEqual(text_type(error), msg)
+            else:
+                self.fail("Error expected")
 
     def test_parallel_diamond(self):
         size = 3
         prob = Problem(Group(), impl=impl)
         root = prob.root
-        root.add('P1', ParamComp('x', np.ones(size, float) * 1.1))
+        root.add('P1', IndepVarComp('x', np.ones(size, float) * 1.1))
         G1 = root.add('G1', ParallelGroup())
         G1.add('C1', ABCDArrayComp(size))
         G1.add('C2', ABCDArrayComp(size))
@@ -150,6 +265,48 @@ class MPITests1(MPITestCase):
                              np.ones(size)*2.1, 1.e-10)
             assert_rel_error(self, prob.root.G1.C2.unknowns['d'],
                              np.ones(size)*-.1, 1.e-10)
+
+    def test_wrong_impl(self):
+        if MPI:
+            try:
+                Problem(Group())
+            except Exception as err:
+                self.assertEqual(str(err), "To run under MPI, the impl for"
+                                           " a Problem must be PetscImpl.")
+            else:
+                self.fail("Exception expected")
+
+    def test_multiple_problems(self):
+        if MPI:
+            # split the comm and run an instance of the Problem in each subcomm
+            subcomm = self.comm.Split(self.comm.rank)
+            prob = Problem(Group(), impl=impl, comm=subcomm)
+
+            size = 5
+            value = self.comm.rank + 1
+            values = np.ones(size)*value
+
+            A1 = prob.root.add('A1', IndepVarComp('x', values))
+            C1 = prob.root.add('C1', ABCDArrayComp(size))
+
+            prob.root.connect('A1.x', 'C1.a')
+            prob.root.connect('A1.x', 'C1.b')
+
+            prob.setup(check=False)
+            prob.run()
+
+            # check the first output array and store in result
+            self.assertTrue(all(prob['C1.c'] == np.ones(size)*(value*2)))
+            result = prob['C1.c']
+
+            # gather the results from the separate processes/problems and check
+            # for expected values
+            results = self.comm.allgather(result)
+            self.assertEqual(len(results), self.comm.size)
+
+            for n in range(self.comm.size):
+                expected = np.ones(size)*2*(n+1)
+                self.assertTrue(all(results[n] == expected))
 
 
 if __name__ == '__main__':

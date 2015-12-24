@@ -1,7 +1,6 @@
 """ OptionsDictionary class definition. """
-
+from copy import deepcopy
 from six import iteritems
-
 
 class OptionsDictionary(object):
     """ A dictionary for storing options for components/drivers/solvers. It
@@ -20,7 +19,7 @@ class OptionsDictionary(object):
         self._options = {}
         self.read_only = read_only
 
-    def add_option(self, name, value, low=None, high=None, values=None,
+    def add_option(self, name, value, lower=None, upper=None, values=None,
                    desc=''):
         """ Adds an option to this options dictionary.
 
@@ -32,10 +31,10 @@ class OptionsDictionary(object):
         value : object
             Default value for this option. The type of this value will be enforced.
 
-        low : float, optional
+        lower : float, optional
             Lower bounds for a float value.
 
-        high : float, optional
+        upper : float, optional
             Upper bounds for a float value.
 
         values : list, optional
@@ -44,14 +43,14 @@ class OptionsDictionary(object):
         desc : str, optional
             String containing documentation of this option.
         """
-
         if name in self._options:
+            print("raising an error")
             raise ValueError("Option '{}' already exists".format(name))
 
         self._options[name] = {
             'val':    value,
-            'low':    low,
-            'high':   high,
+            'lower':    lower,
+            'upper':   upper,
             'values': values,
             'desc' : desc,
         }
@@ -63,6 +62,9 @@ class OptionsDictionary(object):
             return self._options[name]['val']
         except KeyError:
             raise KeyError("Option '{}' has not been added".format(name))
+
+    def __contains__(self, name):
+        return name in self._options
 
     def __setitem__(self, name, value):
         if name not in self._options:
@@ -90,6 +92,9 @@ class OptionsDictionary(object):
             return self._options[name]['val']
         return default
 
+    def iteritems(self):
+        return self.items()
+
     def items(self):
         """
         Returns
@@ -99,20 +104,23 @@ class OptionsDictionary(object):
         """
         return ((name, opt['val']) for name, opt in iteritems(self._options))
 
+    def get_desc(self, name):
+        return self._options[name]['desc']
+
     def _check(self, name, value):
         """ Type checking happens here. """
-        low = self._options[name]['low']
-        high = self._options[name]['high']
+        lower = self._options[name]['lower']
+        upper = self._options[name]['upper']
         values = self._options[name]['values']
         _type = type(self._options[name]['val'])
 
         self._check_type(name, value, _type)
 
-        if low is not None:
-            self._check_low(name, value, low)
+        if lower is not None:
+            self._check_low(name, value, lower)
 
-        if high is not None:
-            self._check_high(name, value, high)
+        if upper is not None:
+            self._check_high(name, value, upper)
 
         if values is not None:
             self._check_values(name, value, values)
@@ -123,17 +131,17 @@ class OptionsDictionary(object):
             msg = "'{}' should be a '{}'"
             raise ValueError(msg.format(name, _type))
 
-    def _check_low(self, name, value, low):
-        """ Check for violation of lowe bounds. """
-        if value < low:
+    def _check_low(self, name, value, lower):
+        """ Check for violation of lower bounds. """
+        if value < lower:
             msg = "minimum allowed value for '{}' is '{}'"
-            raise ValueError(msg.format(name, low))
+            raise ValueError(msg.format(name, lower))
 
-    def _check_high(self, name, value, high):
+    def _check_high(self, name, value, upper):
         """ Check for violation of upper bounds. """
-        if value > high:
+        if value > upper:
             msg = "maximum allowed value for '{}' is '{}'"
-            raise ValueError(msg.format(name, high))
+            raise ValueError(msg.format(name, upper))
 
     def _check_values(self, name, value, values):
         """ Check for value not in enumeration. """

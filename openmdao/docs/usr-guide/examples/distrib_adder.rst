@@ -8,9 +8,9 @@ But it can also be used to speed up any calculations you're implementing yoursel
 directly in OpenMDAO using our MPI-based parallel data passing.
 
 Why should you use OpenMDAO to build your own distributed components? Because
-OpenMDAO lets you build distributed components without writing any significant MPI code yourself.
-Here is a simple example where we break up the job of adding a value
-to a large float array (30,000,000 elements).
+OpenMDAO lets you build distributed components without writing any significant
+MPI code yourself. Here is a simple example where we break up the job of adding
+a value to a large float array (1,000,000 elements).
 
 
 .. testcode :: dist_adder
@@ -19,7 +19,7 @@ to a large float array (30,000,000 elements).
     import numpy as np
     from six.moves import range
 
-    from openmdao.core import Component
+    from openmdao.api import Component
     from openmdao.util.array_util import evenly_distrib_idxs
 
     class DistributedAdder(Component):
@@ -36,9 +36,9 @@ to a large float array (30,000,000 elements).
             self.add_param('x', shape=size)
             self.add_output('y', shape=size)
 
-        def get_req_cpus(self):
+        def get_req_procs(self):
             """
-            min/max number of cpus that this component can use
+            min/max number of procs that this component can use
             """
             return (1,self.size)
 
@@ -52,7 +52,8 @@ to a large float array (30,000,000 elements).
             comm = self.comm
             rank = comm.rank
 
-            #NOTE: evenly_distrib_idxs is a helper function to split the array up as evenly as possible
+            # NOTE: evenly_distrib_idxs is a helper function to split the array
+            #       up as evenly as possible
             sizes, offsets = evenly_distrib_idxs(comm.size, self.size)
             local_size, local_offset = sizes[rank], offsets[rank]
             self.local_size = int(local_size)
@@ -95,7 +96,7 @@ The distributed component magic happens in the `setup_distrib_idxs` method of
 the `DistributedAdder` class. This is where we tell the framework how to split
 up the the big array into smaller chunks handled separately by each distributed
 process. In this case, we just split the array up one chuck at a time in order
-as we go from process to process. But OpenMDAO does not requires that the `src_indices`
+as we go from process to process. But OpenMDAO does not require that the `src_indices`
 be ordered or sequential!
 
 .. note::
@@ -110,8 +111,7 @@ Next we'll use these components to build an actual distributed model:
 
     import time
 
-    from openmdao.core import Problem, Group
-    from openmdao.components import ParamComp
+    from openmdao.api import Problem, Group, IndepVarComp
 
     from openmdao.core.mpi_wrap import MPI
 
@@ -120,17 +120,17 @@ Next we'll use these components to build an actual distributed model:
         from openmdao.core.petsc_impl import PetscImpl as impl
     else:
         # if you didn't use `mpirun`, then use the numpy data passing
-        from openmdao.core import BasicImpl as impl
+        from openmdao.api import BasicImpl as impl
 
     #how many items in the array
-    size = 3e7
+    size = 1000000
 
     prob = Problem(impl=impl)
     prob.root = Group()
 
-    prob.root.add('des_vars', ParamComp('x', np.ones(size)), promotes=['*'])
-    prob.root.add('plus', DistributedAdder(size), promotes=['*'])
-    prob.root.add('summer', Summer(size), promotes=['*'])
+    prob.root.add('des_vars', IndepVarComp('x', np.ones(size)), promotes=['x'])
+    prob.root.add('plus', DistributedAdder(size), promotes=['x', 'y'])
+    prob.root.add('summer', Summer(size), promotes=['y', 'sum'])
 
     prob.setup(check=False)
 
@@ -149,7 +149,7 @@ Next we'll use these components to build an actual distributed model:
     :hide:
     :options: +ELLIPSIS
 
-    process 0: (30000000,)
+    process 0: (1000000...
     run time: ...
     answer:  11.0
 
@@ -191,6 +191,6 @@ And you can expect to see some output as follows:
 
 With two processes running, you get a decent speed up. You can see that each process took
 half the array. Why don't we get a full 2x speedup? Two reasons. The first, and more
-significant factor is that we don't have a fully parallel model. The `plus` component is
-distributed, but the `summer` component is not. This introduces a bottleneck because we have to wait
-for the serial operation to complete.
+significant factor is that we don't have a fully parallel model. The `DistributedAdder`
+component is distributed, but the `Summer` component is not. This introduces a bottleneck
+because we have to wait for the serial operation to complete.

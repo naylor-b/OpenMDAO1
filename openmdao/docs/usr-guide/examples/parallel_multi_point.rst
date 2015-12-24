@@ -16,9 +16,8 @@ need.
     import time
     import numpy as np
 
-    from openmdao.core import Component, Group, ParallelGroup
+    from openmdao.api import Component, Group, ParallelGroup, IndepVarComp, ExecComp
 
-    from openmdao.components import ParamComp, ExecComp
 
     class Plus(Component):
         """
@@ -62,8 +61,8 @@ need.
         def __init__(self, adder, scalar):
             super(Point, self).__init__()
 
-            self.add('plus', Plus(adder), promotes=['*'])
-            self.add('times', Times(scalar), promotes=['*'])
+            self.add('plus', Plus(adder), promotes=['x', 'f1'])
+            self.add('times', Times(scalar), promotes=['f1', 'f2'])
 
 
     class Summer(Component):
@@ -95,7 +94,7 @@ need.
             super(ParallelMultiPoint, self).__init__()
 
             size = len(adders)
-            self.add('desvar', ParamComp('X', val=np.zeros(size)), promotes=['*'])
+            self.add('desvar', IndepVarComp('X', val=np.zeros(size)), promotes=['X'])
 
             self.add('aggregate', Summer(size))
 
@@ -108,7 +107,7 @@ need.
                 self.connect('multi_point.%s.f2'%c_name,'aggregate.f2_%d'%i)
 
 
-    from openmdao.core import Problem
+    from openmdao.api import Problem
 
 
     prob = Problem()
@@ -185,7 +184,7 @@ multi-point problem needs only a few minor modifications in order to run in para
 
 .. note::
 
-     You'll nedd to make sure you have mpi, mpi4py, petsc, and petsc4py installed
+     You'll need to make sure you have mpi, mpi4py, petsc, and petsc4py installed
      in order to do anything in parallel.
 
 All of the changes you're going to make are in the run-script itself.
@@ -200,16 +199,16 @@ lots of extra output to the screen.
 
 
     if __name__ == "__main__":
-        from openmdao.core import Problem
+        from openmdao.api import Problem
 
         from openmdao.core.mpi_wrap import MPI
 
-        if MPI:
+        if MPI: # pragma: no cover
             # if you called this script with 'mpirun', then use the petsc data passing
             from openmdao.core.petsc_impl import PetscImpl as impl
         else:
             # if you didn't use `mpirun`, then use the numpy data passing
-            from openmdao.core import BasicImpl as impl
+            from openmdao.api import BasicImpl as impl
 
         def mpi_print(prob, *args):
             """ helper function to only print on rank 0"""

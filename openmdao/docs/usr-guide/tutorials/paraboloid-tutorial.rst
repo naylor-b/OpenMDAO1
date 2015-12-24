@@ -14,8 +14,7 @@ this code into a file, and run it directly.
 
     from __future__ import print_function
 
-    from openmdao.components import ParamComp
-    from openmdao.core import Component, Problem, Group
+    from openmdao.api import IndepVarComp, Component, Problem, Group
 
     class Paraboloid(Component):
         """ Evaluates the equation f(x,y) = (x-3)^2 + xy + (y+4)^2 - 3 """
@@ -37,7 +36,7 @@ this code into a file, and run it directly.
 
             unknowns['f_xy'] = (x-3.0)**2 + x*y + (y+4.0)**2 - 3.0
 
-        def jacobian(self, params, unknowns, resids):
+        def linearize(self, params, unknowns, resids):
             """ Jacobian for our paraboloid."""
 
             x = params['x']
@@ -54,8 +53,8 @@ this code into a file, and run it directly.
 
         root = top.root = Group()
 
-        root.add('p1', ParamComp('x', 3.0))
-        root.add('p2', ParamComp('y', -4.0))
+        root.add('p1', IndepVarComp('x', 3.0))
+        root.add('p2', IndepVarComp('y', -4.0))
         root.add('p', Paraboloid())
 
         root.connect('p1.x', 'p.x')
@@ -76,8 +75,7 @@ Building the component
 
     from __future__ import print_function
 
-    from openmdao.components import ParamComp
-    from openmdao.core import Component, Problem, Group
+    from openmdao.api import IndepVarComp, Component, Problem, Group
 
 We need to import some OpenMDAO classes. We also import the print_function to
 ensure compatibility between Python 2.x and 3.x. You don't need the import if
@@ -131,7 +129,7 @@ using the `unknowns` dictionary that is passed in.
 
 ::
 
-        def jacobian(self, params, unknowns, resids):
+        def linearize(self, params, unknowns, resids):
             """ Jacobian for our paraboloid."""
 
             x = params['x']
@@ -142,7 +140,7 @@ using the `unknowns` dictionary that is passed in.
             J['f_xy','y'] = 2.0*y + 8.0 + x
             return J
 
-The `jacobian` method is used to compute analytic partial derivatives of the
+The `linearize` method is used to compute analytic partial derivatives of the
 `unknowns` with respect to `params` (partial derivatives in OpenMDAO context refer to
 derivatives for a single component by itself). The returned value, in this case `J`,
 should be a dictionary whose keys are tuples of the form (‘unknown’, ‘param’) and
@@ -170,14 +168,14 @@ This code instantiates a `Problem` object and sets the root to be an empty `Grou
 
 ::
 
-    root.add('p1', ParamComp('x', 3.0))
-    root.add('p2', ParamComp('y', -4.0))
+    root.add('p1', IndepVarComp('x', 3.0))
+    root.add('p2', IndepVarComp('y', -4.0))
 
-Now it is time to add components to the empty group. `ParamComp`
+Now it is time to add components to the empty group. `IndepVarComp`
 is a `Component` that provides the source for a variable which we can later give
 to a `Driver` as a design variable to control.
 
-We created two `ParamComps` (one for each param on the `Paraboloid`
+We created two `IndepVarComps` (one for each param on the `Paraboloid`
 component), gave them names, and added them to the root `Group`. The `add`
 method takes a name as the first argument, and a `Component` instance as the
 second argument.
@@ -193,9 +191,9 @@ Then we add the paraboloid using the same syntax as before, giving it the name '
     root.connect('p1.x', 'p.x')
     root.connect('p2.y', 'p.y')
 
-Then we connect up the outputs of the `ParamComps` to the parameters of the
+Then we connect up the outputs of the `IndepVarComps` to the parameters of the
 `Paraboloid`. Notice the dotted naming convention used to refer to variables.
-So, for example, `p1` represents the first `ParamComp` that we created to set
+So, for example, `p1` represents the first `IndepVarComp` that we created to set
 the value of `x` and so we connect that to parameter `x` of the `Paraboloid`.
 Since the `Paraboloid` is named `p` and has a parameter
 `x`, it is referred to as `p.x` in the call to the `connect` method.
@@ -240,8 +238,8 @@ Putting it all together:
     top = Problem()
     root = top.root = Group()
 
-    root.add('p1', ParamComp('x', 3.0))
-    root.add('p2', ParamComp('y', -4.0))
+    root.add('p1', IndepVarComp('x', 3.0))
+    root.add('p2', IndepVarComp('y', -4.0))
     root.add('p', Paraboloid())
 
     root.connect('p1.x', 'p.x')
@@ -261,6 +259,7 @@ The output should look like this:
 
 Future tutorials will show more complex `Problems`.
 
+.. _`paraboloid_optimization_tutorial`:
 
 Optimization of the Paraboloid
 ==============================
@@ -273,7 +272,7 @@ First, we need to import the optimizer.
 
 .. testcode:: parab
 
-    from openmdao.drivers import ScipyOptimizer
+    from openmdao.api import ScipyOptimizer
 
 The main optimizer built into OpenMDAO is a wrapper around Scipy's `minimize`
 function. OpenMDAO supports 9 of the optimizers built into `minimize`. The
@@ -287,8 +286,8 @@ SLSQP because it supports OpenMDAO-supplied gradients.
 
         root = top.root = Group()
 
-        root.add('p1', ParamComp('x', 3.0))
-        root.add('p2', ParamComp('y', -4.0))
+        root.add('p1', IndepVarComp('x', 3.0))
+        root.add('p2', IndepVarComp('y', -4.0))
         root.add('p', Paraboloid())
 
         root.connect('p1.x', 'p.x')
@@ -297,8 +296,8 @@ SLSQP because it supports OpenMDAO-supplied gradients.
         top.driver = ScipyOptimizer()
         top.driver.options['optimizer'] = 'SLSQP'
 
-        top.driver.add_param('p1.x', low=-50, high=50)
-        top.driver.add_param('p2.y', low=-50, high=50)
+        top.driver.add_desvar('p1.x', lower=-50, upper=50)
+        top.driver.add_desvar('p2.y', lower=-50, upper=50)
         top.driver.add_objective('p.f_xy')
 
         top.setup()
@@ -313,7 +312,7 @@ select 'SLSQP'. For all optimizers, you can specify a convergence tolerance
 'tol' and a maximum number of iterations 'maxiter.'
 
 Next, we select the parameters the optimizer will drive by calling
-`add_param` and giving it the `ParamComp` unknowns that we have created. We
+`add_param` and giving it the `IndepVarComp` unknowns that we have created. We
 also set a high and low bounds for this problem. It is not required to set
 these (they will default to -1e99 and 1e99 respectively), but it is generally
 a good idea.
@@ -321,7 +320,7 @@ a good idea.
 Finally, we add the objective. You can use any `unknown` in your model as the
 objective.
 
-Since SLSQP is a gradient optimizer, OpenMDAO will call the `jacobian` method
+Since SLSQP is a gradient optimizer, OpenMDAO will call the `linearize` method
 on the `Paraboloid` while calculating the total gradient of the objective
 with respect to the two design variables. This is done automatically.
 
@@ -351,10 +350,12 @@ First, we need to add one more import to the beginning of our model.
 
 .. testcode:: parab
 
-    from openmdao.components import ConstraintComp
+    from openmdao.api import ExecComp
 
 
-We'll use a ConstraintComp to represent our constraint in the model.
+We'll use an `ExecComp` to represent our constraint in the model. An ExecComp
+is a shortcut that lets us easily create a component that defines a simple
+expression for us.
 
 
 .. testcode:: parab
@@ -363,12 +364,12 @@ We'll use a ConstraintComp to represent our constraint in the model.
 
     root = top.root = Group()
 
-    root.add('p1', ParamComp('x', 3.0))
-    root.add('p2', ParamComp('y', -4.0))
+    root.add('p1', IndepVarComp('x', 3.0))
+    root.add('p2', IndepVarComp('y', -4.0))
     root.add('p', Paraboloid())
 
     # Constraint Equation
-    root.add('con', ConstraintComp('x - y > 15.', out='c'))
+    root.add('con', ExecComp('c = x-y'))
 
     root.connect('p1.x', 'p.x')
     root.connect('p2.y', 'p.y')
@@ -378,10 +379,10 @@ We'll use a ConstraintComp to represent our constraint in the model.
     top.driver = ScipyOptimizer()
     top.driver.options['optimizer'] = 'SLSQP'
 
-    top.driver.add_param('p1.x', low=-50, high=50)
-    top.driver.add_param('p2.y', low=-50, high=50)
+    top.driver.add_desvar('p1.x', lower=-50, upper=50)
+    top.driver.add_desvar('p2.y', lower=-50, upper=50)
     top.driver.add_objective('p.f_xy')
-    top.driver.add_constraint('con.c')
+    top.driver.add_constraint('con.c', lower=15.0)
 
     top.setup()
     top.run()
@@ -389,21 +390,16 @@ We'll use a ConstraintComp to represent our constraint in the model.
     print('\n')
     print('Minimum of %f found at (%f, %f)' % (top['p.f_xy'], top['p.x'], top['p.y']))
 
-Here, we added a ConstraintComp named 'con' to represent our constraint equation.
-For our expression, x - y > 15, 'con' is created with inputs 'x' and 'y', and
-we specified that the output name was 'c'. The `solve_nonlinear` and `jacobian`
-functions are implemented based on the equation.  The ConstraintComp
-automatically rearranges our constraint equation into the proper form such that
-its unknown 'c' will have a value less than zero if the constraint is satisfied
-and greater than 0 if it is violated.
+Here, we added an ExecComp named 'con' to represent part of our
+constraint inequality. Our constraint is "x - y > 15", so we have created an
+ExecComp that will evaluate the expression "x - y" and place that result into
+the unknown 'con.c'. To complete the definition of the constraint, we also
+need to connect our 'con' expression to 'x' and 'y' on the paraboloid.
 
-We also need to connect our 'con' expression to 'x' and 'y' on the
-paraboloid. Finally, we call add_constraint on the driver, giving it the
-output from the constraint component, which is 'con.c'. The default
-behavior for `add_constraint` is to add a nonlinear constraint like the one
-in our problem. You can also add a linear constraint, provided that your
-optimizer supports it (SLSQP does), by setting the ctype call attribute to
-'lin'.
+Finally, we need to tell the driver to use the unknown "con.c" as a
+constraint using the `add_constraint` method. This method takes the name of
+the variable and an "upper" or "lower" bound. Here we give it a lower bound
+of 15, which completes the inequality constraint "x - y > 15".
 
 
 So now, putting it all together, we can run the model and get this:

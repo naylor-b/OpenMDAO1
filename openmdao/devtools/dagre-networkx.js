@@ -55,9 +55,9 @@
 
     dagre_networkx.render = function(g) {
         // Create the renderer
-        //var render = new dagreD3.render();
-        var renderer = new dagreD3.Renderer();
-        var l = dagreD3.layout()
+        var renderer = new dagreD3.render();
+        //var renderer = new dagreD3.Renderer();
+        var l = dagreD3.dagre.layout()
                       .nodeSep(100)
                       .rankSep(200)
                       .edgeSep(80)

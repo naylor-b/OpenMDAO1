@@ -1,9 +1,10 @@
 """ Formerly the one-two-one-two-one test. A model that diverges, converges,
 diverges, then converges again. """
 
-from openmdao.components.param_comp import ParamComp
-from openmdao.core.component import Component
+from openmdao.components.indep_var_comp import IndepVarComp
 from openmdao.core.group import Group
+from openmdao.core.parallel_group import ParallelGroup
+from openmdao.core.component import Component
 
 
 class Comp1(Component):
@@ -19,7 +20,7 @@ class Comp1(Component):
         unknowns['y1'] = 2.0*params['x1']**2
         unknowns['y2'] = 3.0*params['x1']
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Returns the Jacobian."""
         J = {}
         J[('y1', 'x1')] = 4.0*params['x1']
@@ -37,7 +38,7 @@ class Comp2(Component):
         """ Runs the component."""
         unknowns['y1'] = 0.5*params['x1']
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Returns the Jacobian."""
         J = {}
         J[('y1', 'x1')] = 0.5
@@ -54,7 +55,7 @@ class Comp3(Component):
         """ Runs the component."""
         unknowns['y1'] = 3.5*params['x1']
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Returns the Jacobian."""
         J = {}
         J[('y1', 'x1')] = 3.5
@@ -74,7 +75,7 @@ class Comp4(Component):
         unknowns['y1'] = params['x1'] + 2.0*params['x2']
         unknowns['y2'] = 3.0*params['x1'] - 5.0*params['x2']
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Returns the Jacobian."""
         J = {}
         J[('y1', 'x1')] = 1.0
@@ -94,7 +95,7 @@ class Comp5(Component):
         """ Runs the component."""
         unknowns['y1'] = 0.8*params['x1']
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Returns the Jacobian."""
         J = {}
         J[('y1', 'x1')] = 0.8
@@ -111,7 +112,7 @@ class Comp6(Component):
         """ Runs the component."""
         unknowns['y1'] = 0.5*params['x1']
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Returns the Jacobian."""
         J = {}
         J[('y1', 'x1')] = 0.5
@@ -129,7 +130,7 @@ class Comp7(Component):
         """ Runs the component."""
         unknowns['y1'] = params['x1'] + 3.0*params['x2']
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Returns the Jacobian."""
         J = {}
         J[('y1', 'x1')] = 1.0
@@ -144,7 +145,7 @@ class ConvergeDiverge(Group):
     def __init__(self):
         super(ConvergeDiverge, self).__init__()
 
-        self.add('p', ParamComp('x', 2.0))
+        self.add('p', IndepVarComp('x', 2.0))
 
         self.add('comp1', Comp1())
         self.add('comp2', Comp2())
@@ -165,6 +166,36 @@ class ConvergeDiverge(Group):
         self.connect('comp6.y1', 'comp7.x2')
 
 
+class ConvergeDivergePar(Group):
+    """ Topology one - two - one - two - one. This model was critical in
+    testing parallel reverse scatters."""
+
+    def __init__(self):
+        super(ConvergeDivergePar, self).__init__()
+
+        self.add('p', IndepVarComp('x', 2.0))
+
+        self.add('comp1', Comp1())
+        par1 = self.add('par1', ParallelGroup())
+        par1.add('comp2', Comp2())
+        par1.add('comp3', Comp3())
+        self.add('comp4', Comp4())
+        par2 = self.add('par2', ParallelGroup())
+        par2.add('comp5', Comp5())
+        par2.add('comp6', Comp6())
+        self.add('comp7', Comp7())
+
+        self.connect("p.x", "comp1.x1")
+        self.connect('comp1.y1', 'par1.comp2.x1')
+        self.connect('comp1.y2', 'par1.comp3.x1')
+        self.connect('par1.comp2.y1', 'comp4.x1')
+        self.connect('par1.comp3.y1', 'comp4.x2')
+        self.connect('comp4.y1', 'par2.comp5.x1')
+        self.connect('comp4.y2', 'par2.comp6.x1')
+        self.connect('par2.comp5.y1', 'comp7.x1')
+        self.connect('par2.comp6.y1', 'comp7.x2')
+
+
 class ConvergeDivergeGroups(Group):
     """ Topology one - two - one - two - one. This model was critical in
     testing parallel reverse scatters."""
@@ -173,7 +204,7 @@ class ConvergeDivergeGroups(Group):
         super(ConvergeDivergeGroups, self).__init__()
 
 
-        self.add('p', ParamComp('x', 2.0))
+        self.add('p', IndepVarComp('x', 2.0))
 
         sub1 = self.add('sub1', Group())
         sub1.add('comp1', Comp1())
@@ -205,7 +236,7 @@ class SingleDiamond(Group):
     def __init__(self):
         super(SingleDiamond, self).__init__()
 
-        self.add('p', ParamComp('x', 2.0))
+        self.add('p', IndepVarComp('x', 2.0))
 
         self.add('comp1', Comp1())
         self.add('comp2', Comp2())
@@ -219,13 +250,34 @@ class SingleDiamond(Group):
         self.connect('comp3.y1', 'comp4.x2')
 
 
+class SingleDiamondPar(Group):
+    """ Topology one - two - one."""
+
+    def __init__(self):
+        super(SingleDiamondPar, self).__init__()
+
+        self.add('p', IndepVarComp('x', 2.0))
+
+        self.add('comp1', Comp1())
+        sub = self.add('sub', ParallelGroup())
+        sub.add('comp2', Comp2())
+        sub.add('comp3', Comp3())
+        self.add('comp4', Comp4())
+
+        self.connect("p.x", "comp1.x1")
+        self.connect('comp1.y1', 'sub.comp2.x1')
+        self.connect('comp1.y2', 'sub.comp3.x1')
+        self.connect('sub.comp2.y1', 'comp4.x1')
+        self.connect('sub.comp3.y1', 'comp4.x2')
+
+
 class SingleDiamondGrouped(Group):
     """ Topology one - two - one."""
 
     def __init__(self):
         super(SingleDiamondGrouped, self).__init__()
 
-        self.add('p', ParamComp('x', 2.0))
+        self.add('p', IndepVarComp('x', 2.0))
 
         sub1 = self.add('sub1', Group())
         sub1.add('comp1', Comp1())
@@ -238,4 +290,3 @@ class SingleDiamondGrouped(Group):
         self.connect('sub1.comp1.y2', 'sub1.comp3.x1')
         self.connect('sub1.comp2.y1', 'comp4.x1')
         self.connect('sub1.comp3.y1', 'comp4.x2')
-

@@ -2,10 +2,7 @@
 
 from __future__ import print_function
 
-from openmdao.components.param_comp import ParamComp
-from openmdao.core.component import Component
-from openmdao.core.group import Group
-from openmdao.core.problem import Problem
+from openmdao.api import IndepVarComp, Component, Group, Problem
 
 
 class SimpleComp(Component):
@@ -25,7 +22,7 @@ class SimpleComp(Component):
         unknowns['y'] = 3.0*params['x']
         print('Execute', self.name)
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Analytical derivatives."""
 
         J = {}
@@ -40,7 +37,7 @@ class Model(Group):
     def __init__(self):
         super(Model, self).__init__()
 
-        self.add('px', ParamComp('x', 2.0))
+        self.add('px', IndepVarComp('x', 2.0))
 
         self.add('comp1', SimpleComp())
 

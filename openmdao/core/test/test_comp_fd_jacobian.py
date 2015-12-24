@@ -7,12 +7,29 @@ import unittest
 
 import numpy as np
 
-from openmdao.core import Component, Group, Problem, System, SrcVecWrapper
-from openmdao.components import ParamComp, ExecComp
+from openmdao.api import Component, Group, Problem, System, \
+    IndepVarComp, ExecComp, ScipyGMRES
+from openmdao.core.vec_wrapper import SrcVecWrapper
 from openmdao.test.simple_comps import SimpleArrayComp, \
                                       SimpleImplicitComp
 from openmdao.test.paraboloid import Paraboloid
 from openmdao.test.util import assert_equal_jacobian, assert_rel_error
+
+class FDpropsComp(Component):
+
+    def __init__(self, **kwargs):
+        super(FDpropsComp, self).__init__()
+
+        # Params
+        self.add_param('x1', 3.0)
+        self.add_param('x2', 3.0, **kwargs)
+
+        # Unknowns
+        self.add_output('y', 5.5)
+
+    def solve_nonlinear(self, params, unknowns, resids):
+        """ Doesn't do much. """
+        unknowns['y'] = 7.0*params['x1']**2 + 7.0*params['x2']**2
 
 
 class TestProb(Problem):
@@ -21,13 +38,18 @@ class TestProb(Problem):
         super(TestProb, self).__init__()
 
         self.root = root = Group()
+        root.ln_solver = ScipyGMRES()
         root.add('c1', SimpleArrayComp())
-        root.add('p1', ParamComp('p', 1*np.ones(2)))
+        root.add('p1', IndepVarComp('p', 1*np.ones(2)))
         root.connect('p1.p','c1.x')
 
         root.add('ci1', SimpleImplicitComp())
-        root.add('pi1', ParamComp('p', 1.))
+        root.add('pi1', IndepVarComp('p', 1.))
         root.connect('pi1.p','ci1.x')
+
+        root.add('pjunk', IndepVarComp('pj', np.ones((2,2))))
+        root.add('junk', ExecComp('y=x', x=np.zeros((2,2)), y=np.zeros((2,2))))
+        root.connect('pjunk.pj', 'junk.x')
 
 
 class CompFDTestCase(unittest.TestCase):
@@ -41,65 +63,42 @@ class CompFDTestCase(unittest.TestCase):
 
         expected_keys=[('y', 'x')]
 
-        params_dict = OrderedDict()
-        params_dict['x'] = { 'val': np.ones((2)),
-                             'pathname' : 'x',
-                             'promoted_name' : 'x',
-                             'shape': 2, 'size' : 2}
-
-        unknowns_dict = OrderedDict()
-        unknowns_dict['y'] = { 'val': np.zeros((2)),
-                               'pathname' : 'y',
-                               'promoted_name' : 'y',
-                             'shape': 2, 'size' : 2 }
-
-        resids_dict = OrderedDict()
-        resids_dict['y'] = { 'val': np.zeros((2)),
-                             'pathname' : 'y',
-                             'promoted_name' : 'y',
-                             'shape': 2, 'size' : 2}
-
-        params = SrcVecWrapper()
-        params.setup(params_dict, store_byobjs=True)
-
-        unknowns = SrcVecWrapper()
-        unknowns.setup(unknowns_dict, store_byobjs=True)
-
-        resids = SrcVecWrapper()
-        resids.setup(resids_dict, store_byobjs=True)
+        params = self.p.root.c1.params
+        unknowns = self.p.root.c1.unknowns
+        resids = self.p.root.c1.resids
 
         jac = self.p.root.c1.fd_jacobian(params, unknowns, resids)
         self.assertEqual(set(expected_keys), set(jac.keys()))
 
     def test_correct_vals_in_jac(self):
 
-        params_dict = OrderedDict()
-        params_dict['x'] = { 'val': np.ones((2)),
-                             'pathname' : 'x',
-                             'promoted_name' : 'x',
-                             'shape': 2, 'size' : 2 }
+        #params_dict = OrderedDict()
+        #params_dict['x'] = { 'val': np.ones((2)),
+                             #'pathname' : 'x',
+                             #'shape': 2, 'size' : 2 }
 
-        unknowns_dict = OrderedDict()
-        unknowns_dict['y'] = { 'val': np.zeros((2)),
-                               'pathname' : 'y',
-                               'promoted_name' : 'y',
-                             'shape': 2, 'size' : 2 }
+        #unknowns_dict = OrderedDict()
+        #unknowns_dict['y'] = { 'val': np.zeros((2)),
+                               #'pathname' : 'y',
+                             #'shape': 2, 'size' : 2 }
 
-        resids_dict = OrderedDict()
-        resids_dict['y'] = { 'val': np.zeros((2)),
-                             'pathname' : 'y',
-                             'promoted_name' : 'y',
-                             'shape': 2, 'size' : 2 }
+        #resids_dict = OrderedDict()
+        #resids_dict['y'] = { 'val': np.zeros((2)),
+                             #'pathname' : 'y',
+                             #'shape': 2, 'size' : 2 }
 
-        params = SrcVecWrapper()
-        params.setup(params_dict, store_byobjs=True)
+        #params = SrcVecWrapper()
+        #params.setup(params_dict, store_byobjs=True)
 
-        unknowns = SrcVecWrapper()
-        unknowns.setup(unknowns_dict, store_byobjs=True)
+        #unknowns = SrcVecWrapper()
+        #unknowns.setup(unknowns_dict, store_byobjs=True)
 
-        resids = SrcVecWrapper()
-        resids.setup(resids_dict, store_byobjs=True)
+        #resids = SrcVecWrapper()
+        #resids.setup(resids_dict, store_byobjs=True)
 
+        params = self.p.root.c1.params
+        unknowns = self.p.root.c1.unknowns
+        resids = self.p.root.c1.resids
         self.p.root.c1.solve_nonlinear(params, unknowns, resids)
 
         jac = self.p.root.c1.fd_jacobian(params, unknowns, resids)
@@ -111,32 +110,13 @@ class CompFDTestCase(unittest.TestCase):
         #Got lucky that the way this comp was written, it would accept any square
         # matrix. But provided jacobian would be really wrong!
 
-        params_dict = OrderedDict()
-        params_dict['x'] = { 'val': np.ones((2, 2)),
-                             'pathname' : 'x',
-                             'promoted_name' : 'x',
-                             'shape': (2,2), 'size' : 4 }
+        params = self.p.root.junk.params
+        unknowns = self.p.root.junk.unknowns
+        resids = self.p.root.junk.resids
 
-        unknowns_dict = OrderedDict()
-        unknowns_dict['y'] = { 'val': np.zeros((2, 2)),
-                               'pathname' : 'y',
-                               'promoted_name' : 'y',
-                             'shape': (2,2), 'size' : 4 }
-
-        resids_dict = OrderedDict()
-        resids_dict['y'] = { 'val': np.zeros((2, 2)),
-                             'pathname' : 'y',
-                             'promoted_name' : 'y',
-                             'shape': (2,2), 'size' : 4 }
-
-        params = SrcVecWrapper()
-        params.setup(params_dict, store_byobjs=True)
-
-        unknowns = SrcVecWrapper()
-        unknowns.setup(unknowns_dict, store_byobjs=True)
-
-        resids = SrcVecWrapper()
-        resids.setup(resids_dict, store_byobjs=True)
+        params['x'] = np.ones((2,2))
+        unknowns['y'] = np.zeros((2,2))
+        resids['y'] = np.zeros((2,2))
 
         self.p.root.c1.solve_nonlinear(params, unknowns, resids)
 
@@ -152,42 +132,17 @@ class CompFDTestCase(unittest.TestCase):
 
     def test_correct_vals_in_jac_implicit(self):
 
-        params_dict = OrderedDict()
-        params_dict['x'] = { 'val': np.array([0.5]),
-                             'pathname' : 'x',
-                             'promoted_name' : 'x',
-                             'shape': (1,), 'size' : 1 }
-
-        unknowns_dict = OrderedDict()
-        unknowns_dict['y'] = { 'val': np.array([0.0]),
-                               'pathname' : 'y',
-                               'promoted_name' : 'y',
-                             'shape': (1,), 'size' : 1 }
-        unknowns_dict['z'] = { 'val': np.array([0.0]),
-                               'pathname' : 'z',
-                               'promoted_name' : 'z',
-                             'shape': (1,), 'size' : 1 }
-
-        resids_dict = OrderedDict()
-        resids_dict['y'] = { 'val': np.array([0.0]),
-                             'pathname' : 'y',
-                             'promoted_name' : 'y',
-                             'shape': (1,), 'size' : 1 }
-        resids_dict['z'] = { 'val': np.array([0.0]),
-                             'pathname' : 'z',
-                             'promoted_name' : 'z',
-                             'shape': (1,), 'size' : 1 }
-
-        params = SrcVecWrapper()
-        params.setup(params_dict, store_byobjs=True)
-
-        unknowns = SrcVecWrapper()
-        unknowns.setup(unknowns_dict, store_byobjs=True)
-
-        resids = SrcVecWrapper()
-        resids.setup(resids_dict, store_byobjs=True)
-
         # Partials
+
+        params = self.p.root.ci1.params
+        unknowns = self.p.root.ci1.unknowns
+        resids = self.p.root.ci1.resids
+
+        params['x'] = np.array([0.5])
+        unknowns['y'] = np.array([0.0])
+        unknowns['z'] = np.array([0.0])
+        resids['y'] = np.array([0.0])
+        resids['z'] = np.array([0.0])
 
         self.p.root.ci1.solve_nonlinear(params, unknowns, resids)
 
@@ -224,7 +179,7 @@ class CompFDinSystemTestCase(unittest.TestCase):
         prob = Problem()
         prob.root = Group()
         comp = prob.root.add('comp', ExecComp('y=x*2.0'))
-        prob.root.add('p1', ParamComp('x', 2.0))
+        prob.root.add('p1', IndepVarComp('x', 2.0))
         prob.root.connect('p1.x', 'comp.x')
 
         comp.fd_options['force_fd'] = True
@@ -260,14 +215,14 @@ class CompFDinSystemTestCase(unittest.TestCase):
                 """Never Call."""
                 raise RuntimeError("This should have been overridden by force_fd.")
 
-            def jacobian(self, params, unknowns, resids):
+            def linearize(self, params, unknowns, resids):
                 """Never Call."""
                 raise RuntimeError("This should have been overridden by force_fd.")
 
         prob = Problem()
         prob.root = Group()
         comp = prob.root.add('comp', OverrideComp())
-        prob.root.add('p1', ParamComp('x', 2.0))
+        prob.root.add('p1', IndepVarComp('x', 2.0))
         prob.root.connect('p1.x', 'comp.x')
 
         comp.fd_options['force_fd'] = True
@@ -283,7 +238,7 @@ class CompFDinSystemTestCase(unittest.TestCase):
         prob = Problem()
         prob.root = Group()
         comp = prob.root.add('comp', Paraboloid())
-        prob.root.add('p1', ParamComp([('x', 15.0), ('y', 15.0)]))
+        prob.root.add('p1', IndepVarComp([('x', 15.0), ('y', 15.0)]))
         prob.root.connect('p1.x', 'comp.x')
         prob.root.connect('p1.y', 'comp.y')
 
@@ -302,25 +257,196 @@ class CompFDinSystemTestCase(unittest.TestCase):
         J = prob.calc_gradient(['p1.x'], ['comp.f_xy'], return_format='dict')
         self.assertGreater(J['comp.f_xy']['p1.x'][0][0], 1000.0)
 
+    def test_fd_options_step_size_precedence(self):
+
+        class MyComp(Component):
+
+            def __init__(self):
+                super(MyComp, self).__init__()
+
+                # Params
+                self.add_param('x1', 3.0)
+                self.add_param('x2', 3.0, step_size = 1e-6)
+
+                # Unknowns
+                self.add_output('y', 5.5)
+
+            def solve_nonlinear(self, params, unknowns, resids):
+                """ Doesn't do much. """
+                unknowns['y'] = 7.0*params['x1']**2 + 7.0*params['x2']**2
+
+        prob = Problem()
+        prob.root = Group()
+        comp = prob.root.add('comp', MyComp())
+        prob.root.add('p1', IndepVarComp([('x1', 3.0), ('x2', 3.0)]))
+        prob.root.connect('p1.x1', 'comp.x1')
+        prob.root.connect('p1.x2', 'comp.x2')
+
+        comp.fd_options['force_fd'] = True
+        comp.fd_options['step_size'] = 1.0e-4
+
+        prob.setup(check=False)
+        prob.run()
+
+        J = prob.calc_gradient(['p1.x1', 'p1.x2'], ['comp.y'], return_format='dict')
+        x1_err = J['comp.y']['p1.x1'] - 42.0
+        x2_err = J['comp.y']['p1.x2'] - 42.0
+
+        assert_rel_error(self, x1_err, 7e-4, 1e-1)
+        assert_rel_error(self, x2_err, 7e-6, 1e-1)
+
+    def test_fd_options_step_size_ambiguous(self):
+
+        prob = Problem()
+        prob.root = Group()
+        comp = prob.root.add('comp', FDpropsComp(step_size=1.e-6), promotes=['x2'])
+        comp2 = prob.root.add('comp2', FDpropsComp(step_size=1.001e-6), promotes=['x2'])
+        prob.root.add('p1', IndepVarComp([('x1', 3.0), ('x2', 3.0)]))
+        prob.root.connect('p1.x1', 'comp.x1')
+
+        comp.fd_options['force_fd'] = True
+        comp.fd_options['step_size'] = 1.0e-4
+
+        try:
+            prob.setup(check=False)
+        except Exception as err:
+            self.assertEqual(str(err), "The following parameters have the same promoted name, "
+                             "'x2', but different 'step_size' values: [('comp.x2', 1e-06), "
+                             "('comp2.x2', 1.001e-06)]")
+
+    def test_fd_options_step_type_ambiguous(self):
+
+        prob = Problem()
+        prob.root = Group()
+        comp = prob.root.add('comp', FDpropsComp(step_type='absolute'), promotes=['x2'])
+        comp2 = prob.root.add('comp2', FDpropsComp(step_type='relative'), promotes=['x2'])
+        prob.root.add('p1', IndepVarComp([('x1', 3.0), ('x2', 3.0)]))
+        prob.root.connect('p1.x1', 'comp.x1')
+
+        comp.fd_options['force_fd'] = True
+        comp.fd_options['step_size'] = 1.0e-4
+
+        try:
+            prob.setup(check=False)
+        except Exception as err:
+            self.assertEqual(str(err), "The following parameters have the same promoted name, "
+                             "'x2', but different 'step_type' values: [('comp.x2', 'absolute'), "
+                             "('comp2.x2', 'relative')]")
+
+    def test_fd_options_form_ambiguous(self):
+
+        prob = Problem()
+        prob.root = Group()
+        comp = prob.root.add('comp', FDpropsComp(form='central'), promotes=['x2'])
+        comp2 = prob.root.add('comp2', FDpropsComp(form='forward'), promotes=['x2'])
+        prob.root.add('p1', IndepVarComp([('x1', 3.0), ('x2', 3.0)]))
+        prob.root.connect('p1.x1', 'comp.x1')
+
+        comp.fd_options['force_fd'] = True
+        comp.fd_options['step_size'] = 1.0e-4
+
+        try:
+            prob.setup(check=False)
+        except Exception as err:
+            self.assertEqual(str(err), "The following parameters have the same promoted name, "
+                             "'x2', but different 'form' values: [('comp.x2', 'central'), "
+                             "('comp2.x2', 'forward')]")
+
+    def test_fd_options_step_type_precedence(self):
+
+        class MyComp(Component):
+
+            def __init__(self):
+                super(MyComp, self).__init__()
+
+                # Params
+                self.add_param('x1', 3.0)
+                self.add_param('x2', 3.0, step_type = 'absolute')
+
+                # Unknowns
+                self.add_output('y', 5.5)
+
+            def solve_nonlinear(self, params, unknowns, resids):
+                """ Doesn't do much. """
+                unknowns['y'] = 7.0*params['x1']**2 + 7.0*params['x2']**2
+
+        prob = Problem()
+        prob.root = Group()
+        comp = prob.root.add('comp', MyComp())
+        prob.root.add('p1', IndepVarComp([('x1', 3.0), ('x2', 3.0)]))
+        prob.root.connect('p1.x1', 'comp.x1')
+        prob.root.connect('p1.x2', 'comp.x2')
+
+        comp.fd_options['force_fd'] = True
+        comp.fd_options['step_type'] = 'relative'
+
+        prob.setup(check=False)
+        prob.run()
+
+        J = prob.calc_gradient(['p1.x1', 'p1.x2'], ['comp.y'], return_format='dict')
+        x1_err = J['comp.y']['p1.x1'] - 42.0
+        x2_err = J['comp.y']['p1.x2'] - 42.0
+
+        assert_rel_error(self, x1_err, 2.1e-5, 1e-1)
+        assert_rel_error(self, x2_err, 7e-6, 1e-1)
+
+    def test_fd_options_form_precedence(self):
+
+        class MyComp(Component):
+
+            def __init__(self):
+                super(MyComp, self).__init__()
+
+                # Params
+                self.add_param('x1', 3.0)
+                self.add_param('x2', 3.0, form = 'central')
+
+                # Unknowns
+                self.add_output('y', 5.5)
+
+            def solve_nonlinear(self, params, unknowns, resids):
+                """ Doesn't do much. """
+                unknowns['y'] = 7.0*params['x1']**2 + 7.0*params['x2']**2
+
+        prob = Problem()
+        prob.root = Group()
+        comp = prob.root.add('comp', MyComp())
+        prob.root.add('p1', IndepVarComp([('x1', 3.0), ('x2', 3.0)]))
+        prob.root.connect('p1.x1', 'comp.x1')
+        prob.root.connect('p1.x2', 'comp.x2')
+
+        comp.fd_options['force_fd'] = True
+        comp.fd_options['form'] = 'forward'
+
+        prob.setup(check=False)
+        prob.run()
+
+        J = prob.calc_gradient(['p1.x1', 'p1.x2'], ['comp.y'], return_format='dict')
+        x1_err = J['comp.y']['p1.x1'] - 42.0
+        x2_err = J['comp.y']['p1.x2'] - 42.0
+
+        assert_rel_error(self, x1_err, 7e-6, 1e-1)
+        assert_rel_error(self, x2_err, 5.4e-10, 1e-1)
+
     def test_fd_options_form(self):
 
         prob = Problem()
         prob.root = Group()
         comp = prob.root.add('comp', Paraboloid())
-        prob.root.add('p1', ParamComp('x', 15.0))
-        prob.root.add('p2', ParamComp('y', 15.0))
+        prob.root.add('p1', IndepVarComp('x', 15.0))
+        prob.root.add('p2', IndepVarComp('y', 15.0))
         prob.root.connect('p1.x', 'comp.x')
         prob.root.connect('p2.y', 'comp.y')
 
         comp.fd_options['force_fd'] = True
         comp.fd_options['form'] = 'forward'
 
-        param_list = ['p1.x']
+        indep_list = ['p1.x']
         unknowns_list = ['comp.f_xy']
         prob.setup(check=False)
         prob.run()
 
-        J = prob.calc_gradient(param_list, unknowns_list, return_format='dict')
+        J = prob.calc_gradient(indep_list, unknowns_list, return_format='dict')
         assert_rel_error(self, J['comp.f_xy']['p1.x'][0][0], 39.0, 1e-6)
 
         # Make sure it gives good result with small stepsize
@@ -378,7 +504,7 @@ class CompFDinSystemTestCase(unittest.TestCase):
                 f_xy = ((x-3.0)**2 + x*y + (y+4.0)**2 - 3.0)
                 unknowns['f_xy'] = self.scale*f_xy
 
-            def jacobian(self, params, unknowns, resids):
+            def linearize(self, params, unknowns, resids):
                 """Analytical derivatives"""
 
                 x = params['x']
@@ -393,8 +519,8 @@ class CompFDinSystemTestCase(unittest.TestCase):
         prob = Problem()
         prob.root = Group()
         comp = prob.root.add('comp', ScaledParaboloid())
-        prob.root.add('p1', ParamComp('x', 8.0*comp.scale))
-        prob.root.add('p2', ParamComp('y', 8.0*comp.scale))
+        prob.root.add('p1', IndepVarComp('x', 8.0*comp.scale))
+        prob.root.add('p2', IndepVarComp('y', 8.0*comp.scale))
         prob.root.connect('p1.x', 'comp.x')
         prob.root.connect('p2.y', 'comp.y')
 
@@ -423,8 +549,8 @@ class CompFDinSystemTestCase(unittest.TestCase):
                 super(MetaParaboloid, self).__init__()
 
                 # Params
-                self.add_param('x', 1.0, fd_step_size = 1.0e5)
-                self.add_param('y', 1.0, fd_step_size = 1.0e5)
+                self.add_param('x', 1.0, step_size = 1.0e5)
+                self.add_param('y', 1.0, step_size = 1.0e5)
 
                 # Unknowns
                 self.add_output('f_xy', 0.0)
@@ -440,7 +566,7 @@ class CompFDinSystemTestCase(unittest.TestCase):
                 f_xy = ((x-3.0)**2 + x*y + (y+4.0)**2 - 3.0)
                 unknowns['f_xy'] = f_xy
 
-            def jacobian(self, params, unknowns, resids):
+            def linearize(self, params, unknowns, resids):
                 """Analytical derivatives"""
 
                 x = params['x']
@@ -455,8 +581,8 @@ class CompFDinSystemTestCase(unittest.TestCase):
         prob = Problem()
         prob.root = Group()
         comp = prob.root.add('comp', MetaParaboloid())
-        prob.root.add('p1', ParamComp('x', 15.0))
-        prob.root.add('p2', ParamComp('y', 15.0))
+        prob.root.add('p1', IndepVarComp('x', 15.0))
+        prob.root.add('p2', IndepVarComp('y', 15.0))
         prob.root.connect('p1.x', 'comp.x')
         prob.root.connect('p2.y', 'comp.y')
 
@@ -480,8 +606,8 @@ class CompFDinSystemTestCase(unittest.TestCase):
                 super(MetaParaboloid, self).__init__()
 
                 # Params
-                self.add_param('x1', 1.0, fd_form = 'forward')
-                self.add_param('x2', 1.0, fd_form = 'backward')
+                self.add_param('x1', 1.0, form = 'forward')
+                self.add_param('x2', 1.0, form = 'backward')
                 self.add_param('y', 1.0)
 
                 # Unknowns
@@ -499,7 +625,7 @@ class CompFDinSystemTestCase(unittest.TestCase):
                 f_xy = ((x1-3.0)**2 + (x2-3.0)**2 + (x2+x2)*y + (y+4.0)**2 - 3.0)
                 unknowns['f_xy'] = f_xy
 
-            def jacobian(self, params, unknowns, resids):
+            def linearize(self, params, unknowns, resids):
                 """Analytical derivatives"""
 
                 x1 = params['x1']
@@ -516,9 +642,9 @@ class CompFDinSystemTestCase(unittest.TestCase):
         prob = Problem()
         prob.root = Group()
         comp = prob.root.add('comp', MetaParaboloid())
-        prob.root.add('p11', ParamComp('x1', 15.0))
-        prob.root.add('p12', ParamComp('x2', 15.0))
-        prob.root.add('p2', ParamComp('y', 15.0))
+        prob.root.add('p11', IndepVarComp('x1', 15.0))
+        prob.root.add('p12', IndepVarComp('x2', 15.0))
+        prob.root.add('p2', IndepVarComp('y', 15.0))
         prob.root.connect('p11.x1', 'comp.x1')
         prob.root.connect('p12.x2', 'comp.x2')
         prob.root.connect('p2.y', 'comp.y')

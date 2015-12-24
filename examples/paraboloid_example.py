@@ -2,9 +2,7 @@
 
 from __future__ import print_function
 
-from openmdao.components.param_comp import ParamComp
-from openmdao.core.component import Component
-from openmdao.core.problem import Problem, Group
+from openmdao.api import IndepVarComp, Component, Problem, Group
 
 
 class Paraboloid(Component):
@@ -28,7 +26,7 @@ class Paraboloid(Component):
 
         unknowns['f_xy'] = (x-3.0)**2 + x*y + (y+4.0)**2 - 3.0
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """ Jacobian for our paraboloid."""
 
         x = params['x']
@@ -45,8 +43,8 @@ if __name__ == "__main__":
 
     root = top.root = Group()
 
-    root.add('p1', ParamComp('x', 3.0))
-    root.add('p2', ParamComp('y', -4.0))
+    root.add('p1', IndepVarComp('x', 3.0))
+    root.add('p2', IndepVarComp('y', -4.0))
     root.add('p', Paraboloid())
 
     root.connect('p1.x', 'p.x')

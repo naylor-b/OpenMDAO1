@@ -1,17 +1,15 @@
 
-import os
-import sys
 from distutils.core import setup
 
 setup(name='openmdao',
-      version='1.0.5',
+      version='1.4.1',
       description="OpenMDAO v1 framework infrastructure",
       long_description="""\
-""",
+      """,
       classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: Apache 2.0',
+        'License :: OSI Approved :: Apache Software License',
         'Natural Language :: English',
         'Operating System :: MacOS :: MacOS X',
         'Operating System :: POSIX :: Linux',
@@ -19,13 +17,14 @@ setup(name='openmdao',
         'Topic :: Scientific/Engineering',
         'Programming Language :: Python',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: Implementation :: CPython',
       ],
       keywords='optimization multidisciplinary multi-disciplinary analysis',
-      author='',
-      author_email='',
+      author='OpenMDAO Team',
+      author_email='openmdao@openmdao.org',
       url='http://openmdao.org',
+      download_url='http://github.com/OpenMDAO/OpenMDAO/tarball/1.4.1',
       license='Apache License, Version 2.0',
       packages=[
           'openmdao',
@@ -47,14 +46,15 @@ setup(name='openmdao',
           'openmdao.recorders.test',
           'openmdao.devtools',
           'openmdao.surrogate_models',
+          'openmdao.surrogate_models.nn_interpolators',
           'openmdao.surrogate_models.test'
       ],
-      package_data = {'openmdao.units': ['unit_library.ini']},
+      package_data={'openmdao.units': ['unit_library.ini']},
       install_requires=[
-        'six', 'numpydoc', 'networkx==1.9.1', 'numpy', 'scipy'
+        'six', 'numpydoc', 'networkx==1.9.1', 'numpy>=1.9.2', 'scipy', 'sqlitedict', 'pyparsing'
       ],
-      entry_points= """
-        [console_scripts]
-        wingproj=openmdao.devtools.wingproj:run_wing
+      entry_points="""
+      [console_scripts]
+      wingproj=openmdao.devtools.wingproj:run_wing
       """
-    )
+)

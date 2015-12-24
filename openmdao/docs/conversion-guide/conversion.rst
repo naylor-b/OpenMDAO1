@@ -55,7 +55,7 @@ in a different location.
 
 ::
 
-    from openmdao.core import Component
+    from openmdao.api import Component
 
 -------------------
 Declaring Variables
@@ -181,7 +181,7 @@ older versions.
 
 ::
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         J = {}
         J[('y', 'x')] = numpy.array([2.0])
         return J
@@ -242,7 +242,7 @@ And for new OpenMDAO:
 
 ::
 
-    from openmdao.core import Component
+    from openmdao.api import Component
 
     class AircraftSim(Component):
         def __init__(self):
@@ -290,7 +290,7 @@ And for new OpenMDAO:
 
 ::
 
-    from openmdao.core import Component
+    from openmdao.api import Component
 
     class Times2(Component):
         def __init__(self):
@@ -300,7 +300,7 @@ And for new OpenMDAO:
         def solve_nonlinear(self, params, unknowns, resids):
             unknowns['y'] = params['x'] * 2.0
 
-        def jacobian(self, params, unknowns, resids):
+        def linearize(self, params, unknowns, resids):
             J = {}
             J[('y', 'x')] = numpy.array([2.0])
             return J

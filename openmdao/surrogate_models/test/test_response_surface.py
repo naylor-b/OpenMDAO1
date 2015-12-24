@@ -1,11 +1,11 @@
 # pylint: disable-msg=C0111,C0103
 
 import unittest, itertools
-    
+
 
 from numpy import array, linspace, sin, cos, pi
 
-from openmdao.surrogate_models import ResponseSurface
+from openmdao.api import ResponseSurface
 from openmdao.test.util import assert_rel_error
 from six.moves import zip
 
@@ -122,7 +122,7 @@ class TestResponseSurfaceSurrogate(unittest.TestCase):
         y = x.copy()
 
         surrogate.train(x, y)
-        jac = surrogate.jacobian(array([[0.]]))
+        jac = surrogate.linearize(array([[0.]]))
 
         assert_rel_error(self, jac[0][0], 1., 1e-3)
 
@@ -134,7 +134,7 @@ class TestResponseSurfaceSurrogate(unittest.TestCase):
         y = array([[a + b, a - b] for a, b in x])
 
         surrogate.train(x, y)
-        jac = surrogate.jacobian(array([[0.5, 0.5]]))
+        jac = surrogate.linearize(array([[0.5, 0.5]]))
         assert_rel_error(self, jac, array([[1, 1], [1, -1]]), 1e-5)
 
 

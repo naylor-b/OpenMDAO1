@@ -7,7 +7,7 @@ Simple Example Using Problem.check_partial_derivatives
 ======================================================
 
 OpenMDAO provides a way for a `Component` developer to verify that their
-partial derivatives, for each individual component, are correct. 
+partial derivatives, for each individual component, are correct.
 
 `Problem` has a method, `check_partial_derivatives`, that checks partial
 derivatives comprehensively for all `Components` in your model (as long as
@@ -33,14 +33,13 @@ Here is example code for a model that consists of a single `Component`,
    import numpy as np
    import sys
 
-   from openmdao.components import ParamComp
-   from openmdao.core import Problem, Group
+   from openmdao.api import IndepVarComp, Problem, Group
    from openmdao.test.simple_comps import SimpleArrayComp
 
    prob = Problem()
    prob.root = Group()
    prob.root.add('comp', SimpleArrayComp())
-   prob.root.add('p1', ParamComp('x', np.ones([2])))
+   prob.root.add('p1', IndepVarComp('x', np.ones([2])))
 
    prob.root.connect('p1.x', 'comp.x')
 

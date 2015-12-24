@@ -1,13 +1,14 @@
+""" Tests related to connecing params to unknowns."""
+
 import unittest
 import numpy as np
 from six import text_type, PY3
 from six.moves import cStringIO
 import warnings
 
-from openmdao.core.problem import Problem
-from openmdao.core.group import Group
-from openmdao.components.param_comp import ParamComp
-from openmdao.components.exec_comp import ExecComp
+from openmdao.api import Problem, Group, IndepVarComp, ExecComp, Component, \
+                         ScipyGMRES
+from openmdao.test.util import assert_rel_error
 
 
 class TestConnections(unittest.TestCase):
@@ -19,12 +20,47 @@ class TestConnections(unittest.TestCase):
         self.G1 = root.add("G1", Group())
         self.G2 = self.G1.add("G2", Group())
         self.C1 = self.G2.add("C1", ExecComp('y=x*2.0'))
-        self.C2 = self.G2.add("C2", ParamComp('x', 1.0))
+        self.C2 = self.G2.add("C2", IndepVarComp('x', 1.0))
 
         self.G3 = root.add("G3", Group())
         self.G4 = self.G3.add("G4", Group())
         self.C3 = self.G4.add("C3", ExecComp('y=x*2.0'))
         self.C4 = self.G4.add("C4", ExecComp('y=x*2.0'))
+
+    def test_diff_conn_input_vals(self):
+        # set different initial values
+        self.C1._init_params_dict['x']['val'] = 7.
+        self.C3._init_params_dict['x']['val'] = 5.
+
+        # connect two inputs
+        self.p.root.connect('G1.G2.C1.x', 'G3.G4.C3.x')
+
+        try:
+            self.p.setup(check=False)
+        except Exception as err:
+            self.assertEqual(str(err),
+                "The following sourceless connected inputs have different initial values: "
+                "[('G1.G2.C1.x', 7.0), ('G3.G4.C3.x', 5.0)].  Connect one of them to the output of "
+                "an IndepVarComp to ensure that they have the same initial value.")
+        else:
+            self.fail("Exception expected")
+
+    def test_diff_conn_input_units(self):
+        # set different but compatible units
+        self.C1._init_params_dict['x']['units'] = 'ft'
+        self.C3._init_params_dict['x']['units'] = 'in'
+
+        # connect two inputs
+        self.p.root.connect('G1.G2.C1.x', 'G3.G4.C3.x')
+
+        try:
+            self.p.setup(check=False)
+        except Exception as err:
+            self.assertEqual(str(err),
+                             "The following sourceless connected inputs have different units: "
+                             "[('G1.G2.C1.x', 'ft'), ('G3.G4.C3.x', 'in')]")
+        else:
+            self.fail("Exception expected")
 
     def test_no_conns(self):
         self.p.setup(check=False)
@@ -90,6 +126,119 @@ class TestConnections(unittest.TestCase):
         self.assertEqual(self.p.root.G3.G4.C3.params['x'], 999.)
         self.assertEqual(self.p.root.G3.G4.C4.params['x'], 999.)
 
+    def test_pull_size_from_source(self):
+
+        class Src(Component):
+
+            def __init__(self):
+                super(Src, self).__init__()
+
+                self.add_param('x', 2.0)
+                self.add_output('y1', np.zeros((3, )))
+                self.add_output('y2', shape=((3, )))
+
+            def solve_nonlinear(self, params, unknowns, resids):
+                """ counts up. """
+
+                x = params['x']
+
+                unknowns['y1'] = x * np.array( [1.0, 2.0, 3.0])
+                unknowns['y2'] = x * np.array( [1.0, 2.0, 3.0])
+
+        class Tgt(Component):
+
+            def __init__(self):
+                super(Tgt, self).__init__()
+
+                self.add_param('x1')
+                self.add_param('x2')
+                self.add_output('y1', 0.0)
+                self.add_output('y2', 0.0)
+
+            def solve_nonlinear(self, params, unknowns, resids):
+                """ counts up. """
+
+                x1 = params['x1']
+                x2 = params['x2']
+
+                unknowns['y1'] = np.sum(x1)
+                unknowns['y2'] = np.sum(x2)
+
+        top = Problem()
+        top.root = Group()
+        top.root.add('src', Src())
+        top.root.add('tgt', Tgt())
+
+        top.root.connect('src.y1', 'tgt.x1')
+        top.root.connect('src.y2', 'tgt.x2')
+
+        top.setup(check=False)
+        top.run()
+
+        self.assertEqual(top['tgt.y1'], 12.0)
+        self.assertEqual(top['tgt.y2'], 12.0)
+
+    def test_pull_size_from_source_with_indices(self):
+
+        class Src(Component):
+
+            def __init__(self):
+                super(Src, self).__init__()
+
+                self.add_param('x', 2.0)
+                self.add_output('y1', np.zeros((3, )))
+                self.add_output('y2', shape=((3, )))
+                self.add_output('y3', 3.0)
+
+            def solve_nonlinear(self, params, unknowns, resids):
+                """ counts up. """
+
+                x = params['x']
+
+                unknowns['y1'] = x * np.array( [1.0, 2.0, 3.0])
+                unknowns['y2'] = x * np.array( [1.0, 2.0, 3.0])
+                unknowns['y3'] = x * 4.0
+
+        class Tgt(Component):
+
+            def __init__(self):
+                super(Tgt, self).__init__()
+
+                self.add_param('x1')
+                self.add_param('x2')
+                self.add_param('x3')
+                self.add_output('y1', 0.0)
+                self.add_output('y2', 0.0)
+                self.add_output('y3', 0.0)
+
+            def solve_nonlinear(self, params, unknowns, resids):
+                """ counts up. """
+
+                x1 = params['x1']
+                x2 = params['x2']
+                x3 = params['x3']
+
+                unknowns['y1'] = np.sum(x1)
+                unknowns['y2'] = np.sum(x2)
+                unknowns['y3'] = np.sum(x3)
+
+        top = Problem()
+        top.root = Group()
+        top.root.add('src', Src())
+        top.root.add('tgt', Tgt())
+
+        top.root.connect('src.y1', 'tgt.x1', src_indices=(0, 1))
+        top.root.connect('src.y2', 'tgt.x2', src_indices=(0, 1))
+        top.root.connect('src.y3', 'tgt.x3')
+
+        top.setup(check=False)
+        top.run()
+
+        self.assertEqual(top['tgt.y1'], 6.0)
+        self.assertEqual(top['tgt.y2'], 6.0)
+        self.assertEqual(top['tgt.y3'], 8.0)
+
+
 
 class TestConnectionsPromoted(unittest.TestCase):
 
@@ -151,7 +300,7 @@ class TestConnectionsPromoted(unittest.TestCase):
         G1 = root.add("G1", Group(), promotes=['x'])
         G2 = G1.add("G2", Group(), promotes=['x'])
         C1 = G2.add("C1", ExecComp('y=x*2.0'))
-        C2 = G2.add("C2", ParamComp('x', 1.0), promotes=['x'])
+        C2 = G2.add("C2", IndepVarComp('x', 1.0), promotes=['x'])
 
         G3 = root.add("G3", Group(), promotes=['x'])
         G4 = G3.add("G4", Group(), promotes=['x'])
@@ -180,7 +329,7 @@ class TestConnectionsPromoted(unittest.TestCase):
         G1 = root.add("G1", Group())
         G2 = G1.add("G2", Group(), promotes=['x'])
         C1 = G2.add("C1", ExecComp('y=x*2.0'))
-        C2 = G2.add("C2", ParamComp('x', 1.0), promotes=['x'])
+        C2 = G2.add("C2", IndepVarComp('x', 1.0), promotes=['x'])
 
         G3 = root.add("G3", Group())
         G4 = G3.add("G4", Group(), promotes=['x'])
@@ -203,7 +352,46 @@ class TestConnectionsPromoted(unittest.TestCase):
         self.assertEqual(p.root.G3.G4.C3.params['x'], 999.)
         self.assertEqual(p.root.G3.G4.C4.params['x'], 999.)
 
+class TestUBCS(unittest.TestCase):
 
+    def test_ubcs(self):
+        p = Problem(root=Group())
+        root = p.root
+        root.ln_solver = ScipyGMRES()
+
+        self.P1 = root.add("P1", IndepVarComp('x', 1.0))
+        self.C1 = root.add("C1", ExecComp('y=x1*2.0+x2*3.0', x2=1.0))
+        self.C2 = root.add("C2", ExecComp('y=x1*2.0+x2'))
+        self.C3 = root.add("C3", ExecComp('y=x*2.0'))
+        self.C4 = root.add("C4", ExecComp('y=x1*2.0 + x2*5.0'))
+        self.C5 = root.add("C5", ExecComp('y=x1*2.0 + x2*7.0'))
+
+        root.connect("P1.x", "C1.x1")
+        root.connect("C1.y", ("C2.x1", "C3.x"))
+        root.connect("C2.y", "C4.x1")
+        root.connect("C3.y", "C4.x2")
+
+        # input-input connection
+        root.connect("C1.x2", "C5.x2")
+
+        # create a cycle
+        root.connect("C4.y", "C1.x2")
+
+        # set a bogus value for C4.y
+        self.C4._init_unknowns_dict['y']['val'] = -999.
+
+        p.setup(check=False)
+
+        ubcs = p._get_ubc_vars(root.connections)
+
+        self.assertEqual(ubcs, ['C1.x2'])
+
+        p.run()
+
+        # TODO: for now, we've just decided to force component devs to give proper initial
+        # values for their outputs.  If later we decide to use push scatters or some other
+        # means to fix the issue, uncomment this.
+        #assert_rel_error(self, p['C1.y'], 5.0, 1e-6)
 
 if __name__ == "__main__":
     unittest.main()

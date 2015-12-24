@@ -4,18 +4,48 @@
 
 import sys
 import os
-from distutils.spawn import find_executable
+
+import numpy.distutils
+from numpy.distutils.exec_command import find_executable
 
 from openmdao.core.component import Component
-from openmdao.core.options import OptionsDictionary
+from openmdao.util.options import OptionsDictionary
 from openmdao.util.shell_proc import STDOUT, DEV_NULL, ShellProc
 
+from six import iteritems, itervalues, iterkeys
 
 class ExternalCode(Component):
-    """Run an external code as a component
+    """
+    Run an external code as a component
 
     Default stdin is the 'null' device, default stdout is the console, and
     default stderr is ``error.out``.
+
+    Options
+    -------
+    fd_options['force_fd'] :  bool(False)
+        Set to True to finite difference this system.
+    fd_options['form'] :  str('forward')
+        Finite difference mode. (forward, backward, central) You can also set to 'complex_step' to peform the complex step method if your components support it.
+    fd_options['step_size'] :  float(1e-06)
+        Default finite difference stepsize
+    fd_options['step_type'] :  str('absolute')
+        Set to absolute, relative
+    options['check_external_outputs'] :  bool(True)
+        Check that all input or output external files exist
+    options['command'] :  list([])
+        command to be executed
+    options['env_vars'] :  dict({})
+        Environment variables required by the command
+    options['external_input_files'] :  list([])
+        (optional) list of input file names to check the pressence of before solve_nonlinear
+    options['external_output_files'] :  list([])
+        (optional) list of input file names to check the pressence of after solve_nonlinear
+    options['poll_delay'] :  float(0.0)
+        Delay between polling for command completion. A value of zero will use an internally computed default
+    options['timeout'] :  float(0.0)
+        Maximum time to wait for command completion. A value of zero implies an infinite wait
+
     """
 
     def __init__(self):
@@ -28,11 +58,12 @@ class ExternalCode(Component):
         self.options = OptionsDictionary()
         self.options.add_option('command', [], desc='command to be executed')
         self.options.add_option('env_vars', {}, desc='Environment variables required by the command')
-        self.options.add_option('poll_delay', 0.0, desc='''Delay between polling for command completion.
-            A value of zero will use an internally computed default''')
-        self.options.add_option('timeout', 0.0, desc='''Maximum time to wait for command
-            completion. A value of zero implies an infinite wait''')
-        self.options.add_option('check_external_outputs', True, desc='Check that all input or output external files exist')
+        self.options.add_option('poll_delay', 0.0, lower=0.0,
+            desc='Delay between polling for command completion. A value of zero will use an internally computed default')
+        self.options.add_option('timeout', 0.0, lower=0.0,
+                                desc='Maximum time to wait for command completion. A value of zero implies an infinite wait')
+        self.options.add_option('check_external_outputs', True,
+            desc='Check that all input or output external files exist')
 
         self.options.add_option( 'external_input_files', [],
             desc='(optional) list of input file names to check the pressence of before solve_nonlinear')
@@ -156,13 +187,20 @@ class ExternalCode(Component):
             program_to_execute = self.options['command']
         else:
             program_to_execute = self.options['command'][0]
-        command_full_path = find_executable( program_to_execute )
 
+        # suppress message from find_executable function, we'll handle it
+        numpy.distutils.log.set_verbosity(-1)
+
+        command_full_path = find_executable( program_to_execute )
         if not command_full_path:
             raise ValueError("The command to be executed, '%s', cannot be found" % program_to_execute)
 
+        command_for_shell_proc = self.options['command']
+        if sys.platform == 'win32':
+            command_for_shell_proc = ['cmd.exe', '/c' ] + command_for_shell_proc
+
         self._process = \
-            ShellProc(self.options['command'], self.stdin,
+            ShellProc(command_for_shell_proc, self.stdin,
                       self.stdout, self.stderr, self.options['env_vars'])
         #self._logger.debug('PID = %d', self._process.pid)
 

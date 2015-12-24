@@ -1,5 +1,7 @@
 """ Gauss Seidel non-linear solver."""
 
+from math import isnan
+
 from openmdao.solvers.solver_base import NonLinearSolver
 from openmdao.util.record_util import update_local_meta, create_local_meta
 
@@ -9,18 +11,32 @@ class NLGaussSeidel(NonLinearSolver):
     `Group`. If there are no cycles, then the system will solve its
     subsystems once and terminate. Equivalent to fixed point iteration in
     cases with cycles.
+
+    Options
+    -------
+    options['atol'] :  float(1e-06)
+        Absolute convergence tolerance.
+    options['iprint'] :  int(0)
+        Set to 0 to disable printing, set to 1 to print the residual to stdout each iteration, set to 2 to print subiteration residuals as well.
+    options['maxiter'] :  int(100)
+        Maximum number of iterations.
+    options['rtol'] :  float(1e-06)
+        Relative convergence tolerance.
+
     """
 
     def __init__(self):
         super(NLGaussSeidel, self).__init__()
 
         opt = self.options
-        opt.add_option('atol', 1e-6,
+        opt.add_option('atol', 1e-6, lower=0.0,
                        desc='Absolute convergence tolerance.')
-        opt.add_option('rtol', 1e-6,
+        opt.add_option('rtol', 1e-6, lower=0.0,
                        desc='Relative convergence tolerance.')
-        opt.add_option('maxiter', 100,
+        opt.add_option('maxiter', 100, lower=0,
                        desc='Maximum number of iterations.')
+
+        self.print_name = 'NLN_GS'
 
     def solve(self, params, unknowns, resids, system, metadata=None):
         """ Solves the system using Gauss Seidel.
@@ -52,15 +68,14 @@ class NLGaussSeidel(NonLinearSolver):
         self.iter_count = 1
 
         # Metadata setup
-        local_meta = create_local_meta(metadata, system.name)
+        local_meta = create_local_meta(metadata, system.pathname)
         system.ln_solver.local_meta = local_meta
         update_local_meta(local_meta, (self.iter_count,))
 
         # Initial Solve
         system.children_solve_nonlinear(local_meta)
 
-        for recorder in self.recorders:
-            recorder.raw_record(params, unknowns, resids, local_meta)
+        self.recorders.record_iteration(system, local_meta)
 
         # Bail early if the user wants to.
         if maxiter == 1:
@@ -74,7 +89,7 @@ class NLGaussSeidel(NonLinearSolver):
         basenorm = normval if normval > atol else 1.0
 
         if self.options['iprint'] > 0:
-            self.print_norm('NLN_GS', local_meta, 0, normval, basenorm)
+            self.print_norm(self.print_name, system.pathname, 0, normval, basenorm)
 
         while self.iter_count < maxiter and \
                 normval > atol and \
@@ -86,17 +101,21 @@ class NLGaussSeidel(NonLinearSolver):
 
             # Runs an iteration
             system.children_solve_nonlinear(local_meta)
-            for recorder in self.recorders:
-                recorder.raw_record(params, unknowns, resids, local_meta)
+            self.recorders.record_iteration(system, local_meta)
 
             # Evaluate Norm
             system.apply_nonlinear(params, unknowns, resids)
             normval = resids.norm()
 
             if self.options['iprint'] > 0:
-                self.print_norm('NLN_GS', local_meta, self.iter_count, normval,
+                self.print_norm(self.print_name, system.pathname, self.iter_count, normval,
                                 basenorm)
 
         if self.options['iprint'] > 0:
-            self.print_norm('NLN_GS', local_meta, self.iter_count, normval,
-                            basenorm, msg='Converged')
+            if self.iter_count == maxiter or isnan(normval):
+                msg = 'FAILED to converge after max iterations'
+            else:
+                msg = 'converged'
+
+            self.print_norm(self.print_name, system.pathname, self.iter_count, normval,
+                            basenorm, msg=msg)

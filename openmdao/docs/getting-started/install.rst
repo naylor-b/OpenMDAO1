@@ -1,7 +1,7 @@
 
 .. warning::
 
-        OpenMDAO 1.0 is in an ALPHA state.  The version that you are installing
+        OpenMDAO 1.x is in an ALPHA state.  The version that you are installing
         is under active development, and as such may be broken from time to time.
         Therefore, OpenMDAO 1.0 Alpha should be used at your own risk!
 
@@ -25,7 +25,16 @@ to use OpenMDAO, see the `OpenMDAO User Guide`_.
 .. _TL;DR: https://en.wikipedia.org/wiki/TL;DR
 
 Install Git, Python, Pip, Numpy, and Scipy. (`Anaconda Python <http://continuum.io/downloads>`_, comes
-bundled with everything you need). Next, install OpenMDAO with pip:
+bundled with everything you need). Next, install OpenMDAO with pip.
+
+To get most recent release of OpenMDAO:
+
+::
+
+    pip install openmdao
+
+
+To get the latest commit to OpenMDAO's Github master:
 
 ::
 
@@ -114,6 +123,25 @@ If you have any feedback, we'd love to hear it.
 Installation
 ===================
 
+Quickstart
+----------
+
+Assuming you are on a supported platform (discussed below), with the proper
+prerequisites installed (discussed further below), you can quickly and easily
+install the latest release of OpenMDAO with this line:
+
+::
+
+    pip install openmdao
+
+
+Or install the most recent commit to OpenMDAO from its Github repository with this:
+
+::
+
+    pip install git+http://github.com/OpenMDAO/OpenMDAO.git@master
+
+
 Supported Platforms
 -------------------
 
@@ -176,11 +204,11 @@ Currently, we are supporting two different versions of Python_:
 
 .. _Python: http://www.python.org
 
- * 2.7.9_ or higher versions of 2.7.x
+ * 2.7.9_ or upper versions of 2.7.x
 
 .. _2.7.9: https://www.python.org/downloads/release/python-279/
 
- * 3.4.3_ or higher versions of 3.4.x
+ * 3.4.3_ or upper versions of 3.4.x
 
  .. _3.4.3: https://www.python.org/downloads/release/python-343/
 
@@ -193,7 +221,7 @@ includes Numpy.
 
 .. _Numpy: http://numpy.org
 
- * Version 1.9.2 or higher will be supported.
+ * Version 1.9.2 or upper will be supported.
 
 Scipy
 +++++
@@ -203,7 +231,7 @@ includes Scipy.
 
 .. _Scipy: http://scipy.org
 
- * Version 0.15.1 or higher will be supported.
+ * Version 0.15.1 or upper will be supported.
 
 Git (Optional)
 ++++++++++++++
@@ -229,6 +257,12 @@ packages, you'll either need platform-specific binaries for them, or you'll need
 
 Install OpenMDAO Using pip
 --------------------------
+To pip install OpenMDAO's most recent release from the Python Package Index (pypi):
+
+::
+
+  pip install openmdao
+
 
 To pip install OpenMDAO directly from the OpenMDAO Github repository:
 

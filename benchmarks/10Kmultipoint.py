@@ -5,7 +5,7 @@ import numpy as np
 from openmdao.core.component import Component
 from openmdao.core.group import Group
 
-from openmdao.components.param_comp import ParamComp
+from openmdao.components.indep_var_comp import IndepVarComp
 from openmdao.components.exec_comp import ExecComp
 
 
@@ -63,19 +63,15 @@ class MultiPoint(Group):
         super(MultiPoint, self).__init__()
 
         size = len(adders)
-        # self.add('desvar', ParamComp('X', val=10*np.arange(size, dtype=float)), promotes=['*'])
+        # self.add('desvar', IndepVarComp('X', val=10*np.arange(size, dtype=float)), promotes=['*'])
 
-        order = []
         for i,(a,s) in enumerate(zip(adders, scalars)):
             c_name = 'p%d'%i
-            order.append(c_name)
             self.add(c_name, Point(a,s))
-            # self.connect('X', c_name+'.x', src_indices=[i,])
+            # self.connect('X', c_name+'.x', src_indices=[i])
             self.connect(c_name+'.f2','aggregate.y%d'%i)
 
         self.add('aggregate', Summer(size))
-        order.append('aggregate')
-        self.set_order(order)
 
 if __name__ == '__main__':
     import time
@@ -97,9 +93,9 @@ if __name__ == '__main__':
     print("setup time", time.time() - st)
 
     print("num connections:",len(prob.root.connections))
-    print("num unknowns:", len(prob.root._unknowns_dict), 
+    print("num unknowns:", len(prob.root._unknowns_dict),
           "size:", prob.root.unknowns.vec.size)
-    print("num params:", len(prob.root._params_dict), 
+    print("num params:", len(prob.root._params_dict),
           "size:", prob.root.params.vec.size)
 
     # prob['p0.x'] = 10

@@ -1,26 +1,39 @@
 """ Class definition for BaseRecorder, the base class for all recorders."""
 
+from types import MethodType
 from fnmatch import fnmatch
 import sys
 
 from six.moves import filter
 from six import StringIO
 
-from openmdao.core.options import OptionsDictionary
-
+from openmdao.util.options import OptionsDictionary
 
 class BaseRecorder(object):
     """ Base class for all case recorders. """
 
     def __init__(self):
         self.options = OptionsDictionary()
+        self.options.add_option('record_metadata', True)
+        self.options.add_option('record_unknowns', True)
+        self.options.add_option('record_params', False)
+        self.options.add_option('record_resids', False)
         self.options.add_option('includes', ['*'],
                                 desc='Patterns for variables to include in recording')
         self.options.add_option('excludes', [],
                                 desc='Patterns for variables to exclude from recording '
                                 '(processed after includes)')
-
         self.out = None
+
+        # This is for drivers to determine if a recorder supports
+        # real parallel recording (recording on each process), because
+        # if it doesn't, the driver figures out what variables must
+        # be gathered to rank 0 if running under MPI.
+        #
+        # By default, this is False, but it should be set to True
+        # if the recorder will record data on each process to avoid
+        # unnecessary gathering.
+        self._parallel = False
 
         self._filtered = {}
         # TODO: System specific includes/excludes
@@ -59,59 +72,55 @@ class BaseRecorder(object):
         # Did not match anything in includes.
         return False
 
-    def raw_record(self, params, unknowns, resids, metadata):
-        """
-        This is the method that drivers and solvers will call during their
-        execution to record their current state. This method is responsible
-        for filtering the provided data to reflect the includes/excludes
-        provided by the user and then calling `self.record`.
+    def _get_pathname(self, iteration_coordinate):
+        '''
+        Converts an iteration coordinate to key to index
+        `_filtered` to retrieve names of variables to be recorder
+        '''
+        return '.'.join(iteration_coordinate[4::2])
 
-        Recorder subclasses should override `record`, altering this function
-        should not be necessary.
-
-        Args
-        ----
-        params : `VecWrapper`
-            `VecWrapper` containing parameters. (p)
-
-        unknowns : `VecWrapper`
-            `VecWrapper` containing outputs and states. (u)
-
-        resids : `VecWrapper`
-            `VecWrapper` containing residuals. (r)
-
-        metadata : dict
-            Dictionary containing execution metadata (e.g. iteration coordinate).
-        """
-
-        # Coord will look like ['Driver', (1,), 'root', (1,), 'G1', (1,1), ...]
-        # So the pathname is every other entry, starting with the fifth.
-        pathname = '.'.join(metadata['coord'][4::2])
+    def _filter_vectors(self, params, unknowns, resids, iteration_coordinate):
+        '''
+        Returns subset of `params`, `unknowns` and `resids` to be recoder
+        '''
+        pathname = self._get_pathname(iteration_coordinate)
         pnames, unames, rnames = self._filtered[pathname]
-        filtered_params = {key: params[key] for key in pnames}
-        filtered_unknowns = {key: unknowns[key] for key in unames}
-        filtered_resids = {key: resids[key] for key in rnames}
-        self.record(filtered_params, filtered_unknowns, filtered_resids, metadata)
 
-    def record(self, params, unknowns, resids, metadata):
-        """ Records the requested variables. This method must be defined in
-        all recorders.
+        params = {key: params[key] for key in pnames}
+        unknowns = {key: unknowns[key] for key in unames}
+        resids = {key: resids[key] for key in rnames}
+
+        return params, unknowns, resids
+
+    def record_iteration(self, params, unknowns, resids, metadata):
+        """
+        Writes the provided data.
 
         Args
         ----
-        params : `VecWrapper`
-            `VecWrapper` containing parameters. (p)
+        params : dict
+            Dictionary containing parameters. (p)
 
-        unknowns : `VecWrapper`
-            `VecWrapper` containing outputs and states. (u)
+        unknowns : dict
+            Dictionary containing outputs and states. (u)
 
-        resids : `VecWrapper`
-            `VecWrapper` containing residuals. (r)
+        resids : dict
+            Dictionary containing residuals. (r)
 
-        metadata : dict
+        metadata : dict, optional
             Dictionary containing execution metadata (e.g. iteration coordinate).
         """
-        raise NotImplementedError("record")
+        raise NotImplementedError()
+
+    def record_metadata(self, group):
+        """Writes the metadata of the given group
+
+        Args
+        ----
+        group : `System`
+            `System` containing vectors
+        """
+        raise NotImplementedError()
 
     def close(self):
         """Closes `out` unless it's ``sys.stdout``, ``sys.stderr``, or StringIO.

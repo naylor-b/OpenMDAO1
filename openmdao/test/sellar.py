@@ -9,10 +9,11 @@ From Sellar's analytic problem.
 import numpy as np
 
 from openmdao.components.exec_comp import ExecComp
-from openmdao.components.param_comp import ParamComp
+from openmdao.components.indep_var_comp import IndepVarComp
 from openmdao.core.component import Component
 from openmdao.core.group import Group
 from openmdao.solvers.nl_gauss_seidel import NLGaussSeidel
+from openmdao.solvers.scipy_gmres import ScipyGMRES
 from openmdao.solvers.newton import Newton
 
 
@@ -34,6 +35,8 @@ class SellarDis1(Component):
         # Coupling output
         self.add_output('y1', val=1.0)
 
+        self.execution_count = 0
+
     def solve_nonlinear(self, params, unknowns, resids):
         """Evaluates the equation
         y1 = z1**2 + z2 + x1 - 0.2*y2"""
@@ -45,16 +48,18 @@ class SellarDis1(Component):
 
         unknowns['y1'] = z1**2 + z2 + x1 - 0.2*y2
 
+        self.execution_count += 1
+
 
 class SellarDis1withDerivatives(SellarDis1):
     """Component containing Discipline 1 -- derivatives version."""
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """ Jacobian for Sellar discipline 1."""
         J = {}
 
         J['y1','y2'] = -0.2
-        J['y1','z'] = np.array([[2*params['z'][0], 1.0]])
+        J['y1','z'] = np.array([[2.0*params['z'][0], 1.0]])
         J['y1','x'] = 1.0
 
         return J
@@ -75,6 +80,8 @@ class SellarDis2(Component):
         # Coupling output
         self.add_output('y2', val=1.0)
 
+        self.execution_count = 0
+
     def solve_nonlinear(self, params, unknowns, resids):
         """Evaluates the equation
         y2 = y1**(.5) + z1 + z2"""
@@ -90,11 +97,13 @@ class SellarDis2(Component):
 
         unknowns['y2'] = y1**.5 + z1 + z2
 
+        self.execution_count += 1
+
 
 class SellarDis2withDerivatives(SellarDis2):
     """Component containing Discipline 2 -- derivatives version."""
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """ Jacobian for Sellar discipline 2."""
         J = {}
 
@@ -111,22 +120,24 @@ class SellarNoDerivatives(Group):
     def __init__(self):
         super(SellarNoDerivatives, self).__init__()
 
-        self.add('px', ParamComp('x', 1.0), promotes=['*'])
-        self.add('pz', ParamComp('z', np.array([5.0, 2.0])), promotes=['*'])
+        self.add('px', IndepVarComp('x', 1.0), promotes=['*'])
+        self.add('pz', IndepVarComp('z', np.array([5.0, 2.0])), promotes=['*'])
 
-        self.add('d1', SellarDis1(), promotes=['*'])
-        self.add('d2', SellarDis2(), promotes=['*'])
+        cycle = self.add('cycle', Group(), promotes=['*'])
+        cycle.ln_solver = ScipyGMRES()
+        cycle.add('d1', SellarDis1(), promotes=['*'])
+        cycle.add('d2', SellarDis2(), promotes=['*'])
 
         self.add('obj_cmp', ExecComp('obj = x**2 + z[1] + y1 + exp(-y2)',
-                                     z=np.array([0.0, 0.0]), x=0.0, d1=0.0, d2=0.0),
+                                     z=np.array([0.0, 0.0]), x=0.0),
                  promotes=['*'])
 
         self.add('con_cmp1', ExecComp('con1 = 3.16 - y1'), promotes=['*'])
         self.add('con_cmp2', ExecComp('con2 = y2 - 24.0'), promotes=['*'])
 
         self.nl_solver = NLGaussSeidel()
-        self.d1.fd_options['force_fd'] = True
-        self.d2.fd_options['force_fd'] = True
+        self.cycle.d1.fd_options['force_fd'] = True
+        self.cycle.d2.fd_options['force_fd'] = True
 
 
 class SellarDerivatives(Group):
@@ -136,21 +147,21 @@ class SellarDerivatives(Group):
     def __init__(self):
         super(SellarDerivatives, self).__init__()
 
-        self.add('px', ParamComp('x', 1.0), promotes=['*'])
-        self.add('pz', ParamComp('z', np.array([5.0, 2.0])), promotes=['*'])
+        self.add('px', IndepVarComp('x', 1.0), promotes=['*'])
+        self.add('pz', IndepVarComp('z', np.array([5.0, 2.0])), promotes=['*'])
 
         self.add('d1', SellarDis1withDerivatives(), promotes=['*'])
         self.add('d2', SellarDis2withDerivatives(), promotes=['*'])
 
         self.add('obj_cmp', ExecComp('obj = x**2 + z[1] + y1 + exp(-y2)',
-                                     z=np.array([0.0, 0.0]), x=0.0, d1=0.0, d2=0.0),
+                                     z=np.array([0.0, 0.0]), x=0.0),
                  promotes=['*'])
 
         self.add('con_cmp1', ExecComp('con1 = 3.16 - y1'), promotes=['*'])
         self.add('con_cmp2', ExecComp('con2 = y2 - 24.0'), promotes=['*'])
 
         self.nl_solver = NLGaussSeidel()
-
+        self.ln_solver = ScipyGMRES()
 
 class SellarDerivativesGrouped(Group):
     """ Group containing the Sellar MDA. This version uses the disciplines
@@ -159,12 +170,13 @@ class SellarDerivativesGrouped(Group):
     def __init__(self):
         super(SellarDerivativesGrouped, self).__init__()
 
-        self.add('px', ParamComp('x', 1.0), promotes=['*'])
-        self.add('pz', ParamComp('z', np.array([5.0, 2.0])), promotes=['*'])
-        sub = self.add('mda', Group(), promotes=['*'])
+        self.add('px', IndepVarComp('x', 1.0), promotes=['*'])
+        self.add('pz', IndepVarComp('z', np.array([5.0, 2.0])), promotes=['*'])
 
-        sub.add('d1', SellarDis1withDerivatives(), promotes=['*'])
-        sub.add('d2', SellarDis2withDerivatives(), promotes=['*'])
+        mda = self.add('mda', Group(), promotes=['*'])
+        mda.ln_solver = ScipyGMRES()
+        mda.add('d1', SellarDis1withDerivatives(), promotes=['*'])
+        mda.add('d2', SellarDis2withDerivatives(), promotes=['*'])
 
         self.add('obj_cmp', ExecComp('obj = x**2 + z[1] + y1 + exp(-y2)',
                                      z=np.array([0.0, 0.0]), x=0.0, y1=0.0, y2=0.0),
@@ -173,10 +185,11 @@ class SellarDerivativesGrouped(Group):
         self.add('con_cmp1', ExecComp('con1 = 3.16 - y1'), promotes=['*'])
         self.add('con_cmp2', ExecComp('con2 = y2 - 24.0'), promotes=['*'])
 
-        sub.nl_solver = NLGaussSeidel()
-        sub.d1.fd_options['force_fd'] = True
-        sub.d2.fd_options['force_fd'] = True
+        mda.nl_solver = NLGaussSeidel()
+        mda.d1.fd_options['force_fd'] = True
+        mda.d2.fd_options['force_fd'] = True
 
+        self.ln_solver = ScipyGMRES()
 
 class StateConnection(Component):
     """ Define connection with an explicit equation"""
@@ -202,7 +215,7 @@ class StateConnection(Component):
         """ This is a dummy comp that doesn't modify its state."""
         pass
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Analytical derivatives."""
 
         J = {}
@@ -220,12 +233,18 @@ class SellarStateConnection(Group):
     def __init__(self):
         super(SellarStateConnection, self).__init__()
 
-        self.add('px', ParamComp('x', 1.0), promotes=['*'])
-        self.add('pz', ParamComp('z', np.array([5.0, 2.0])), promotes=['*'])
+        self.add('px', IndepVarComp('x', 1.0), promotes=['*'])
+        self.add('pz', IndepVarComp('z', np.array([5.0, 2.0])), promotes=['*'])
 
-        self.add('state_eq', StateConnection())
-        self.add('d1', SellarDis1withDerivatives(), promotes=['x', 'z', 'y1'])
-        self.add('d2', SellarDis2withDerivatives(), promotes=['z', 'y1'])
+        sub = self.add('sub', Group(), promotes=['*'])
+        sub.ln_solver = ScipyGMRES()
+
+        subgrp = sub.add('state_eq_group', Group(), promotes=['*'])
+        subgrp.ln_solver = ScipyGMRES()
+        subgrp.add('state_eq', StateConnection())
+
+        sub.add('d1', SellarDis1withDerivatives(), promotes=['x', 'z', 'y1'])
+        sub.add('d2', SellarDis2withDerivatives(), promotes=['z', 'y1'])
 
         self.connect('state_eq.y2_command', 'd1.y2')
         self.connect('d2.y2', 'state_eq.y2_actual')
@@ -235,7 +254,7 @@ class SellarStateConnection(Group):
                  promotes=['x', 'z', 'y1', 'obj'])
         self.connect('d2.y2', 'obj_cmp.y2')
 
-        self.add('con_cmp1', ExecComp('con1 = 3.16 - y1'), promotes=['*'])
+        self.add('con_cmp1', ExecComp('con1 = 3.16 - y1'), promotes=['con1', 'y1'])
         self.add('con_cmp2', ExecComp('con2 = y2 - 24.0'), promotes=['con2'])
         self.connect('d2.y2', 'con_cmp2.y2')
 

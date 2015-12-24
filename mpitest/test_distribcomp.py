@@ -1,15 +1,11 @@
 from __future__ import print_function
 
 import time
-import sys
 
 import numpy as np
 
-from openmdao.core.problem import Problem
+from openmdao.api import Problem, Component, Group
 from openmdao.core.mpi_wrap import MPI
-from openmdao.core.component import Component
-from openmdao.core.group import Group
-from openmdao.components.exec_comp import ExecComp
 from openmdao.util.array_util import evenly_distrib_idxs
 from openmdao.test.mpi_util import MPITestCase
 
@@ -19,8 +15,6 @@ if MPI:
 else:
     from openmdao.core.basic_impl import BasicImpl as impl
     rank = 0
-
-from openmdao.test.util import assert_rel_error
 
 
 def take_nth(rank, size, seq):
@@ -74,11 +68,11 @@ class DistribCompSimple(Component):
             self.comm.Allgather(outvec, both)
 
             # add both together to get our output
-            unknowns['outvec'] = both[0,:] + both[1,:]
+            unknowns['outvec'] = both[0, :] + both[1, :]
         else:
             unknowns['outvec'] = params['invec'] * 0.75
 
-    def get_req_cpus(self):
+    def get_req_procs(self):
         return (2, 2)
 
 
@@ -93,8 +87,8 @@ class DistribInputComp(Component):
     def solve_nonlinear(self, params, unknowns, resids):
         if MPI:
             self.comm.Allgatherv(params['invec']*2.0,
-                                    [unknowns['outvec'], self.sizes,
-                                     self.offsets, MPI.DOUBLE])
+                                 [unknowns['outvec'], self.sizes,
+                                  self.offsets, MPI.DOUBLE])
         else:
             unknowns['outvec'] = params['invec'] * 2.0
 
@@ -112,7 +106,7 @@ class DistribInputComp(Component):
         self.set_var_indices('invec', val=np.ones(self.sizes[rank], float),
                              src_indices=np.arange(start, end, dtype=int))
 
-    def get_req_cpus(self):
+    def get_req_procs(self):
         return (2, 2)
 
 
@@ -155,7 +149,7 @@ class DistribOverlappingInputComp(Component):
         self.set_var_indices('invec', val=np.ones(size, float),
                              src_indices=np.arange(start, end, dtype=int))
 
-    def get_req_cpus(self):
+    def get_req_procs(self):
         return (2, 2)
 
 
@@ -188,7 +182,7 @@ class DistribInputDistribOutputComp(Component):
         self.set_var_indices('outvec', val=np.ones(sizes[rank], float),
                              src_indices=np.arange(start, end, dtype=int))
 
-    def get_req_cpus(self):
+    def get_req_procs(self):
         return (2, 2)
 
 
@@ -221,7 +215,7 @@ class DistribNoncontiguousComp(Component):
         self.set_var_indices('outvec', val=np.ones(len(idxs), float),
                              src_indices=idxs)
 
-    def get_req_cpus(self):
+    def get_req_procs(self):
         return (2, 2)
 
 
@@ -259,7 +253,7 @@ class DistribGatherComp(Component):
         self.set_var_indices('invec', val=np.ones(self.sizes[rank], float),
                              src_indices=np.arange(start, end, dtype=int))
 
-    def get_req_cpus(self):
+    def get_req_procs(self):
         return (2, 2)
 
 
@@ -293,7 +287,7 @@ class MPITests(MPITestCase):
 
         p.run()
 
-        self.assertTrue(all(top.C2.unknowns['outvec']==np.ones(size, float)*7.5))
+        self.assertTrue(all(top.C2.unknowns['outvec'] == np.ones(size, float)*7.5))
 
     def test_distrib_idx_in_full_out(self):
         size = 11
@@ -309,7 +303,7 @@ class MPITests(MPITestCase):
 
         p.run()
 
-        self.assertTrue(all(top.C2.unknowns['outvec']==np.array(range(size, 0, -1), float)*4))
+        self.assertTrue(all(top.C2.unknowns['outvec'] == np.array(range(size, 0, -1), float)*4))
 
     def test_distrib_idx_in_distrb_idx_out(self):
         # normal comp to distrib comp to distrb gather comp
@@ -328,7 +322,7 @@ class MPITests(MPITestCase):
 
         p.run()
 
-        self.assertTrue(all(top.C3.unknowns['outvec']==np.array(range(size, 0, -1), float)*4))
+        self.assertTrue(all(top.C3.unknowns['outvec'] == np.array(range(size, 0, -1), float)*4))
 
     def test_noncontiguous_idxs(self):
         # take even input indices in 0 rank and odd ones in 1 rank
@@ -356,8 +350,8 @@ class MPITests(MPITestCase):
             full_list = list(take_nth(0, 2, range(size))) + list(take_nth(1, 2, range(size)))
             self.assertTrue(all(top.C3.unknowns['outvec'] == np.array(full_list, 'f')*4))
         else:
-            self.assertTrue(all(top.C2.unknowns['outvec']==top.C1.unknowns['outvec']*2.))
-            self.assertTrue(all(top.C3.unknowns['outvec']==top.C2.unknowns['outvec']))
+            self.assertTrue(all(top.C2.unknowns['outvec'] == top.C1.unknowns['outvec']*2.))
+            self.assertTrue(all(top.C3.unknowns['outvec'] == top.C2.unknowns['outvec']))
 
     def test_overlapping_inputs_idxs(self):
         # distrib comp with src_indices that overlap, i.e. the same
@@ -375,11 +369,11 @@ class MPITests(MPITestCase):
 
         p.run()
 
-        self.assertTrue(all(top.C2.unknowns['outvec'][:4]==np.array(range(size, 0, -1), float)[:4]*4))
-        self.assertTrue(all(top.C2.unknowns['outvec'][8:]==np.array(range(size, 0, -1), float)[8:]*4))
+        self.assertTrue(all(top.C2.unknowns['outvec'][:4] == np.array(range(size, 0, -1), float)[:4]*4))
+        self.assertTrue(all(top.C2.unknowns['outvec'][8:] == np.array(range(size, 0, -1), float)[8:]*4))
 
         # overlapping part should be double size of the rest
-        self.assertTrue(all(top.C2.unknowns['outvec'][4:8]==np.array(range(size, 0, -1), float)[4:8]*8))
+        self.assertTrue(all(top.C2.unknowns['outvec'][4:8] == np.array(range(size, 0, -1), float)[4:8]*8))
 
     def test_nondistrib_gather(self):
         # regular comp --> distrib comp --> regular comp.  last comp should
@@ -400,7 +394,7 @@ class MPITests(MPITestCase):
         p.run()
 
         if rank == 0:
-            self.assertTrue(all(top.C3.unknowns['outvec']==np.array(range(size, 0, -1), float)*4))
+            self.assertTrue(all(top.C3.unknowns['outvec'] == np.array(range(size, 0, -1), float)*4))
 
 
 if __name__ == '__main__':

@@ -1,8 +1,8 @@
 """ Base class for linear and nonlinear solvers."""
 
 from __future__ import print_function
-
-from openmdao.core.options import OptionsDictionary
+from openmdao.recorders.recording_manager import RecordingManager
+from openmdao.util.options import OptionsDictionary
 
 
 class SolverBase(object):
@@ -16,10 +16,20 @@ class SolverBase(object):
                'residual to stdout each iteration, set to 2 to print ' \
                'subiteration residuals as well.'
         self.options.add_option('iprint', 0, values=[0, 1, 2], desc=desc)
-        self.recorders = []
+        self.recorders = RecordingManager()
         self.local_meta = None
 
-    def print_norm(self, solver_string, metadata, iteration, res, res0,
+    def setup(self, sub):
+        """ Solvers override to define post-setup initiailzation.
+
+        Args
+        ----
+        sub: `System`
+            System that owns this solver.
+        """
+        pass
+
+    def print_norm(self, solver_string, pathname, iteration, res, res0,
                    msg=None, indent=0, solver='NL'):
         """ Prints out the norm of the residual in a neat readable format.
 
@@ -29,8 +39,8 @@ class SolverBase(object):
             Unique string to identify your solver type (e.g., 'LN_GS' or
             'NEWTON').
 
-        metadata: dict
-            OpenMDAO execution metadata containing iteration info.
+        pathname: dict
+            Parent system pathname.
 
         iteration: int
             Current iteration number
@@ -50,13 +60,15 @@ class SolverBase(object):
         solver: string, optional
             Solver type if not LN or NL (mostly for line search operations.)
         """
-        name = metadata['name']
+        if pathname=='':
+            name = 'root'
+        else:
+            name = 'root.' + pathname
 
         # Find indentation level
-        level = sum(len(item) for item in metadata['coord']
-                    if not isinstance(item, str))
+        level = pathname.count('.')
         # No indentation for driver; top solver is no indentation.
-        level = level + indent - 2
+        level = level + indent
 
         indent = '   ' * level
         if msg is not None:
@@ -67,10 +79,63 @@ class SolverBase(object):
         form = indent + '[%s] %s: %s   %d | %.9g %.9g'
         print(form % (name, solver, solver_string, iteration, res, res/res0))
 
+    def print_all_convergence(self):
+        """ Turns on iprint for this solver and all subsolvers. Override if
+        your solver has subsolvers."""
+        self.options['iprint'] = 1
+
+    def generate_docstring(self):
+        """
+        Generates a numpy-style docstring for a user-created System class.
+
+        Returns
+        -------
+        docstring : str
+                string that contains a basic numpy docstring.
+
+        """
+        #start the docstring off
+        docstring = '    \"\"\"\n'
+
+        #Put options into docstring
+        firstTime = 1
+        #for py3.4, items from vars must come out in same order.
+        from collections import OrderedDict
+        v = OrderedDict(sorted(vars(self).items()))
+        for key, value in v.items():
+            if type(value)==OptionsDictionary:
+                if firstTime:  #start of Options docstring
+                    docstring += '\n    Options\n    -------\n'
+                    firstTime = 0
+                for (name, val) in sorted(value.items()):
+                    docstring += "    " + key + "['"
+                    docstring += name + "']"
+                    docstring += " :  " + type(val).__name__
+                    docstring += "("
+                    if type(val).__name__ == 'str': docstring += "'"
+                    docstring += str(val)
+                    if type(val).__name__ == 'str': docstring += "'"
+                    docstring += ")\n"
+
+                    desc = value._options[name]['desc']
+                    if(desc):
+                        docstring += "        " + desc + "\n"
+
+        #finish up docstring
+        docstring += '\n    \"\"\"\n'
+        return docstring
+
 
 class LinearSolver(SolverBase):
     """ Base class for all linear solvers. Inherit from this class to create a
-    new custom linear solver."""
+    new custom linear solver.
+
+    Options
+    -------
+    options['iprint'] :  int(0)
+        Set to 0 to disable printing, set to 1 to print the residual to stdout
+        each iteration, set to 2 to print subiteration residuals as well.
+    """
 
     def add_recorder(self, recorder):
         """Appends the given recorder to this solver's list of recorders.
@@ -108,7 +173,14 @@ class LinearSolver(SolverBase):
 
 class NonLinearSolver(SolverBase):
     """ Base class for all nonlinear solvers. Inherit from this class to create a
-    new custom nonlinear solver."""
+    new custom nonlinear solver.
+
+    Options
+    -------
+    options['iprint'] :  int(0)
+        Set to 0 to disable printing, set to 1 to print the residual to stdout
+        each iteration, set to 2 to print subiteration residuals as well.
+    """
 
     def add_recorder(self, recorder):
         """Appends the given recorder to this solver's list of recorders.
@@ -145,3 +217,50 @@ class NonLinearSolver(SolverBase):
         pass
 
 
+class LineSearch(SolverBase):
+    """ Base class for all linesearch subsolvers. Line search is used by
+    other solvers such as the Newton solver. Inherit from this class to
+    create a new custom line search.
+
+    Options
+    -------
+    options['iprint'] :  int(0)
+        Set to 0 to disable printing, set to 1 to print the residual to stdout
+        each iteration, set to 2 to print subiteration residuals as well.
+    """
+
+    def solve(self, params, unknowns, resids, system, solver, alpha, fnorm,
+              fnorm0, metadata=None):
+        """ Take the gradient calculated by the parent solver and figure out
+        how far to go.
+
+        Args
+        ----
+        params : `VecWrapper`
+            `VecWrapper` containing parameters. (p)
+
+        unknowns : `VecWrapper`
+            `VecWrapper` containing outputs and states. (u)
+
+        resids : `VecWrapper`
+            `VecWrapper` containing residuals. (r)
+
+        system : `System`
+            Parent `System` object.
+
+        metadata : dict, optional
+            Dictionary containing execution metadata (e.g. iteration coordinate).
+
+        solver : `Solver`
+            Parent solver instance.
+
+        alpha : float
+            Initial over-relaxation factor as used in parent solver.
+
+        fnorm : float
+            Initial norm of the residual for absolute tolerance check.
+
+        fnorm0 : float
+            Initial norm of the residual for relative tolerance check.
+        """
+        pass

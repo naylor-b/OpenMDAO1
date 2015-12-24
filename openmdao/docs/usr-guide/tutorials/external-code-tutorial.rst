@@ -56,8 +56,7 @@ Next we need to build the OpenMDAO component that makes use of this external cod
 
     from __future__ import print_function
 
-    from openmdao.core import Problem, Group
-    from openmdao.components import ExternalCode, ParamComp
+    from openmdao.api import Problem, Group, ExternalCode, IndepVarComp
 
     class ParaboloidExternalCode(ExternalCode):
       def __init__(self):
@@ -106,8 +105,8 @@ Next we need to build the OpenMDAO component that makes use of this external cod
       top.root = root = Group()
 
       # Create and connect inputs
-      root.add('p1', ParamComp('x', 3.0))
-      root.add('p2', ParamComp('y', -4.0))
+      root.add('p1', IndepVarComp('x', 3.0))
+      root.add('p2', IndepVarComp('y', -4.0))
       root.add('p', ParaboloidExternalCode())
 
       root.connect('p1.x', 'p.x')
@@ -135,8 +134,7 @@ you are running in Python 3.x.
 
     from __future__ import print_function
 
-    from openmdao.core import Problem, Group
-    from openmdao.components import ExternalCode, ParamComp
+    from openmdao.api import Problem, Group, ExternalCode, IndepVarComp
 
 
 OpenMDAO provides a base class, `ExternalCode`, which you should inherit from to
@@ -217,8 +215,8 @@ create a `ParaboloidExternalCode` `Component`.
         top.root = root = Group()
 
         # Create and connect inputs
-        root.add('p1', ParamComp('x', 3.0))
-        root.add('p2', ParamComp('y', -4.0))
+        root.add('p1', IndepVarComp('x', 3.0))
+        root.add('p2', IndepVarComp('y', -4.0))
         root.add('p', ParaboloidExternalCode())
 
         root.connect('p1.x', 'p.x')

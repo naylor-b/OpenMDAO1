@@ -3,10 +3,7 @@
 import unittest
 import numpy as np
 
-from openmdao.components.param_comp import ParamComp
-from openmdao.core.component import Component
-from openmdao.core.group import Group
-from openmdao.core.problem import Problem
+from openmdao.api import IndepVarComp, Component, Group, Problem
 from openmdao.test.converge_diverge import ConvergeDivergeGroups
 from openmdao.test.simple_comps import SimpleCompDerivMatVec
 from openmdao.test.util import assert_rel_error
@@ -18,7 +15,7 @@ class TestGroupDerivatves(unittest.TestCase):
 
         class VerificationComp(SimpleCompDerivMatVec):
 
-            def jacobian(self, params, unknowns, resids):
+            def linearize(self, params, unknowns, resids):
                 raise RuntimeError("Derivative functions on this comp should not run.")
 
             def apply_linear(self, params, unknowns, dparams, dunknowns,
@@ -31,7 +28,7 @@ class TestGroupDerivatves(unittest.TestCase):
         prob = Problem()
         prob.root = Group()
         prob.root.add('sub', sub)
-        prob.root.add('x_param', ParamComp('x', 1.0))
+        prob.root.add('x_param', IndepVarComp('x', 1.0))
         prob.root.connect('x_param.x', "sub.mycomp.x")
 
         sub.fd_options['force_fd'] = True
@@ -52,16 +49,16 @@ class TestGroupDerivatves(unittest.TestCase):
         prob.root = Group()
         prob.root.add('sub', ConvergeDivergeGroups())
 
-        param_list = ['sub.p.x']
+        indep_list = ['sub.p.x']
         unknown_list = ['sub.comp7.y1']
 
         prob.setup(check=False)
         prob.run()
 
-        J = prob.calc_gradient(param_list, unknown_list, mode='fwd', return_format='dict')
+        J = prob.calc_gradient(indep_list, unknown_list, mode='fwd', return_format='dict')
         assert_rel_error(self, J['sub.comp7.y1']['sub.p.x'][0][0], -40.75, 1e-6)
 
-        J = prob.calc_gradient(param_list, unknown_list, mode='rev', return_format='dict')
+        J = prob.calc_gradient(indep_list, unknown_list, mode='rev', return_format='dict')
         assert_rel_error(self, J['sub.comp7.y1']['sub.p.x'][0][0], -40.75, 1e-6)
 
     def test_group_fd(self):
@@ -82,7 +79,7 @@ class TestGroupDerivatves(unittest.TestCase):
                 """ Doesn't do much.  Just multiply by 3"""
                 unknowns['y'] = 3.0*params['x']
 
-            def jacobian(self, params, unknowns, resids):
+            def linearize(self, params, unknowns, resids):
                 """Analytical derivatives."""
 
                 J = {}
@@ -95,7 +92,7 @@ class TestGroupDerivatves(unittest.TestCase):
             def __init__(self):
                 super(Model, self).__init__()
 
-                self.add('px', ParamComp('x', 2.0))
+                self.add('px', IndepVarComp('x', 2.0))
 
                 self.add('comp1', SimpleComp())
                 sub = self.add('sub', Group())

@@ -3,11 +3,8 @@ and replaces it with an implicit component."""
 
 import numpy as np
 
-from openmdao.components.exec_comp import ExecComp
-from openmdao.components.param_comp import ParamComp
-from openmdao.core.component import Component
-from openmdao.core.group import Group
-from openmdao.solvers.newton import Newton
+from openmdao.api import Component, Group, IndepVarComp, \
+    ExecComp, Newton
 
 
 class SellarDis1(Component):
@@ -39,7 +36,7 @@ class SellarDis1(Component):
 
         unknowns['y1'] = z1**2 + z2 + x1 - 0.2*y2
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """ Jacobian for Sellar discipline 1."""
         J = {}
 
@@ -80,7 +77,7 @@ class SellarDis2(Component):
 
         unknowns['y2'] = y1**.5 + z1 + z2
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """ Jacobian for Sellar discipline 2."""
         J = {}
 
@@ -114,7 +111,7 @@ class StateConnection(Component):
         """ This is a dummy comp that doesn't modify its state."""
         pass
 
-    def jacobian(self, params, unknowns, resids):
+    def linearize(self, params, unknowns, resids):
         """Analytical derivatives."""
 
         J = {}
@@ -133,8 +130,8 @@ class SellarStateConnection(Group):
     def __init__(self):
         super(SellarStateConnection, self).__init__()
 
-        self.add('px', ParamComp('x', 1.0), promotes=['*'])
-        self.add('pz', ParamComp('z', np.array([5.0, 2.0])), promotes=['*'])
+        self.add('px', IndepVarComp('x', 1.0), promotes=['*'])
+        self.add('pz', IndepVarComp('z', np.array([5.0, 2.0])), promotes=['*'])
 
         self.add('state_eq', StateConnection())
         self.add('d1', SellarDis1(), promotes=['x', 'z', 'y1'])
@@ -144,7 +141,7 @@ class SellarStateConnection(Group):
         self.connect('d2.y2', 'state_eq.y2_actual')
 
         self.add('obj_cmp', ExecComp('obj = x**2 + z[1] + y1 + exp(-y2)',
-                                     z=np.array([0.0, 0.0]), x=0.0, d1=0.0, d2=0.0),
+                                     z=np.array([0.0, 0.0])),
                   promotes=['x', 'z', 'y1', 'obj'])
         self.connect('d2.y2', 'obj_cmp.y2')
 
@@ -168,13 +165,13 @@ if __name__ == '__main__':
     top.driver.options['optimizer'] = 'SLSQP'
     top.driver.options['tol'] = 1.0e-8
 
-    top.driver.add_param('z', low=np.array([-10.0, 0.0]),
-                         high=np.array([10.0, 10.0]))
-    top.driver.add_param('x', low=0.0, high=10.0)
+    top.driver.add_desvar('z', lower=np.array([-10.0, 0.0]),
+                         upper=np.array([10.0, 10.0]))
+    top.driver.add_desvar('x', lower=0.0, upper=10.0)
 
     top.driver.add_objective('obj')
-    top.driver.add_constraint('con1')
-    top.driver.add_constraint('con2')
+    top.driver.add_constraint('con1', upper=0.0)
+    top.driver.add_constraint('con2', upper=0.0)
 
     top.setup()
     top.run()

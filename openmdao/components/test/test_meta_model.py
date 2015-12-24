@@ -1,10 +1,8 @@
 import numpy as np
 import unittest
 
-from openmdao.core import Group, Problem
-from openmdao.components import MetaModel, ParamComp
-from openmdao.surrogate_models import ResponseSurface, FloatKrigingSurrogate, KrigingSurrogate
-
+from openmdao.api import Group, Problem, MetaModel, IndepVarComp, ResponseSurface, \
+    FloatKrigingSurrogate, KrigingSurrogate
 from openmdao.test.util import assert_rel_error
 
 from six.moves import cStringIO
@@ -43,6 +41,44 @@ class TestMetaModel(unittest.TestCase):
         # train the surrogate and check predicted value
         prob['sin_mm.train:x'] = np.linspace(0,10,200)
         prob['sin_mm.train:f_x'] = .5*np.sin(prob['sin_mm.train:x'])
+
+        prob['sin_mm.x'] = 2.22
+
+        prob.run()
+
+        self.assertAlmostEqual(prob['sin_mm.f_x'],
+                               .5*np.sin(prob['sin_mm.x']),
+                               places=5)
+
+    def test_sin_metamodel_preset_data(self):
+        # preset training data
+        x = np.linspace(0,10,200)
+        f_x = .5*np.sin(x)
+
+        # create a MetaModel for Sin and add it to a Problem
+        sin_mm = MetaModel()
+        sin_mm.add_param('x', 0., training_data = np.linspace(0,10,200))
+        sin_mm.add_output('f_x', 0., training_data=f_x)
+
+        prob = Problem(Group())
+        prob.root.add('sin_mm', sin_mm)
+
+        # check that missing surrogate is detected in check_setup
+        stream = cStringIO()
+        prob.setup(out_stream=stream)
+        msg = ("No default surrogate model is defined and the "
+               "following outputs do not have a surrogate model:\n"
+               "['f_x']\n"
+               "Either specify a default_surrogate, or specify a "
+               "surrogate model for all outputs.")
+        self.assertTrue(msg in stream.getvalue())
+
+        # check that output with no specified surrogate gets the default
+        sin_mm.default_surrogate = FloatKrigingSurrogate()
+        prob.setup(check=False)
+        surrogate = prob.root.unknowns.metadata('sin_mm.f_x').get('surrogate')
+        self.assertTrue(isinstance(surrogate, FloatKrigingSurrogate),
+                        'sin_mm.f_x should get the default surrogate')
 
         prob['sin_mm.x'] = 2.22
 
@@ -344,13 +380,19 @@ class TestMetaModel(unittest.TestCase):
 
         prob = Problem(Group())
         prob.root.add('meta', meta, promotes=['x'])
-        prob.root.add('p', ParamComp('x', 0.), promotes=['x'])
+        prob.root.add('p', IndepVarComp('x', 0.), promotes=['x'])
         prob.setup(check=False)
 
         prob['meta.train:x'] = [0., .25, .5, .75, 1.]
         prob['meta.train:f'] = [1., .75, .5, .25, 0.]
         prob['x'] = 0.125
         prob.run()
+
+        Jf = prob.calc_gradient(['x'], ['meta.f'], mode='fwd')
+        Jr = prob.calc_gradient(['x'], ['meta.f'], mode='rev')
+
+        assert_rel_error(self, Jf[0][0], -1.00011, 1.0e-5)
+        assert_rel_error(self, Jr[0][0], -1.00011, 1.0e-5)
 
         stream = cStringIO()
         prob.check_partial_derivatives(out_stream=stream)

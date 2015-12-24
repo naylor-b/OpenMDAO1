@@ -38,7 +38,7 @@ First, disciplines 1 and 2 were implemented in OpenMDAO as components.
 
         import numpy as np
 
-        from openmdao.core import Component
+        from openmdao.api import Component
 
 
         class SellarDis1(Component):
@@ -70,7 +70,7 @@ First, disciplines 1 and 2 were implemented in OpenMDAO as components.
 
                 unknowns['y1'] = z1**2 + z2 + x1 - 0.2*y2
 
-            def jacobian(self, params, unknowns, resids):
+            def linearize(self, params, unknowns, resids):
                 """ Jacobian for Sellar discipline 1."""
                 J = {}
 
@@ -111,7 +111,7 @@ First, disciplines 1 and 2 were implemented in OpenMDAO as components.
 
                 unknowns['y2'] = y1**.5 + z1 + z2
 
-            def jacobian(self, params, unknowns, resids):
+            def linearize(self, params, unknowns, resids):
                 """ Jacobian for Sellar discipline 2."""
                 J = {}
 
@@ -135,11 +135,10 @@ were combined into a 2-element `ndarray`.
   of the absolute value solves the problem without impacting the final converged solution.
 
 
-We have written two (very simple) analysis components. If you were working on a real problem, these would
-your components could be more complex, or could potentially be wrappers for external analysis components.
+We have written two (very simple) analysis components. If you were working on a real problem, your components could be more complex, or could potentially be wrappers for external analysis components.
 But keep in mind that from an optimization point of view, whether they are simple tools or wrappers for
 real analyses, OpenMDAO still views them as components with `params`, `unknowns`, `resids` and a `solve_nonlinear` function,
-and optionally a `jacobian` function.
+and optionally a `linearize` function.
 
 
 At this point we've written the components, but we haven't combined them
@@ -157,9 +156,8 @@ for things like objectives and constraints.
 
 .. testcode:: Disciplines
 
-    from openmdao.components import ExecComp, ParamComp
-    from openmdao.core import Group
-    from openmdao.solvers import NLGaussSeidel
+    from openmdao.api import ExecComp, IndepVarComp, Group, NLGaussSeidel, \
+                             ScipyGMRES
 
     class SellarDerivatives(Group):
         """ Group containing the Sellar MDA. This version uses the disciplines
@@ -168,8 +166,8 @@ for things like objectives and constraints.
         def __init__(self):
             super(SellarDerivatives, self).__init__()
 
-            self.add('px', ParamComp('x', 1.0), promotes=['*'])
-            self.add('pz', ParamComp('z', np.array([5.0, 2.0])), promotes=['*'])
+            self.add('px', IndepVarComp('x', 1.0), promotes=['*'])
+            self.add('pz', IndepVarComp('z', np.array([5.0, 2.0])), promotes=['*'])
 
             self.add('d1', SellarDis1(), promotes=['*'])
             self.add('d2', SellarDis2(), promotes=['*'])
@@ -184,16 +182,21 @@ for things like objectives and constraints.
             self.nl_solver = NLGaussSeidel()
             self.nl_solver.options['atol'] = 1.0e-12
 
+            self.ln_solver = ScipyGMRES()
+
 We use `add` to add `Components` or `Systems`
 to a `Group.` The order you add them to your `Group` is the order they will
-execute, so it to add them in the correct order. Here, this means starting
-with the ParamComps, then adding our disciplines, and finishing with the objective and constraints.
+execute, so it is important to add them in the correct order. Here, this means starting
+with the IndepVarComps, then adding our disciplines, and finishing with the objective and constraints.
 
 We have also decided to declare all of our connections to be implicit by
 using the `promotes` argument when we added any component. When you
 promote '*', that means that every `param` and `unknown` is available in the
 parent system. Thus, if you wanted to connect something to variable `y1`, you
-would address it with the string `y1` instead of `dis1.y1`. The following is also valid
+would address it with the string `y1` instead of `dis1.y1`. Note that as models
+become more complicated, using promote '*' everywhere can result in connections
+that you don't intend, so be careful when using it.  The following is
+also valid
 
 ::
 
@@ -209,7 +212,8 @@ to arrive at values of `y1` and `y2` that satisfy the equations in both
 disciplines. We have selected the `NLGaussSeidel` solver (i.e., fixed point
 iteration), which will converge the model in our `Group`. We also specify a
 tighter tolerance in the solver's `options` dictionary, overriding the 1e-6
-default.
+default.  Note that we had to change our linear solver to ScipyGMRES instead
+of using the default LinearGaussSeidel solver because we have a cycle.
 
 The objective and constraints are defined with the `ExecComp`, which is really a
 shortcut for creating a `Component` that is a simple function of other
@@ -226,9 +230,9 @@ outputs objective and constraint variables.
 This creates a component named 'obj_comp' with inputs 'x', 'z', 'y1', and
 'y2', and with output 'obj'. The first argument is a string expression that contains the function.
 OpenMDAO can parse this expression so that the `solve_nonlinear` and
-`jacobian` methods are taken care of for you. Notice that standard math
+`linearize` methods are taken care of for you. Notice that standard math
 functions like `exp` are available to use. Because we promote every variable
-in our call to `add`, all of the inputs variables are automatically connected
+in our call to `add`, all of the input variables are automatically connected
 to sources in the model. We also specify our default initial values as the
 remaining arguments for the ExecComp. You are not required to do this for
 scalars, but you must always allocate the array inputs ('z' in this case).
@@ -257,8 +261,7 @@ which wraps `scipy's minimize function <http://docs.scipy.org/doc/scipy-0.15.1/r
 
 .. testcode:: Disciplines
 
-        from openmdao.core import Problem
-        from openmdao.drivers import ScipyOptimizer
+        from openmdao.api import Problem, ScipyOptimizer
 
         top = Problem()
         top.root = SellarDerivatives()
@@ -267,13 +270,13 @@ which wraps `scipy's minimize function <http://docs.scipy.org/doc/scipy-0.15.1/r
         top.driver.options['optimizer'] = 'SLSQP'
         top.driver.options['tol'] = 1.0e-8
 
-        top.driver.add_param('z', low=np.array([-10.0, 0.0]),
-                             high=np.array([10.0, 10.0]))
-        top.driver.add_param('x', low=0.0, high=10.0)
+        top.driver.add_desvar('z', lower=np.array([-10.0, 0.0]),
+                             upper=np.array([10.0, 10.0]))
+        top.driver.add_desvar('x', lower=0.0, upper=10.0)
 
         top.driver.add_objective('obj')
-        top.driver.add_constraint('con1')
-        top.driver.add_constraint('con2')
+        top.driver.add_constraint('con1', upper=0.0)
+        top.driver.add_constraint('con2', upper=0.0)
 
         top.setup()
         top.run()
@@ -302,9 +305,9 @@ which wraps `scipy's minimize function <http://docs.scipy.org/doc/scipy-0.15.1/r
 
 Next we add the parameter for 'z'. Recall that the first argument for
 `add_param` is a string containing the name of a variable declared in a
-`ParamComp`. Since we are promoting the output of this pcomp, we use the
+`IndepVarComp`. Since we are promoting the output of this pcomp, we use the
 promoted name, which is 'z' (and likewise we use 'x' for the other
-parameter.) Variable 'z' is an 2-element array, and each element has a
+parameter.) Variable 'z' is a 2-element array, and each element has a
 different set of bounds defined in the problem, so we  specify the `low`
 and `high` attributes as numpy arrays. If you are ok with the same `low` or `high`
 for all elements of your design variable array, you could also give a scalar for
@@ -317,10 +320,9 @@ variable, you will have to place a minus sign in the expression you give to
 the objective `ExecComp`.
 
 Finally we add the constraints using the `add_constraint` method, which takes
-any valid `unknown` in the model as the first argument. Constraints in
-OpenMDAO are defined so that a negative value means the constraint is
-satisfied, and a positive value means it is violated. When a constraint is
-equal to zero, it is called an 'active' constraint.
+any valid `unknown` in the model as the first argument. We want to constrain
+the unknowns "con1" and "con2" to be less than zero, so we set an upper bound
+of zero on both constraints.
 
 Don't forget to call `setup` on your `Problem` before calling `run`. Also, we
 are using the Python 3.x print function to print results. To keep
@@ -387,7 +389,7 @@ First we need to write the component to replace the connection:
             """ This is a dummy comp that doesn't modify its state."""
             pass
 
-        def jacobian(self, params, unknowns, resids):
+        def linearize(self, params, unknowns, resids):
             """Analytical derivatives."""
 
             J = {}
@@ -401,7 +403,7 @@ First we need to write the component to replace the connection:
 So this `Component` has one `state` and one `param`. The `StateConnection` component
 will bridge the gap between the output of `y2` from Discipline2 and the input
 for `y2` in Discipline1. The solver
-sets the new value of y2 based on the models residuals, which now include the
+sets the new value of y2 based on the model's residuals, which now include the
 difference between 'y2' leaving Discipline2 and the 'y2' entering
 Discipline1. So the `solve_nonlinear` method does nothing, but we need to
 define `apply_nonlinear` to return this residual. Residuals live in the
@@ -411,7 +413,7 @@ define `apply_nonlinear` to return this residual. Residuals live in the
 
     resids['y2_command'] = y2_actual - y2_command
 
-We also define the `Jacobian` method, and the derivatives are trivial to
+We also define the `linearize` method, and the derivatives are trivial to
 compute.
 
 Next, we need to modify the model that we defined in `SellarDerivatives` to
@@ -419,7 +421,7 @@ break the connection and use the `StateConnection` component.
 
 .. testcode:: Disciplines
 
-    from openmdao.solvers import Newton
+    from openmdao.api import Newton, ScipyGMRES
 
     class SellarStateConnection(Group):
         """ Group containing the Sellar MDA. This version uses the disciplines
@@ -428,8 +430,8 @@ break the connection and use the `StateConnection` component.
         def __init__(self):
             super(SellarStateConnection, self).__init__()
 
-            self.add('px', ParamComp('x', 1.0), promotes=['*'])
-            self.add('pz', ParamComp('z', np.array([5.0, 2.0])), promotes=['*'])
+            self.add('px', IndepVarComp('x', 1.0), promotes=['*'])
+            self.add('pz', IndepVarComp('z', np.array([5.0, 2.0])), promotes=['*'])
 
             self.add('state_eq', StateConnection())
             self.add('d1', SellarDis1(), promotes=['x', 'z', 'y1'])
@@ -447,6 +449,7 @@ break the connection and use the `StateConnection` component.
             self.connect('d2.y2', 'con_cmp2.y2')
 
             self.nl_solver = Newton()
+            self.ln_solver = ScipyGMRES()
 
 The first thing to notice is that we no longer promote the variable `y2` up
 to the group level. We need to add the connections manually because we really
@@ -458,6 +461,9 @@ We have also switched the solver to the Newton solver, since we no longer are
 iterating around a loop. Don't forget to change your import. The default
 settings should be fine for Sellar.
 
+Also, because we have states, we have switched the linear solver to ScipyGMRES
+instead of using the default LinearGaussSeidel solver.
+
 Otherwise, there are no other differences in the model, and the
 remaining optimization set up is the same as before. However, a small change
 in printing our results is required because 'y2' no longer exists in the
@@ -466,8 +472,7 @@ which one, since they should only differ by the solver tolerance at most.
 
 .. testcode:: Disciplines
 
-        from openmdao.core import Problem
-        from openmdao.drivers import ScipyOptimizer
+        from openmdao.api import Problem, ScipyOptimizer
 
         top = Problem()
         top.root = SellarStateConnection()
@@ -476,13 +481,13 @@ which one, since they should only differ by the solver tolerance at most.
         top.driver.options['optimizer'] = 'SLSQP'
         top.driver.options['tol'] = 1.0e-8
 
-        top.driver.add_param('z', low=np.array([-10.0, 0.0]),
-                             high=np.array([10.0, 10.0]))
-        top.driver.add_param('x', low=0.0, high=10.0)
+        top.driver.add_desvar('z', lower=np.array([-10.0, 0.0]),
+                             upper=np.array([10.0, 10.0]))
+        top.driver.add_desvar('x', lower=0.0, upper=10.0)
 
         top.driver.add_objective('obj')
-        top.driver.add_constraint('con1')
-        top.driver.add_constraint('con2')
+        top.driver.add_constraint('con1', upper=0.0)
+        top.driver.add_constraint('con2', upper=0.0)
 
         top.setup()
         top.run()

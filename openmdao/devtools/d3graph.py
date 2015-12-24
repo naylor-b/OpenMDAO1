@@ -16,6 +16,7 @@ import SocketServer
 import networkx as nx
 from networkx.readwrite.json_graph import node_link_data
 
+from openmdao.core.component import Component
 
 def _launch_browser(port, fname):
     time.sleep(1)
@@ -26,6 +27,34 @@ def _startThread(fn):
     thread.setDaemon(True)
     thread.start()
     return thread
+
+def system_tree(system):
+    """ Returns a dict representation of the system hierarchy with
+    this System as root.
+
+    Returns
+    -------
+    dict
+    """
+
+    def _tree_dict(ss):
+        dct = { 'name': ss.name }
+        children = [_tree_dict(s) for s in ss.subsystems()]
+
+        if isinstance(ss, Component):
+            for vname, meta in ss.unknowns.items():
+                size = meta['size'] if meta['size'] else 1
+                children.append({'name': vname, 'size': size })
+
+        dct['children'] = children
+
+        return dct
+
+    tree = _tree_dict(system)
+    if not tree['name']:
+        tree['name'] = 'root'
+
+    return tree  #json.dump(tree, stream)
 
 def add_graph_meta(group, graph):
     """
@@ -54,30 +83,32 @@ def add_graph_meta(group, graph):
 
     return graph
 
-def view_tree(tree, d3page='collapse_tree.html', port=8001):
+def view_tree(system, viewer='collapse_tree', port=8001):
     """
     Args
     ----
-    tree : nested dict
-        A nested dictionary indictating the structure of the system tree. Leaf nodes_iter
-        in the tree are variables and branch nodes are systems.
+    system : system
+        The root system for the desired tree.
 
-    d3page : str, optional
-        The name of the html file used to view the tree.
+    viewer : str, optional
+        The name of web viewer used to view the tree. Options are:
+        collapse_tree, circlepack, circletree, indenttree, and treemap.
 
     port : int, optional
         The port number for the web server that serves the tree viewing page.
     """
+    if not viewer.endswith('.html'):
+        viewer += '.html'
+
+    tree = system_tree(system)
     try:
         startdir = os.getcwd()
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
         from pprint import pprint
         with open('__graph.json', 'w') as f:
-            #f.write("__mygraph__json = ")
             pprint(tree, width=70)
             json.dump(tree, f)
-            #f.write(";\n")
 
         httpd = SocketServer.TCPServer(("localhost", port),
                            SimpleHTTPServer.SimpleHTTPRequestHandler)
@@ -85,7 +116,7 @@ def view_tree(tree, d3page='collapse_tree.html', port=8001):
         print("starting server on port %d" % port)
 
         serve_thread  = _startThread(httpd.serve_forever)
-        launch_thread = _startThread(lambda: _launch_browser(port, d3page))
+        launch_thread = _startThread(lambda: _launch_browser(port, viewer))
 
         while serve_thread.isAlive():
             serve_thread.join(timeout=1)

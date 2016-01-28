@@ -32,7 +32,7 @@ class DUT(Component):
 
     def solve_nonlinear(self, params, unknowns, resids):
         """ Doesn't do much.  Just multiply by 3"""
-        time.sleep(.5)
+        time.sleep(self.comm.rank*0.9)
         unknowns['y'] = params['c']*params['x']
 
 class ParallelDOETestCase(MPITestCase):
@@ -50,10 +50,48 @@ class ParallelDOETestCase(MPITestCase):
         root.connect('indep_var.x', 'dut.x')
         root.connect('const.c', 'dut.c')
 
-        num_samples = 10
+        num_samples = 100
         problem.driver = UniformDriver(num_samples=num_samples,
                                        num_par_doe=self.N_PROCS)
-        problem.driver.add_desvar('indep_var.x', low=4410.0,  high=4450.0)
+        problem.driver.add_desvar('indep_var.x', lower=4410.0, upper=4450.0)
+        problem.driver.add_objective('dut.y')
+
+        problem.driver.add_recorder(InMemoryRecorder())
+
+        problem.setup(check=False)
+        problem.run()
+
+        for data in problem.driver.recorders[0].iters:
+            self.assertEqual(data['unknowns']['indep_var.x']*3.0,
+                             data['unknowns']['dut.y'])
+
+        num_cases = len(problem.driver.recorders[0].iters)
+        if MPI:
+            lens = problem.comm.allgather(num_cases)
+            self.assertEqual(sum(lens), num_samples)
+        else:
+            self.assertEqual(num_cases, num_samples)
+
+class LBParallelDOETestCase(MPITestCase):
+
+    N_PROCS = 4
+
+    def test_load_balanced_doe(self):
+
+        problem = Problem(impl=impl)
+        root = problem.root = Group()
+        root.add('indep_var', IndepVarComp('x', val=7.0))
+        root.add('const', IndepVarComp('c', val=3.0))
+        root.add('dut', DUT())
+
+        root.connect('indep_var.x', 'dut.x')
+        root.connect('const.c', 'dut.c')
+
+        num_samples = 100
+        problem.driver = UniformDriver(num_samples=num_samples,
+                                       num_par_doe=self.N_PROCS,
+                                       load_balance=True)
+        problem.driver.add_desvar('indep_var.x', lower=4410.0, upper=4450.0)
         problem.driver.add_objective('dut.y')
 
         problem.driver.add_recorder(InMemoryRecorder())

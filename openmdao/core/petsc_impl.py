@@ -206,11 +206,13 @@ class PetscSrcVecWrapper(SrcVecWrapper):
 
         # We need an alpha that violates no variables on any process, which
         # is the min alpha over all processes.
-        local_alpha = super(PetscSrcVecWrapper,
-                            self).distance_along_vector_to_limit(alpha, duvec)
+        local_alpha = np.array(super(PetscSrcVecWrapper,
+                               self).distance_along_vector_to_limit(alpha,
+                                                                    duvec))
 
-        alphas = self.comm.allgather(local_alpha)
-        return min(alphas)
+        min_alpha = np.zeros(1)
+        self.comm.Allreduce(local_alpha, min_alpha, op=MPI.MIN)
+        return min_alpha[0]
 
 
 class PetscTgtVecWrapper(TgtVecWrapper):

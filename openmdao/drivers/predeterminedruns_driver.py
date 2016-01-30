@@ -8,6 +8,7 @@ from openmdao.core.driver import Driver
 from openmdao.util.record_util import create_local_meta, update_local_meta
 from openmdao.util.array_util import evenly_distrib_idxs
 import os
+import traceback
 
 from openmdao.core.mpi_wrap import MPI
 
@@ -152,7 +153,7 @@ class PredeterminedRunsDriver(Driver):
         create all cases on one rank and scatter them to other ranks.
         """
         for i, case in enumerate(self._build_runlist()):
-            if i % self._num_par_doe == self._par_doe_id:
+            if (i % self._num_par_doe) == self._par_doe_id:
                 yield case
 
     def _distrib_lb_build_runlist(self):
@@ -225,5 +226,4 @@ class PredeterminedRunsDriver(Driver):
                 if case is None:
                     break
                 yield case
-                #self.root.comm.barrier()
                 comm.send(comm.rank, 0)

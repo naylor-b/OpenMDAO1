@@ -200,7 +200,8 @@ class PredeterminedRunsDriver(Driver):
                 received += 1
                 clist = cases[doe_ids[worker]]
                 clist.pop()
-                if not clist: # we've received case from all procs with that doe_ids
+                if not clist:
+                    # we've received case from all procs with that doe_id
                     try:
                         case = list(runiter.next())
                     except StopIteration:
@@ -211,7 +212,7 @@ class PredeterminedRunsDriver(Driver):
                         cases[doe_ids[worker]].append(case)
                         sent += 1
 
-            # receive any leftover worker replies
+            # receive all leftover worker replies
             while received < sent:
                 worker = comm.recv()
                 received += 1
@@ -222,8 +223,11 @@ class PredeterminedRunsDriver(Driver):
 
         else:   # worker
             while True:
+                # wait on a case from the master
                 case = comm.recv(source=0, tag=1)
                 if case is None:
                     break
+                # yield the case so it can be executed
                 yield case
+                # tell the master we're done with that case
                 comm.send(comm.rank, 0)

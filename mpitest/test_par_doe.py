@@ -49,7 +49,7 @@ class ParallelDOETestCase(MPITestCase):
         root.connect('indep_var.x', 'mult.x')
         root.connect('const.c', 'mult.c')
 
-        num_levels = 100
+        num_levels = 25
         problem.driver = FullFactorialDriver(num_levels=num_levels,
                                        num_par_doe=self.N_PROCS)
         problem.driver.add_desvar('indep_var.x',
@@ -74,7 +74,7 @@ class ParallelDOETestCase(MPITestCase):
 
 class LBParallelDOETestCase(MPITestCase):
 
-    N_PROCS = 5
+    N_PROCS = 4
 
     def test_load_balanced_doe(self):
 
@@ -87,7 +87,7 @@ class LBParallelDOETestCase(MPITestCase):
         root.connect('indep_var.x', 'mult.x')
         root.connect('const.c', 'mult.c')
 
-        num_levels = 100
+        num_levels = 25
         problem.driver = FullFactorialDriver(num_levels=num_levels,
                                        num_par_doe=self.N_PROCS,
                                        load_balance=True)

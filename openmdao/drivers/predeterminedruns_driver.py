@@ -230,4 +230,4 @@ class PredeterminedRunsDriver(Driver):
                 # yield the case so it can be executed
                 yield case
                 # tell the master we're done with that case
-                comm.send(comm.rank, 0)
+                comm.isend(comm.rank, 0)

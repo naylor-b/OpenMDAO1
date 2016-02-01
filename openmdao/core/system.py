@@ -990,14 +990,12 @@ class System(object):
         # We should never need more memory than the largest sized collection of
         # parallel vecs.
         if my_params is None:
-            metas = [m for m in itervalues(vdict)
-                          if not m.get('pass_by_obj')]
+            metas = [m for m in itervalues(vdict)]
         else: # for params, we only include 'owned' vars in the vector
             metas = [m for m in itervalues(vdict)
-                          if m['pathname'] in my_params and
-                             not m.get('pass_by_obj')]
+                          if m['pathname'] in my_params]
 
-        full_size = sum([m['size'] for m in metas])  # 'None' vecs are this size
+        full_size = sum(m['size'] for m in metas)  # 'None' vecs are this size
         max_size = full_size
 
         offsets = { None: 0 }
@@ -1011,11 +1009,9 @@ class System(object):
         for vois in self._probdata.relevance.groups:
             vec_size = 0
             for voi in vois:
-                sz = sum(m['size'] for m in metas
-                                 if m['pathname'] in vdict and
-                                    m['top_promoted_name'] in relevant[voi])
                 offsets[voi] = vec_size
-                vec_size += sz
+                vec_size += sum(m['size'] for m in metas
+                                 if m['top_promoted_name'] in relevant[voi])
 
             if vec_size > max_size:
                 max_size = vec_size

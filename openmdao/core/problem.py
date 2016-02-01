@@ -822,7 +822,7 @@ class Problem(object):
             print("\nUnit Conversions", file=out_stream)
 
             vec = self.root.unknowns
-            pbos = [var for var in vec if vec.metadata(var).get('pass_by_obj') is True]
+            pbos = [var for var in vec if vec.metadata(var).get('pass_by_obj')]
 
             for (src, tgt), (sunit, tunit) in tuples:
                 if src in pbos:
@@ -1013,7 +1013,7 @@ class Problem(object):
             return []
 
         vec = self.root.unknowns
-        pbos = [var for var in vec if vec.metadata(var).get('pass_by_obj') is True]
+        pbos = [var for var in vec if vec.metadata(var).get('pass_by_obj')]
 
         rels = set()
         for key, rel in iteritems(self._probdata.relevance.relevant):

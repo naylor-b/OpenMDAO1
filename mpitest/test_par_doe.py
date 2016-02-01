@@ -30,7 +30,8 @@ class Mult(Component):
         self.add_output('y', shape=1)
 
     def solve_nonlinear(self, params, unknowns, resids):
-        time.sleep((MPI.COMM_WORLD.rank+1.0)*0.1)
+        if MPI:
+            time.sleep((MPI.COMM_WORLD.rank+1.0)*0.1)
         unknowns['y'] = params['c']*params['x']
 
 

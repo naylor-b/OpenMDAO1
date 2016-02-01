@@ -1545,7 +1545,7 @@ class Problem(object):
                 vkey = self._get_voi_key(voi, params)
 
                 duvec = self.root.dumat[vkey]
-                rhs[vkey] = np.zeros((len(duvec.vec), ))
+                rhs[vkey] = np.empty((len(duvec.vec), ))
 
                 voi_srcs[vkey] = voi
                 if voi in duvec:

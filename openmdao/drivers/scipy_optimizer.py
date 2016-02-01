@@ -122,7 +122,7 @@ class ScipyOptimizer(Driver):
         nparam = 0
         for param in itervalues(pmeta):
             nparam += param['size']
-        x_init = np.zeros(nparam)
+        x_init = np.empty(nparam)
 
         # Initial Parameters
         i = 0

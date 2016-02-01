@@ -229,7 +229,7 @@ class _LHC_Individual(object):
 def _rand_latin_hypercube(n, k):
     # Calculates a random Latin hypercube set of n points in k dimensions
     # within [0,n-1]^k hypercube.
-    arr = np.zeros((n, k))
+    arr = np.empty((n, k))
     row = list(range(0, n))
     for i in range(k):
         shuffle(row)

@@ -403,14 +403,14 @@ class Group(System):
                 self._get_shared_vec_info(self._unknowns_dict)
 
             # other vecs will be sub-sliced from this one
-            self._shared_du_vec = np.zeros(max_usize)
-            self._shared_dr_vec = np.zeros(max_usize)
-            self._shared_dp_vec = np.zeros(max_psize)
+            self._shared_du_vec = np.empty(max_usize)
+            self._shared_dr_vec = np.empty(max_usize)
+            self._shared_dp_vec = np.empty(max_psize)
 
             self._create_vecs(my_params, voi=None, impl=impl)
             top_unknowns = self.unknowns
         else:
-            self._shared_dp_vec = np.zeros(max_psize)
+            self._shared_dp_vec = np.empty(max_psize)
 
             # map promoted name in parent to corresponding promoted name in this view
             self._relname_map = self._get_relname_map(parent._sysdata.to_prom_name)
@@ -1211,7 +1211,7 @@ class Group(System):
 
         ivar = u_var_idxs[uname]
         if udist or pdist:
-            new_indices = np.zeros(arg_idxs.shape, dtype=arg_idxs.dtype)
+            new_indices = np.empty(arg_idxs.shape, dtype=arg_idxs.dtype)
 
             for irank in range(self.comm.size):
                 start = np.sum(u_sizes[:irank, ivar])

@@ -928,16 +928,15 @@ class Group(System):
             sgraph = self._probdata.relevance._sgraph
             if self.pathname:
                 path = self.pathname.split('.')
-                start = self.pathname + '.'
-                slen = len(start)
-                graph = sgraph.subgraph((n for n in sgraph if start == n[:slen]))
+                graph = sgraph.subgraph(s.pathname
+                                        for s in self.subsystems(recurse=True))
             else:
                 path = []
                 graph = sgraph.subgraph(sgraph.nodes_iter())
 
             plen = len(path)+1
 
-            renames = {} # Order not guaranteed in python 3.
+            renames = {}
             for node in graph.nodes_iter():
                 newnode = '.'.join(node.split('.')[:plen])
                 if newnode != node:

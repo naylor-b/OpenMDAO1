@@ -210,7 +210,7 @@ class PetscSrcVecWrapper(SrcVecWrapper):
                                self).distance_along_vector_to_limit(alpha,
                                                                     duvec))
 
-        min_alpha = np.zeros(1)
+        min_alpha = np.empty(1)
         self.comm.Allreduce(local_alpha, min_alpha, op=MPI.MIN)
         return min_alpha[0]
 

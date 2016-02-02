@@ -928,8 +928,9 @@ class Group(System):
             sgraph = self._probdata.relevance._sgraph
             if self.pathname:
                 path = self.pathname.split('.')
-                graph = sgraph.subgraph(s.pathname
-                                        for s in self.subsystems(recurse=True))
+                start = self.pathname + '.'
+                slen = len(start)
+                graph = sgraph.subgraph((n for n in sgraph if start == n[:slen]))
             else:
                 path = []
                 graph = sgraph.subgraph(sgraph.nodes_iter())

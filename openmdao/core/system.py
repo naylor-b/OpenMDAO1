@@ -1012,8 +1012,9 @@ class System(object):
             vec_size = 0
             for voi in vois:
                 offsets[voi] = vec_size
+                rel_voi = relevant[voi]
                 vec_size += sum(m['size'] for m in metas
-                                 if m['top_promoted_name'] in relevant[voi])
+                                 if m['top_promoted_name'] in rel_voi)
 
             if vec_size > max_size:
                 max_size = vec_size

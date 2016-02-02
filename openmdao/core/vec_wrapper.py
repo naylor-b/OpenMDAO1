@@ -757,14 +757,17 @@ class TgtVecWrapper(VecWrapper):
         scoped_name = self._sysdata._scoped_abs_name
         vec_size = 0
         missing = []  # names of our params that we don't 'own'
+        syspath = self._sysdata.pathname + '.'
+
         for meta in itervalues(params_dict):
             if relevance is None or relevance.is_relevant(var_of_interest,
                                                           meta['top_promoted_name']):
                 pathname = meta['pathname']
                 if pathname in my_params:
                     # if connected, get metadata from the source
-                    src = connections.get(pathname)
-                    if src is None:
+                    try:
+                        src = connections[pathname]
+                    except KeyError:
                         raise RuntimeError("Parameter '%s' is not connected" % pathname)
                     src_pathname, idxs = src
                     src_rel_name = src_to_prom_name[src_pathname]
@@ -779,13 +782,12 @@ class TgtVecWrapper(VecWrapper):
                     self._dat[scoped_name(pathname)] = Accessor(self, slc, val, meta)
                 else:
                     if parent_params_vec is not None:
-                        src = connections.get(pathname)
-                        if src:
-                            src, idxs = src
+                        if pathname in connections:
+                            src, _ = connections[pathname]
                             common = get_common_ancestor(src, pathname)
                             if (common == self._sysdata.pathname or
-                                 (self._sysdata.pathname+'.') not in common):
-                                missing.append(meta)
+                                                        syspath not in common):
+                                missing.append(pathname)
 
         if shared_vec is not None:
             self.vec = shared_vec[:vec_size]
@@ -801,8 +803,7 @@ class TgtVecWrapper(VecWrapper):
         # fill entries for missing params with views from the parent
         if parent_params_vec is not None:
             parent_scoped_name = parent_params_vec._sysdata._scoped_abs_name
-        for meta in missing:
-            pathname = meta['pathname']
+        for pathname in missing:
             parent_acc = parent_params_vec._dat[parent_scoped_name(pathname)]
             newmeta = parent_acc.meta
             if newmeta['pathname'] == pathname:
@@ -810,16 +811,6 @@ class TgtVecWrapper(VecWrapper):
                 self._dat[scoped_name(pathname)] = Accessor(self, None,
                                                            parent_acc.val,
                                                            newmeta, owned=False)
-
-        # Finally, set up unit conversions, if any exist.
-        for meta in itervalues(params_dict):
-            pathname = meta['pathname']
-            if pathname in my_params and (relevance is None or
-                                          relevance.is_relevant(var_of_interest,
-                                                                pathname)):
-                unitconv = meta.get('unit_conv')
-                if unitconv:
-                    self._dat[scoped_name(pathname)].meta['unit_conv'] = unitconv
 
     def _setup_var_meta(self, pathname, meta, index, src_acc, store_byobjs):
         """

@@ -780,14 +780,12 @@ class TgtVecWrapper(VecWrapper):
                         vec_size += meta['size']
 
                     self._dat[scoped_name(pathname)] = Accessor(self, slc, val, meta)
-                else:
-                    if parent_params_vec is not None:
-                        if pathname in connections:
-                            src, _ = connections[pathname]
-                            common = get_common_ancestor(src, pathname)
-                            if (common == self._sysdata.pathname or
-                                                        syspath not in common):
-                                missing.append(pathname)
+                elif parent_params_vec is not None and pathname in connections:
+                    src, _ = connections[pathname]
+                    common = get_common_ancestor(src, pathname)
+                    if (common == self._sysdata.pathname or
+                                                syspath not in common):
+                        missing.append(pathname)
 
         if shared_vec is not None:
             self.vec = shared_vec[:vec_size]
@@ -795,7 +793,7 @@ class TgtVecWrapper(VecWrapper):
             self.vec = numpy.zeros(vec_size)
 
         # map slices to the array
-        for name, acc in iteritems(self._dat):
+        for acc in itervalues(self._dat):
             if not (acc.pbo or acc.remote):
                 start, end = acc.slice
                 acc.val = self.vec[start:end]
@@ -803,6 +801,7 @@ class TgtVecWrapper(VecWrapper):
         # fill entries for missing params with views from the parent
         if parent_params_vec is not None:
             parent_scoped_name = parent_params_vec._sysdata._scoped_abs_name
+
         for pathname in missing:
             parent_acc = parent_params_vec._dat[parent_scoped_name(pathname)]
             newmeta = parent_acc.meta

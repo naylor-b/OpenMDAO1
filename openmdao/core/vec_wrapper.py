@@ -856,7 +856,6 @@ class TgtVecWrapper(VecWrapper):
             if not meta.get('remote') and store_byobjs and not isinstance(val, FileRef):
                 val = src_acc.val
             meta['pass_by_obj'] = True
-            meta['size'] = 0
             slc = None
         elif meta.get('remote'):
             slc = None
@@ -880,7 +879,6 @@ class TgtVecWrapper(VecWrapper):
                                pathname)
 
         meta['pass_by_obj'] = True
-        meta['size'] = 0
         self._dat[self._sysdata._scoped_abs_name(pathname)] = Accessor(self,
                                                                        None,
                                                                        val,

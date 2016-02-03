@@ -223,15 +223,12 @@ class Problem(object):
                     if p != n:
                         input_graph.add_edge(p, n, idxs=None)
                         skip.add(n)
-                        # skip.add(p)
 
         # store all of the connected sets of inputs for later use
         self._input_inputs = {}
 
         for tgt in connections:
             if tgt in input_graph and tgt not in self._input_inputs:
-                # force list here, since some versions of networkx return a
-                # set here.
                 connected = list(plain_bfs(input_graph, tgt))
                 for c in connected:
                     self._input_inputs[c] = connected
@@ -255,7 +252,6 @@ class Problem(object):
                             # make sure we start at a 'src' input
                             if compute_indices:
                                 if new_tgt not in skip:
-                                    #new_idxs = idxs
                                     # follow path to new target, apply src_idxs along the way
                                     for s,t in nx.dfs_edges(input_graph, new_tgt):
                                         if s == new_tgt:

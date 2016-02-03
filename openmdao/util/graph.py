@@ -58,23 +58,3 @@ def plain_bfs(G, source):
                 seen.add(v)
                 nextlevel.update(Gsucc[v])
                 nextlevel.update(Gpred[v])
-
-def plain_preds(G, source):
-    """A fast predecessor node generator
-    For directed graphs only. The source is
-    not included in the returned iterator.
-
-    """
-    Gpred = G.pred
-
-    seen = set()
-    nextlevel = {source}
-    while nextlevel:
-        thislevel = nextlevel
-        nextlevel = set()
-        for v in thislevel:
-            if v not in seen:
-                if v is not source:
-                    yield v
-                seen.add(v)
-                nextlevel.update(Gpred[v])

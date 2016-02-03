@@ -31,6 +31,7 @@ from openmdao.solvers.ln_gauss_seidel import LinearGaussSeidel
 from openmdao.units.units import get_conversion_tuple
 from collections import OrderedDict
 from openmdao.util.string_util import get_common_ancestor, nearest_child, name_relative_to
+from openmdao.util.graph import plain_bfs
 
 force_check = os.environ.get('OPENMDAO_FORCE_CHECK_SETUP')
 
@@ -196,13 +197,20 @@ class Problem(object):
         for tgt, srcs in iteritems(implicit_conns):
             connections.setdefault(tgt, []).extend(srcs)
 
-        input_graph = nx.Graph()
+        old_graph = nx.Graph()
+        input_graph = nx.DiGraph()
+
+        # so we can make sure we don't start our traversals at any input
+        # node that isn't connected to an unknown
+        skip = set()
 
         # resolve any input to input connections
         for tgt, srcs in iteritems(connections):
             for src, idxs in srcs:
                 if src in params_dict:
                     input_graph.add_edge(src, tgt, idxs=idxs)
+                    old_graph.add_edge(src, tgt, idxs=idxs)
+                    skip.add(tgt)
 
         # find any promoted but not connected inputs
         for p, prom in iteritems(self.root._sysdata.to_prom_pname):
@@ -210,6 +218,9 @@ class Problem(object):
                 for n in prom_noconns[prom]:
                     if p != n:
                         input_graph.add_edge(p, n, idxs=None)
+                        old_graph.add_edge(p, n, idxs=None)
+                        skip.add(n)
+                        # skip.add(p)
 
         # store all of the connected sets of inputs for later use
         self._input_inputs = {}
@@ -218,7 +229,12 @@ class Problem(object):
             if tgt in input_graph and tgt not in self._input_inputs:
                 # force list here, since some versions of networkx return a
                 # set here.
-                connected = list(nx.node_connected_component(input_graph, tgt))
+                conn_old = list(nx.node_connected_component(old_graph, tgt))
+                connected = list(plain_bfs(input_graph, tgt))
+                if set(conn_old) != set(connected):
+                    print("connected sets are different!:")
+                    print("old:",conn_old)
+                    print("new:",connected)
                 for c in connected:
                     self._input_inputs[c] = connected
 
@@ -231,6 +247,7 @@ class Problem(object):
         # the 'unknown' source for that target to all other inputs that are
         # connected to it
         to_add = []
+        print("compute_indices:",compute_indices)
         for tgt, srcs in iteritems(connections):
             if tgt in input_graph:
                 connected_inputs = self._input_inputs[tgt]
@@ -238,18 +255,38 @@ class Problem(object):
                 for src, idxs in srcs:
                     if src in unknowns_dict:
                         for new_tgt in connected_inputs:
+                            # make sure we start at a 'src' input
+                            if compute_indices:
+                                if new_tgt not in skip:
+                                    #new_idxs = idxs
+                                    # follow path to new target, apply src_idxs along the way
+                                    for s,t in nx.dfs_edges(input_graph, new_tgt):
+                                        if s == new_tgt:
+                                            new_idxs = idxs
+                                        next_idxs = input_graph[s][t]['idxs']
+                                        if next_idxs is not None:
+                                            if new_idxs is not None:
+                                                new_idxs = np.array(new_idxs)[next_idxs]
+                                            else:
+                                                new_idxs = next_idxs
+                                        to_add.append((t, (src, new_idxs)))
+                                        print("new added:",t,(src,new_idxs))
+                            else:
+                                to_add.append((new_tgt, (src, idxs)))
+                                print("new added:",new_tgt, (src,idxs))
+
                             new_idxs = idxs
                             if compute_indices:
-                                # follow path to new target, apply src_idxs along the way
-                                path = nx.shortest_path(input_graph, tgt, new_tgt)
+                                path = nx.shortest_path(old_graph, tgt, new_tgt)
                                 for i, node in enumerate(path[:-1]):
-                                    next_idxs = input_graph[node][path[i+1]]['idxs']
+                                    next_idxs = old_graph[node][path[i+1]]['idxs']
                                     if next_idxs is not None:
                                         if new_idxs is not None:
                                             new_idxs = np.array(new_idxs)[next_idxs]
                                         else:
                                             new_idxs = next_idxs
-                            to_add.append((new_tgt, (src, new_idxs)))
+                            #to_add.append((new_tgt, (src, idxs)))
+                            print("old would add:",new_tgt, (src, idxs))
 
         for tgt, (src, idxs) in to_add:
             if tgt in connections:
@@ -279,7 +316,8 @@ class Problem(object):
             if p not in connections:
                 if p in input_graph:
                     self._dangling[prom] = \
-                        set(nx.node_connected_component(input_graph, p))
+                        set(plain_bfs(input_graph, p))
+                        #set(nx.node_connected_component(input_graph, p))
                 else:
                     self._dangling[prom] = set([p])
 

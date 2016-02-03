@@ -32,7 +32,7 @@ class _SysData(object):
         self.absdir = None
 
         # map absolute name to local promoted name
-        self.to_prom_name = {} # Order not guaranteed in python 3.
+        self.to_prom_name = {}
 
         self.to_abs_uname = OrderedDict()  # promoted name to abs name
         self.to_prom_uname = OrderedDict() # abs name to promoted name

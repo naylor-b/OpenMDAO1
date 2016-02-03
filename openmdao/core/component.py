@@ -427,6 +427,8 @@ class Component(System):
         """
         self.params = self.unknowns = self.resids = None
         self.dumat, self.dpmat, self.drmat = OrderedDict(), OrderedDict(), OrderedDict()
+        self.connections = self._probdata.connections
+        
         relevance = self._probdata.relevance
 
         if not self.is_active():

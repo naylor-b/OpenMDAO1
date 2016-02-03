@@ -388,6 +388,7 @@ class Group(System):
         self._local_unknown_sizes = OrderedDict()
         self._local_param_sizes = OrderedDict()
         self._owning_ranks = None
+        self.connections = self._probdata.connections
         relevance = self._probdata.relevance
 
         if not self.is_active():

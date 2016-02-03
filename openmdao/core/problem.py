@@ -523,9 +523,9 @@ class Problem(object):
         #     'val': 2.5,   # the initial value of that variable (if known)
         #  }
         params_dict, unknowns_dict = self.root._setup_variables()
+
         self._probdata.params_dict = params_dict
         self._probdata.unknowns_dict = unknowns_dict
-
         self._probdata.to_prom_name = self.root._sysdata.to_prom_name
 
         # collect all connections, both implicit and explicit from
@@ -535,40 +535,32 @@ class Problem(object):
         connections = self._setup_connections(params_dict, unknowns_dict)
         self._probdata.connections = connections
 
-        # Allow the user to omit the size of a parameter and pull the size
-        # and shape from the connection source.
-        for tgt, src in iteritems(connections):
+        for tgt, (src, idxs) in iteritems(connections):
             tmeta = params_dict[tgt]
-            if not tmeta.get('pass_by_obj') and tmeta['shape'] == ():
+            if 'pass_by_obj' not in tmeta or not tmeta['pass_by_obj']:
 
-                src_name, src_idx = src
-                smeta = unknowns_dict[src_name]
+                # Allow the user to omit the size of a parameter and pull
+                # the size and shape from the connection source.
+                if tmeta['shape'] == ():
 
-                # Connected with src_indices specified
-                if src_idx is not None:
-                    size = len(src_idx)
-                    tmeta['shape'] = (size, )
-                    tmeta['size'] = size
-                    tmeta['val'] = smeta['val'][np.array(src_idx)]
+                    smeta = unknowns_dict[src]
 
-                # Regular connection
-                else:
-                    tmeta['shape'] = smeta['shape']
-                    tmeta['size'] = smeta['size']
-                    tmeta['val'] = smeta['val']
+                    # Connected with src_indices specified
+                    if idxs is not None:
+                        size = len(idxs)
+                        tmeta['shape'] = (size, )
+                        tmeta['size'] = size
+                        tmeta['val'] = smeta['val'][np.array(idxs)]
 
-        # push connection src_indices down into the metadata for all target
-        # params in all component level systems, then flag meta_changed so
-        # it will get percolated back up to all groups in next setup_vars()
-        src_idx_conns = [(tgt, src, idxs) for tgt, (src, idxs) in
-                         iteritems(connections) if idxs is not None]
-        if src_idx_conns:
-            meta_changed = True
-            for comp in self.root.components(recurse=True):
-                for tgt, src, idxs in src_idx_conns:
-                    meta = comp._params_dict.get(tgt)
-                    if meta and meta['pathname'] == tgt:
-                        meta['src_indices'] = idxs
+                    # Regular connection
+                    else:
+                        tmeta['shape'] = smeta['shape']
+                        tmeta['size'] = smeta['size']
+                        tmeta['val'] = smeta['val']
+
+                # set src_indices into variable metadata
+                if idxs is not None:
+                    tmeta['src_indices'] = idxs
 
         # TODO: handle any automatic grouping of systems here...
         #       If we modify the system tree here, we'll have to call
@@ -611,18 +603,19 @@ class Problem(object):
         # and connections down to all subsystems
         to_prom_name = self.root._sysdata.to_prom_name
         self._probdata.to_prom_name = to_prom_name
-        for sub in self.root.subsystems(recurse=True, include_self=True):
-            sub.connections = connections
 
-        # set top_promoted_name and unit_conv in top system (all metatdata
-        # is shared, so no need to propagate down the tree)
-        for path, meta in iteritems(self.root._params_dict):
+        for path, meta in iteritems(params_dict):
+            # set top promoted name into var metadata
             meta['top_promoted_name'] = to_prom_name[path]
-            unit_conv = params_dict[path].get('unit_conv')
-            if unit_conv:
-                meta['unit_conv'] = unit_conv
 
-        for path, meta in iteritems(self.root._unknowns_dict):
+            # Check for dangling params that have no size or shape
+            if path not in connections:
+                if 'pass_by_obj' not in meta or not meta['pass_by_obj']:
+                    if meta['shape'] == ():
+                        raise RuntimeError("Unconnected param '{}' is missing "
+                                           "a shape or default value.".format(path))
+
+        for path, meta in iteritems(unknowns_dict):
             meta['top_promoted_name'] = to_prom_name[path]
 
         # Given connection information, create mapping from system pathname
@@ -663,7 +656,6 @@ class Problem(object):
                                              unknowns_dict, connections,
                                              pois, oois, mode)
 
-
         # perform auto ordering
         for s in self.root.subgroups(recurse=True, include_self=True):
             # set auto order if order not already set
@@ -691,15 +683,6 @@ class Problem(object):
         # report any differences in units or initial values for
         # sourceless connected inputs
         self._check_input_diffs(connections, params_dict, unknowns_dict)
-
-        # Check for dangling params that have no size or shape
-        dangling_params = set([p for p in self.root._params_dict
-                               if p not in self.root.connections])
-        for param in dangling_params:
-            tmeta = self.root._params_dict[param]
-            if not tmeta.get('pass_by_obj') and tmeta['shape'] == ():
-                msg = "Unconnected param '{}' is missing a shape or default value."
-                raise RuntimeError(msg.format(param))
 
         # create VecWrappers for all systems in the tree.
         self.root._setup_vectors(param_owners, impl=self._impl)

@@ -614,13 +614,13 @@ class SrcVecWrapper(VecWrapper):
             promname = to_prom_name[path]
             if relevance is None or relevance.is_relevant(var_of_interest,
                                                     meta['top_promoted_name']):
-                if meta.get('pass_by_obj') or meta.get('remote'):
-                    slc = None
-                else:
+                if ('pass_by_obj' not in meta or not meta['pass_by_obj']) and \
+                       ('remote' not in meta or not meta['remote']):
                     slc = (vec_size, vec_size + meta['size'])
                     vec_size += meta['size']
-
-                self._dat[promname] = Accessor(self, slc, meta['val'], meta)
+                    self._dat[promname] = dat = Accessor(self, slc, meta['val'], meta)
+                else:
+                    self._dat[promname] = Accessor(self, None, meta['val'], meta)
 
         if shared_vec is not None:
             self.vec = shared_vec[:vec_size]
@@ -631,22 +631,18 @@ class SrcVecWrapper(VecWrapper):
         for name, acc in iteritems(self._dat):
             if not acc.pbo:
                 if acc.remote:
-                    acc.val = numpy.array([], dtype=float)
+                    acc.val = numpy.empty(0, dtype=float)
                 else:
                     start, end = acc.slice
                     acc.val = self.vec[start:end]
-
-        # if store_byobjs is True, this is the unknowns vecwrapper,
-        # so initialize all of the values from the unknowns dicts.
-        if store_byobjs:
-            for path, meta in iteritems(unknowns_dict):
-                if 'remote' not in meta and (relevance is None or
-                                  relevance.is_relevant(var_of_interest, meta['top_promoted_name'])):
-                    if not meta.get('pass_by_obj'):
+                    meta = acc.meta
+                    if store_byobjs:
+                        # if store_byobjs is True, this is the unknowns vecwrapper,
+                        # so initialize all of the values from the unknowns dicts.
                         if meta['shape'] == 1:
-                            self._dat[to_prom_name[path]].val[0] = meta['val']
+                            acc.val[0] = meta['val']
                         else:
-                            self._dat[to_prom_name[path]].val[:] = meta['val'].flat
+                            acc.val[:] = meta['val'].flat
 
     def _get_flattened_sizes(self):
         """

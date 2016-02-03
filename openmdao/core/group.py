@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import sys
 import os
+import re
 from collections import Counter, OrderedDict
 from six import iteritems, itervalues
 from six.moves import zip_longest
@@ -24,6 +25,8 @@ from openmdao.util.graph import collapse_nodes
 
 trace = os.environ.get('OPENMDAO_TRACE')
 
+# regex to check for valid variable names.
+namecheck_rgx = re.compile('[_a-zA-Z][_a-zA-Z0-9]*')
 
 class Group(System):
     """A system that contains other systems.
@@ -126,6 +129,11 @@ class Group(System):
             msg = "Group '%s' already contains an attribute with name '%s'." % \
                   (self.name, name)
             raise RuntimeError(msg)
+
+        match = namecheck_rgx.match(name)
+        if match is None or match.group() != name:
+            raise NameError("%s: '%s' is not a valid system name." %
+                            (self.pathname, name))
 
         self._subsystems[name] = system
         setattr(self, name, system)

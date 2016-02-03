@@ -110,7 +110,7 @@ class Component(System):
             If a valid value or shape is not specified.
         """
         shape = kwargs.get('shape')
-        self._check_name(name)
+        self._check_varname(name)
         meta = kwargs.copy()
 
         if isinstance(val, FileRef):
@@ -237,8 +237,8 @@ class Component(System):
         meta['size'] = val.size
         meta['src_indices'] = src_indices
 
-    def _check_name(self, name):
-        """ Verifies that a system name is valid. Also checks for
+    def _check_varname(self, name):
+        """ Verifies that a variable name is valid. Also checks for
         duplicates."""
         if self._post_setup_vars:
             raise RuntimeError("%s: can't add variable '%s' because setup has already been called." %

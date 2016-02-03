@@ -574,12 +574,6 @@ class Problem(object):
         #       If we modify the system tree here, we'll have to call
         #       the full setup over again...
 
-        # mark any variables in non-local Systems as 'remote'
-        for comp in self.root.components(recurse=True):
-            if not comp.is_active():
-                meta_changed = True
-                comp._set_vars_as_remote()
-
         if MPI:
             for s in self.root.components(recurse=True):
                 # get rid of check for setup_distrib_idxs when we move to beta
@@ -621,7 +615,7 @@ class Problem(object):
             sub.connections = connections
 
         # set top_promoted_name and unit_conv in top system (all metatdata
-        # is shared, so not need to propagate down the tree)
+        # is shared, so no need to propagate down the tree)
         for path, meta in iteritems(self.root._params_dict):
             meta['top_promoted_name'] = to_prom_name[path]
             unit_conv = params_dict[path].get('unit_conv')

@@ -385,6 +385,12 @@ class Component(System):
             if isinstance(val, FileRef):
                 self._fileref_setup(val)
 
+        if not self.is_active():
+            for meta in itervalues(self._init_params_dict):
+                meta['remote'] = True
+            for meta in itervalues(self._init_unknowns_dict):
+                meta['remote'] = True
+
     def _fileref_setup(self, fref):
         fref.parent_dir = self._sysdata.absdir
         d = fref._abspath()

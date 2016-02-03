@@ -448,12 +448,6 @@ class Group(System):
 
                     self._setup_data_transfer(my_params, voi)
 
-        # convert any src_indices to index arrays
-        for meta in itervalues(self._params_dict):
-            if 'src_indices' in meta:
-                meta['src_indices'] = self.params.to_idx_array(meta['src_indices'])
-
-
         for sub in itervalues(self._subsystems):
             sub._setup_vectors(param_owners, parent=self,
                                top_unknowns=top_unknowns,

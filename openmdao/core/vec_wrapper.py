@@ -772,7 +772,7 @@ class TgtVecWrapper(VecWrapper):
                     slc, val = self._setup_var_meta(pathname, meta, vec_size,
                                                     src_acc, store_byobjs)
 
-                    if not meta.get('remote'):
+                    if 'remote' not in meta or not meta['remote']:
                         vec_size += meta['size']
 
                     self._dat[scoped_name(pathname)] = Accessor(self, slc, val, meta)

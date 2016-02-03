@@ -560,7 +560,11 @@ class Problem(object):
 
                 # set src_indices into variable metadata
                 if idxs is not None:
-                    tmeta['src_indices'] = idxs
+                    if isinstance(idxs, np.ndarray):
+                        tmeta['src_indices'] = idxs
+                    else:
+                        tmeta['src_indices'] = np.array(idxs,
+                                                  dtype=self._impl.idx_arr_type)
 
         # TODO: handle any automatic grouping of systems here...
         #       If we modify the system tree here, we'll have to call

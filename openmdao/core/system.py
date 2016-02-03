@@ -998,19 +998,19 @@ class System(object):
         # parallel vecs.
         if my_params is None:
             metas = [m for m in itervalues(vdict)
-                          if not m.get('pass_by_obj')]
+                          if 'pass_by_obj' not in m or not m['pass_by_obj']]
         else: # for params, we only include 'owned' vars in the vector
             metas = [m for m in itervalues(vdict)
-                          if m['pathname'] in my_params and
-                             not m.get('pass_by_obj')]
+                       if m['pathname'] in my_params and
+                             ('pass_by_obj' not in m or not m['pass_by_obj'])]
 
         full_size = sum(m['size'] for m in metas)  # 'None' vecs are this size
         max_size = full_size
 
         offsets = { None: 0 }
 
-        # no parallel rhs vecs, so biggest one will just be the one containing all
-        # vars.
+        # no parallel rhs vecs, so biggest one will just be the one containing
+        # all vars.
         if not self._probdata.top_lin_gs:
             return max_size, offsets
 

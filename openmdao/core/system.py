@@ -1002,9 +1002,7 @@ class System(object):
             metas = [m for m in itervalues(vdict)
                           if 'pass_by_obj' not in m or not m['pass_by_obj']]
         else: # for params, we only include 'owned' vars in the vector
-            metas = [m for m in itervalues(vdict)
-                       if m['pathname'] in my_params and
-                             ('pass_by_obj' not in m or not m['pass_by_obj'])]
+            metas = [vdict[p] for p in my_params if not vdict[p].get('pass_by_obj')]
 
         full_size = sum(m['size'] for m in metas)  # 'None' vecs are this size
         max_size = full_size

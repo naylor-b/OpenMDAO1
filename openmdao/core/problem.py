@@ -2174,7 +2174,11 @@ def _assign_parameters(connections):
     param_owners = {}
 
     for par, (unk, idxs) in iteritems(connections):
-        param_owners.setdefault(get_common_ancestor(par, unk), set()).add(par)
+        param_owners.setdefault(get_common_ancestor(par, unk), []).append(par)
+
+    # order must be the same across procs
+    for p in param_owners:
+        param_owners[p] = sorted(param_owners[p])
 
     return param_owners
 

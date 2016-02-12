@@ -1329,10 +1329,7 @@ class Group(System):
         modename = ['fwd', 'rev']
         xfer_dict = OrderedDict()
 
-        for param in self.connections:
-            if param not in my_params:
-                continue
-
+        for param in my_params:
             unknown, idxs = self.connections[param]
             if self._unknowns_dict[unknown]['top_promoted_name'] not in relevant:
                 continue

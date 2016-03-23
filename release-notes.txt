@@ -1,3 +1,85 @@
+
+OpenMDAO Version 1.6.3 Alpha Release Notes
+March 17, 2016
+
+Features:
+* User can call alloc_jacobian() to pre-allocate jacobian with correct sizes for everything. 
+* User can get more compact check_partials: user can limit the component to check by name, can ask for a more compact print out. 
+* Setup error messages are now all delayed until the end of setup.
+
+Bug fixes:
+* Fixed bug in FD check_partials that gave partials off by 8 orders of magnitude and a negative sign.
+
+---------------------------------------------------------------------------------------------------
+OpenMDAO Version 1.6.2 Alpha Release Notes
+March 14, 2016
+
+Features: 
+* Added ability to limit FD'd state variables.
+* group.list_unit_conversions() method replaces the old unit conversion output from check_setup.
+
+Bug fixes: 
+* run_once now calls apply_nonlinear at the end.
+* Bug fix for relevance reduction when using precoditioner with gmres.
+
+---------------------------------------------------------------------------------------------------
+OpenMDAO Version 1.6.1 Alpha Release Notes
+March 12, 2016
+
+Features
+* Problem has run_once method, which (surprisingly!) runs through a model one time.  
+* Problem.check_partial_derivatives() and Problem.check_total_derivatives() call run_once() automatically, if model has not been run.
+* Improved error msg when you have multiple connected parameters with no ultimate src, but different units or initial values.
+* Internal refactor of relevance reduction in the LinearGaussSeidel solver.
+* Added Implicit Components tutorials.
+* Added a secondary validation option for check_partial_derivatives via fd_options['extra_check_partials_form'], useful to compare complex-step with FD.  
+
+BugFixes
+* Bug fix for petscKSP in parallel.
+* Integer values for scalar and adder are supported.
+---------------------------------------------------------------------------------------------------
+OpenMDAO Version 1.6.0 Alpha Release Notes
+March 1, 2016
+
+Backwards-Incompatible Change
+*System names must be valid Python names:
+ Because we add subsystems as attributes of their parent system, the name of each system must be a valid Python name. Otherwise we will raise an exception.
+
+Features
+*User now has the ability to call check_total_derivs and have it just do the driver-relevant params/cons/objs instead of every param/unknown in the model.
+*Multiple local components are now allowable in a parallel system.
+*User can choose to complex step a full model for total derivatives.
+*We now account for Jacobian sparsity patern that arises from src_indices connections. This is available for the pyoptsparse driver.
+*Documented more of our MPI functionality.
+*Added support for File variables.
+*Case recorders now save derivative information by default. You can turn this off in the recorder options.
+*Pass-by-object connections will now convert units if the object is numeric.
+*Now raise an error if a user tries to add the same constraint/param twice.
+*Made Brent solver work for when state variable is an element of an array variable.
+*Sped up setup of model 
+*Test nsga2 with pyoptsparse wrapper.
+*Added dynamic load balancing option for PredeterminedRunsDriver.
+*Removed getitem() function from System class.
+*Added complex step example to the FD tutorial.
+*Edited paraboloid tutorial and sellar tutorial to include lines where we set initial guesses.
+
+Bugfixes
+*Components without outputs now allow linearize to return an empty dict ({}).
+*User can now specify units for ExecComp values.
+*Two_sided_constraints are now supported in ScipyOptimizer.
+*Unit conversions were being reported for pass-by-object variables.
+*Fixed bug in check_setup when connecting array_src to scalar target.
+*Cleared up problems that ExternalComp had with timeout and Windows process termination.
+*check_total_derivatives did not work under single_voi_relevance_reduction because the vectors were setup for only fwd or rev.
+*DOE des-vars with array variables didn't work.
+*optlatinhypercube was missing the load_balance arg.￼ 
+*Fixed bug where RBF interpolator returned NaN when a Jacobian is requested at a point in the training set.
+*Fixed a bug where finite difference of a group would error out if there was a pass-by-object param or unknown in any sub-component.
+*All metamodel training data is now params.
+*Bogus unit conversion msg when inputs that share a source have different units.
+*Fixed bug where the size of src_indices could exceed the size of the source.
+
+---------------------------------------------------------------------------------------------------
 OpenMDAO Version 1.5.0 Alpha Release Notes
 January 19, 2016
 

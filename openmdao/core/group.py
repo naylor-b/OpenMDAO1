@@ -41,6 +41,12 @@ class Group(System):
         Default finite difference stepsize
     fd_options['step_type'] :  str('absolute')
         Set to absolute, relative
+    fd_options['extra_check_partials_form'] :  None or str
+        Finite difference mode: ("forward", "backward", "central", "complex_step")
+        During check_partial_derivatives, you can optionally do a
+        second finite difference with a different mode.
+    fd_options['linearize'] : bool(False)
+        Set to True if you want linearize to be called even though you are using FD.
 
     """
 
@@ -48,7 +54,6 @@ class Group(System):
         super(Group, self).__init__()
 
         self._src = OrderedDict()
-        self._src_idxs = OrderedDict()
         self._data_xfer = OrderedDict()
 
         self._local_unknown_sizes = OrderedDict()
@@ -233,6 +238,7 @@ class Group(System):
         """
         super(Group, self)._init_sys_data(parent_path, probdata)
         self._sys_graph = None
+        self._gs_outputs = None
         for sub in itervalues(self._subsystems):
             sub._init_sys_data(self.pathname, probdata)
 
@@ -255,11 +261,8 @@ class Group(System):
             A dictionary of metadata for parameters and for unknowns
             for all subsystems.
         """
-        params_dict = OrderedDict()
-        unknowns_dict = OrderedDict()
-
-        self._params_dict = params_dict
-        self._unknowns_dict = unknowns_dict
+        self._params_dict = params_dict = OrderedDict()
+        self._unknowns_dict = unknowns_dict = OrderedDict()
 
         self._sysdata._params_dict = params_dict
         self._sysdata._unknowns_dict = unknowns_dict
@@ -315,13 +318,15 @@ class Group(System):
                 for sub in self._local_subsystems:
                     gs_outputs[sub.name] = outs = OrderedDict()
                     for voi in vois:
-                        outs[voi] = set([x for x in dumat[voi]._dat if
+                        if voi in dumat:
+                            outs[voi] = set([x for x in dumat[voi]._dat if
                                                    sub.dumat and x not in sub.dumat[voi]])
             else: # rev
                 for sub in self._local_subsystems:
                     gs_outputs[sub.name] = outs = OrderedDict()
                     for voi in vois:
-                        outs[voi] = set([x for x in dumat[voi]._dat if
+                        if voi in dumat:
+                            outs[voi] = set([x for x in dumat[voi]._dat if
                                                    not sub.dumat or
                                                    (sub.dumat and x not in sub.dumat[voi])])
         return self._gs_outputs
@@ -460,19 +465,14 @@ class Group(System):
 
         self._do_apply = {} # dict of (child_pathname, voi) keyed to bool
 
-        ls_inputs = {}
-        for voi in self.dumat:
-            ls_inputs[voi] = self._all_params(voi)
-
         for s in self.subsystems(recurse=True, include_self=True):
             for voi, vec in iteritems(s.dpmat):
-                abs_inputs = {
-                    acc.meta['pathname'] for acc in itervalues(vec._dat)
-                        if not acc.pbo
-                }
-
-                self._do_apply[(s.pathname, voi)] = bool(abs_inputs and
-                                      len(abs_inputs.intersection(ls_inputs[voi])))
+                for acc in itervalues(vec._dat):
+                    if not acc.pbo:
+                        self._do_apply[(s.pathname, voi)] = True
+                        break
+                else:
+                    self._do_apply[(s.pathname, voi)] = False
 
         self._relname_map = None  # reclaim some memory
 
@@ -491,8 +491,6 @@ class Group(System):
         if voi is None:
             self.unknowns = impl.create_src_vecwrapper(self._sysdata,
                                                        self._probdata, comm)
-            self.states = set(n for n, m in iteritems(self.unknowns)
-                                if 'state' in m and m['state'])
             self.resids = impl.create_src_vecwrapper(self._sysdata,
                                                      self._probdata, comm)
             self.params = impl.create_tgt_vecwrapper(self._sysdata,
@@ -519,6 +517,9 @@ class Group(System):
                               relevance=self._probdata.relevance,
                               var_of_interest=None, store_byobjs=True,
                               alloc_complex=alloc_complex)
+
+            self.states = set(n for n, m in iteritems(self.unknowns)
+                                if 'state' in m and m['state'])
 
         # Create derivative VecWrappers
         if voi is None or self._probdata.top_lin_gs:
@@ -647,7 +648,7 @@ class Group(System):
 
     def solve_nonlinear(self, params=None, unknowns=None, resids=None, metadata=None):
         """
-        Solves the group using the slotted nl_solver.
+        Solves the group using the nonlinear solver specified in self.nl_solver.
 
         Args
         ----
@@ -836,7 +837,7 @@ class Group(System):
         # Don't solve if user requests finite difference in this group.
         if self.fd_options['force_fd']:
             for voi in vois:
-                sol_vec[voi].vec[:] = rhs_vec[voi].vec
+                sol_vec[voi].vec[:] = -rhs_vec[voi].vec
                 return
 
         # Solve Jacobian, df |-> du [fwd] or du |-> df [rev]
@@ -1020,19 +1021,6 @@ class Group(System):
                       if len(s) > 1]
 
         return graph, broken_edges
-
-    def _all_params(self, voi=None):
-        """ Returns the set of all parameters in this system and all
-        subsystems that are relevant to the given variable of interest.
-
-        Args
-        ----
-        voi: string
-            Variable of interest, default is None.
-        """
-        relevant = self._probdata.relevance.relevant[voi]
-        return set(n for n,m in iteritems(self._params_dict)
-                          if m['top_promoted_name'] in relevant)
 
     def dump(self, nest=0, out_stream=sys.stdout, verbose=False, dvecs=False,
              sizes=False):
@@ -1291,6 +1279,7 @@ class Group(System):
             The name of a variable of interest.
 
         """
+
         relevant = self._probdata.relevance.relevant.get(var_of_interest, ())
         to_prom_name = self._sysdata.to_prom_name
         uacc = self.unknowns._dat

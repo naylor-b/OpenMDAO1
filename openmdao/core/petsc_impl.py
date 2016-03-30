@@ -13,10 +13,9 @@ from petsc4py import PETSc
 
 from openmdao.core.vec_wrapper import SrcVecWrapper, TgtVecWrapper
 from openmdao.core.fileref import FileRef
+from openmdao.core.mpi_wrap import debug
 
 trace = os.environ.get('OPENMDAO_TRACE')
-if trace:  # pragma: no cover
-    from openmdao.core.mpi_wrap import debug
 
 from mpi4py import MPI
 

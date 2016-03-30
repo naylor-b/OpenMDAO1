@@ -167,8 +167,7 @@ class DistribInputDistribOutputComp(Component):
 
     def setup_distrib(self):
         """ component declares the local sizes and sets initial values
-        for all distributed inputs and outputs. Returns a dict of
-        index arrays keyed to variable names.
+        for all distributed inputs and outputs.
         """
 
         comm = self.comm
@@ -202,8 +201,7 @@ class DistribNoncontiguousComp(Component):
 
     def setup_distrib(self):
         """ component declares the local sizes and sets initial values
-        for all distributed inputs and outputs. Returns a dict of
-        index arrays keyed to variable names.
+        for all distributed inputs and outputs.
         """
 
         comm = self.comm
@@ -239,8 +237,7 @@ class DistribGatherComp(Component):
 
     def setup_distrib(self):
         """ component declares the local sizes and sets initial values
-        for all distributed inputs and outputs. Returns a dict of
-        index arrays keyed to variable names.
+        for all distributed inputs and outputs. 
         """
         comm = self.comm
         rank = comm.rank

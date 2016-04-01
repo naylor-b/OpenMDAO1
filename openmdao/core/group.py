@@ -876,13 +876,7 @@ class Group(System):
         # this was moved here from system.py because Components never own
         # their own params. All of the calls to clear_dparams on components
         # are unnecessary
-
-        for parallel_set in self._probdata.relevance.vars_of_interest():
-            for name in parallel_set:
-                if name in self.dpmat:
-                    self.dpmat[name].vec[:] = 0.0
-
-        self.dpmat[None].vec[:] = 0.0
+        self._shared_dp_vec[:] = 0.0
 
         # Recurse to clear all dparams vectors.
         for system in self._local_subsystems:

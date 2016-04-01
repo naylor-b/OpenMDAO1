@@ -1435,13 +1435,8 @@ class Problem(object):
 
         # Prepare model for calculation
         root.clear_dparams()
-        for names in root._probdata.relevance.vars_of_interest(mode):
-            for name in names:
-                if name in root.dumat:
-                    root.dumat[name].vec[:] = 0.0
-                    root.drmat[name].vec[:] = 0.0
-        root.dumat[None].vec[:] = 0.0
-        root.drmat[None].vec[:] = 0.0
+        root._shared_du_vec[:] = 0.0
+        root._shared_dr_vec[:] = 0.0
 
         # Linearize Model
         root._sys_linearize(root.params, unknowns, root.resids)
@@ -1543,7 +1538,7 @@ class Problem(object):
                 vkey = self._get_voi_key(voi, params)
 
                 duvec = self.root.dumat[vkey]
-                rhs[vkey] = np.empty((len(duvec.vec), ))
+                rhs[vkey] = np.empty((duvec.vec.size, ))
 
                 voi_srcs[vkey] = voi
                 if voi in duvec:

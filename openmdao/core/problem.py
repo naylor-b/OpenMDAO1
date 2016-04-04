@@ -1523,7 +1523,7 @@ class Problem(object):
                     # Put them in serial groups
                     voi_sets.append((item,))
 
-        voi_srcs = {}
+        voi_keys = {None:None}
 
         # If Forward mode, solve linear system for each param
         # If Adjoint mode, solve linear system for each unknown
@@ -1535,25 +1535,29 @@ class Problem(object):
 
             # Allocate all of our Right Hand Sides for this parallel set.
             for voi in params:
-                vkey = self._get_voi_key(voi, params)
+                vkey = voi_keys[voi] = self._get_voi_key(voi, params)
 
                 duvec = self.root.dumat[vkey]
-                rhs[vkey] = np.empty((duvec.vec.size, ))
+                if vkey not in rhs:
+                    rhs[vkey] = np.empty((duvec.vec.size, ))
 
-                voi_srcs[vkey] = voi
                 if voi in duvec:
                     in_idxs = duvec._get_local_idxs(voi, poi_indices)
                 else:
                     in_idxs = []
 
                 if len(in_idxs) == 0:
-                    in_idxs = np.arange(0, unknowns_dict[to_abs_uname[voi]]['size'], dtype=int)
+                    in_idxs = np.arange(0,
+                                       unknowns_dict[to_abs_uname[voi]]['size'],
+                                       dtype=int)
 
                 if old_size is None:
                     old_size = len(in_idxs)
                 elif old_size != len(in_idxs):
-                    raise RuntimeError("Indices within the same VOI group must be the same size, but"
-                                       " in the group %s, %d != %d" % (params, old_size, len(in_idxs)))
+                    raise RuntimeError("Indices within the same VOI group must "
+                                       "be the same size, but"
+                                       " in the group %s, %d != %d" % (params,
+                                                       old_size, len(in_idxs)))
                 voi_idxs[vkey] = in_idxs
 
             # at this point, we know that for all vars in the current
@@ -1563,20 +1567,20 @@ class Problem(object):
             # of interest.
             for i in range(len(in_idxs)):
                 for voi in params:
-                    vkey = self._get_voi_key(voi, params)
+                    vkey = voi_keys[voi]
                     rhs[vkey][:] = 0.0
                     # only set a -1.0 in the entry if that var is 'owned' by this rank
                     # Note, we solve a slightly modified version of the unified
                     # derivatives equations in OpenMDAO.
                     # (dR/du) * (du/dr) = -I
-                    if self.root._owning_ranks[voi_srcs[vkey]] == iproc:
+                    if owned[voi] == iproc:
                         rhs[vkey][voi_idxs[vkey][i]] = -1.0
 
                 # Solve the linear system
                 dx_mat = root.ln_solver.solve(rhs, root, mode)
 
                 for param, dx in iteritems(dx_mat):
-                    vkey = self._get_voi_key(param, params)
+                    vkey = vkey = voi_keys[param]
                     if param is None:
                         param = params[0]
 

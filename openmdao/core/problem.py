@@ -1643,7 +1643,6 @@ class Problem(object):
                                         J[param][item][i, :] *= in_scale[param]
                                     if item in un_scale:
                                         J[param][item][i, :] *= un_scale[item]
-
                             else:
                                 if fwd:
                                     J[Jslices[item], Jslices[param].start+i] = dxval

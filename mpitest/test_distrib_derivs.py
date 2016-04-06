@@ -2,10 +2,11 @@
 
 from __future__ import print_function
 
+import unittest
 import numpy
 
 from openmdao.api import ParallelGroup, Group, Problem, IndepVarComp, \
-    ExecComp, LinearGaussSeidel
+    ExecComp, LinearGaussSeidel, Component
 from openmdao.core.mpi_wrap import MPI
 from openmdao.test.mpi_util import MPITestCase
 from openmdao.test.util import assert_rel_error
@@ -230,6 +231,189 @@ class MPITests2(MPITestCase):
             if MPI:
                 self.fail("Exception expected")
 
+class DistribEvenOddComp(Component):
+    """Uses 2 procs and takes input var slices"""
+    def __init__(self, arr_size=11, numprocs=2):
+        super(DistribEvenOddComp, self).__init__()
+        self.arr_size = arr_size
+        self.num_procs = numprocs
+        self.add_param('x', numpy.ones(arr_size, float))
+        self.add_output('y', numpy.ones(arr_size, float))
+
+    def solve_nonlinear(self, params, unknowns, resids):
+        if MPI:
+            rank = self.comm.rank
+            offset = self.offsets[rank]
+            size = self.sizes[rank]
+
+            # even ranks
+            if rank % 2 == 0:
+                unknowns['y'] = 2.0 * params['x']
+            else:
+                unknowns['y'] = 3.0 * params['x']
+        else:
+            unknowns['y'] = params['x'] * 2.0
+
+    def setup_distrib(self):
+        rank = self.comm.rank
+
+        self.sizes, self.offsets = evenly_distrib_idxs(self.comm.size,
+                                                       self.arr_size)
+        start = self.offsets[rank]
+        end = start + self.sizes[rank]
+
+        #need to initialize the param to have the correct local size
+        self.set_var_indices('x', val=numpy.ones(self.sizes[rank], float),
+                             src_indices=numpy.arange(start, end, dtype=int))
+        self.set_var_indices('y', val=numpy.ones(self.sizes[rank], float),
+                             src_indices=numpy.arange(start, end, dtype=int))
+
+    def get_req_procs(self):
+        return (self.num_procs, self.num_procs)
+
+    def linearize(self, params, unknowns, resids):
+        """Analytical derivatives"""
+        J = {}
+
+        if MPI:
+            rank = self.comm.rank
+            if rank % 2 == 0:
+                J[('y', 'x')] = numpy.eye(self.sizes[rank]) * 2.0
+            else:
+                J[('y', 'x')] = numpy.eye(self.sizes[rank]) * 3.0
+        else:
+            J[('y', 'x')] = numpy.eye(self.arr_size) * 2.0
+
+        return J
+
+class TestParallelDerivs(MPITestCase):
+    N_PROCS = 2
+
+    def test_par_deriv_distrib(self):
+        size = 4
+        group = Group()
+        group.add('P', IndepVarComp('x', numpy.ones(size)))
+        C1 = group.add('C1', DistribEvenOddComp(arr_size=size, numprocs=self.N_PROCS))
+        group.add('C2', ExecComp(['y=3.0*x'],
+                                 y=numpy.zeros(size),
+                                 x=numpy.zeros(size)))
+
+        prob = Problem(impl=impl, root=group)
+
+        prob.root.ln_solver.options['mode'] = 'rev'
+
+        prob.root.connect('P.x', 'C1.x')
+        prob.root.connect('C1.y', 'C2.x')
+
+        prob.driver.add_desvar('P.x')
+        prob.driver.add_objective('C2.y')
+
+        prob.driver.parallel_derivs([('C2.y',2)])
+
+        prob.setup(check=False)
+        prob.run()
+
+        J = prob.calc_gradient(['P.x'], ['C2.y'], mode='rev', return_format='dict')
+        if MPI:
+            rank = self.comm.rank
+            vals = [6.0, 9.0]
+            expected = numpy.zeros(size)
+            for i in range(self.comm.size):
+                start = C1.offsets[i]
+                sz = C1.sizes[i]
+                expected[start:start+sz] = vals[i]
+            expected = numpy.diag(expected)
+
+            assert_rel_error(self, J['C2.y']['P.x'], expected, 1e-6)
+        else:
+            assert_rel_error(self, J['C2.y']['P.x'], numpy.eye(size)*6.0, 1e-6)
+
+
+#class DistComp(Component):
+    #"""Uses 2 procs and has output var slices"""
+    #def __init__(self, arr_size=4):
+        #super(DistComp, self).__init__()
+        #self.arr_size = arr_size
+        #self.add_param('invec', numpy.ones(arr_size, float))
+        #self.add_output('outvec', numpy.ones(arr_size, float))
+
+    #def solve_nonlinear(self, params, unknowns, resids):
+
+        #p1 = params['invec'][0]
+        #p2 = params['invec'][1]
+
+        #unknowns['outvec'][0] = p1**2 - 11.0*p2
+        #unknowns['outvec'][1] = 7.0*p2**2 - 13.0*p1
+
+    #def linearize(self, params, unknowns, resids):
+        #""" Derivatives"""
+
+        #p1 = params['invec'][0]
+        #p2 = params['invec'][1]
+
+        #J = {}
+        #jac = numpy.zeros((2, 2))
+        #jac[0][0] = 2.0*p1
+        #jac[0][1] = -11.0
+        #jac[1][0] = -13.0
+        #jac[1][1] = 7.0*p2
+
+        #J[('outvec', 'invec')] = jac
+        #return J
+
+    #def setup_distrib(self):
+        #""" component declares the local sizes and sets initial values
+        #for all distributed inputs and outputs. Returns a dict of
+        #index arrays keyed to variable names.
+        #"""
+
+        #comm = self.comm
+        #rank = comm.rank
+
+        #sizes, offsets = evenly_distrib_idxs(comm.size, self.arr_size)
+        #start = offsets[rank]
+        #end = start + sizes[rank]
+
+        #self.set_var_indices('invec', val=numpy.ones(sizes[rank], float),
+                             #src_indices=numpy.arange(start, end, dtype=int))
+        #self.set_var_indices('outvec', val=numpy.ones(sizes[rank], float),
+                             #src_indices=numpy.arange(start, end, dtype=int))
+
+    #def get_req_procs(self):
+        #return (2, 2)
+
+#class ElementwiseParallelDerivativesTestCase(MPITestCase):
+
+    #N_PROCS = 2
+
+    #def test_simple_adjoint(self):
+        #if not MPI:
+            #raise unittest.SkipTest("this test only works in MPI")
+        #top = Problem(impl=impl)
+        #root = top.root = Group()
+        #root.add('p1', IndepVarComp('x', numpy.ones((4, ))))
+        #root.add('dcomp', DistComp(arr_size=4))
+
+        #top.driver.add_desvar('p1.x', numpy.ones((4, )))
+        #top.driver.add_objective('dcomp.outvec')
+        #top.root.connect('p1.x', 'dcomp.invec')
+
+        #top.setup(check=False)
+
+        #top['p1.x'][0] = 1.0
+        #top['p1.x'][1] = 2.0
+        #top['p1.x'][2] = 3.0
+        #top['p1.x'][3] = 4.0
+
+        #top.run()
+
+        #J = top.calc_gradient(['p1.x'], ['dcomp.outvec'], mode='rev')
+
+        #print("J:",J)
+        #assert_rel_error(self, J[0][0], 2.0, 1e-6)
+        #assert_rel_error(self, J[0][1], -11.0, 1e-6)
+        #assert_rel_error(self, J[0][2], 4.0, 1e-6)
+        #assert_rel_error(self, J[0][3], -11.0, 1e-6)
 
 if __name__ == '__main__':
     from openmdao.test.mpi_util import mpirun_tests

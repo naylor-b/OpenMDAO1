@@ -245,11 +245,27 @@ class Driver(object):
         vnames : iter of str
             The names of variables of interest that are to be grouped.
         """
+        #import wingdbstub
+
+        self._voi_counts = {}
+
         #make sure all vnames are desvars, constraints, or objectives
-        for n in vnames:
+        for i, n in enumerate(vnames):
+            # When we have distributed compnents that are 'striped', we can calculate
+            # derivs in parallel for each rank of the distributed comp.  The user tells the
+            # framework that they want to do this by using a tuple containing the var name and
+            # a count.
+            if isinstance(n, tuple):
+                self._voi_counts[n[0]] = n[1]
+                n = n[0]
+            else:
+                self._voi_counts[n] = 1
             if not (n in self._desvars or n in self._objs or n in self._cons):
                 raise RuntimeError("'%s' is not a param, objective, or "
                                    "constraint" % n)
+            # turn vname back into just a name
+            vnames[i] = n
+
         for grp in self._voi_sets:
             for vname in vnames:
                 if vname in grp:

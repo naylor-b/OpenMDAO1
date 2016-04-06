@@ -1421,6 +1421,7 @@ class Problem(object):
         iproc = comm.rank
         nproc = comm.size
         owned = root._owning_ranks
+        dumat = self.root.dumat
 
         if dv_scale is None:
             dv_scale = {}
@@ -1453,7 +1454,6 @@ class Problem(object):
                         if isinstance(ikeys, str):
                             ikeys = (ikeys,)
                         for ikey in ikeys:
-
                             # Support sparsity
                             if sparsity is not None:
                                 if ikey not in sparsity[okey]:
@@ -1525,11 +1525,21 @@ class Problem(object):
 
         voi_keys = {None:None}
 
+        voi_counts = self.driver._voi_counts
+
         # If Forward mode, solve linear system for each param
         # If Adjoint mode, solve linear system for each unknown
         for params in voi_sets:
             rhs = OrderedDict()
             voi_idxs = {}
+
+            # if any vois have a count > 1, we need to repeat them so we get a separate
+            # RHS for each one.
+            newparams = []
+            for p in params:
+                for i in range(voi_counts[p]):
+                    newparams.append(p)
+            params = newparams
 
             old_size = None
 
@@ -1537,7 +1547,7 @@ class Problem(object):
             for voi in params:
                 vkey = voi_keys[voi] = self._get_voi_key(voi, params)
 
-                duvec = self.root.dumat[vkey]
+                duvec = dumat[vkey]
                 if vkey not in rhs:
                     rhs[vkey] = np.empty((duvec.vec.size, ))
 
@@ -1580,7 +1590,7 @@ class Problem(object):
                 dx_mat = root.ln_solver.solve(rhs, root, mode)
 
                 for param, dx in iteritems(dx_mat):
-                    vkey = vkey = voi_keys[param]
+                    vkey = voi_keys[param]
                     if param is None:
                         param = params[0]
 
@@ -1593,11 +1603,11 @@ class Problem(object):
                             elif not fwd and item not in sparsity[param]:
                                 continue
 
-                        if relevance.is_relevant(vkey, item):
+                        if vkey is None or relevance.is_relevant(vkey, item):
                             if fwd or owned[item] == iproc:
-                                out_idxs = self.root.dumat[vkey]._get_local_idxs(item,
-                                                                                 qoi_indices,
-                                                                                 get_slice=True)
+                                out_idxs = dumat[vkey]._get_local_idxs(item,
+                                                                 qoi_indices,
+                                                                 get_slice=True)
                                 dxval = dx[out_idxs]
                                 if dxval.size == 0:
                                     dxval = None

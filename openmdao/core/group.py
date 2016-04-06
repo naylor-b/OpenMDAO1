@@ -800,7 +800,8 @@ class Group(System):
 
         if mode == 'rev':
             for voi in vois:
-                self._transfer_data(mode='rev', deriv=True, var_of_interest=voi)  # Full Scatter
+                self._transfer_data(mode='rev', deriv=True,
+                                    var_of_interest=voi)  # Full Scatter
 
     def solve_linear(self, dumat, drmat, vois, mode=None, solver=None):
         """

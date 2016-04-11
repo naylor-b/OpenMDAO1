@@ -55,20 +55,6 @@ class LinearGaussSeidel(LinearSolver):
 
         self.print_name = 'LN_GS'
 
-    def setup(self, group):
-        """ Solvers override to define post-setup initiailzation.
-
-        Args
-        ----
-        group: `Group`
-            Group that owns this solver.
-        """
-        super(LinearGaussSeidel, self).setup(group)
-
-        self._vois = set([None])
-        for vois in group._probdata.relevance.vars_of_interest():
-            self._vois.update(vois)
-
     def solve(self, rhs_mat, system, mode):
         """ Solves the linear system for the problem in self.system. The
         full solution vector is returned.
@@ -94,7 +80,7 @@ class LinearGaussSeidel(LinearSolver):
         dumat = system.dumat
         drmat = system.drmat
         dpmat = system.dpmat
-        gs_outputs = system._get_gs_outputs(mode, self._vois)
+        gs_outputs = system._get_gs_outputs(mode)
         relevance = system._probdata.relevance
         fwd = mode == 'fwd'
 

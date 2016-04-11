@@ -303,7 +303,7 @@ class Group(System):
 
         return self._params_dict, self._unknowns_dict
 
-    def _get_gs_outputs(self, mode, vois):
+    def _get_gs_outputs(self, mode):
         """
         Linear Gauss-Siedel can limit the outputs when calling apply. This
         calculates and caches the list of outputs to be updated for each voi.
@@ -314,22 +314,11 @@ class Group(System):
         if mode not in self._gs_outputs:
             dumat = self.dumat
             gs_outputs = self._gs_outputs[mode] = {}
-            if mode == 'fwd':
-                for sub in self._local_subsystems:
-                    gs_outputs[sub.name] = outs = {}
-                    for voi in vois:
-                        if voi in dumat:
-                            outs[voi] = set([x for x in dumat[voi]._dat if
-                                                   sub.dumat and x not in sub.dumat[voi]])
-            else: # rev
-                for sub in self._local_subsystems:
-                    gs_outputs[sub.name] = outs = {}
-                    for voi in vois:
-                        if voi in dumat:
-                            outs[voi] = set([x for x in dumat[voi]._dat if
-                                                   not sub.dumat or
-                                                   (sub.dumat and x not in sub.dumat[voi])])
-        debug("gs_outputs:",self._gs_outputs)
+
+            for sub in self._local_subsystems:
+                gs_outputs[sub.name] = {
+                    v : set(dumat[v]).difference(sub.dumat[v]) for v in dumat }
+
         return self._gs_outputs
 
     def _promoted_name(self, name, subsystem):

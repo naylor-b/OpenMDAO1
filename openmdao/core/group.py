@@ -313,17 +313,17 @@ class Group(System):
 
         if mode not in self._gs_outputs:
             dumat = self.dumat
-            gs_outputs = self._gs_outputs[mode] = OrderedDict()
+            gs_outputs = self._gs_outputs[mode] = {}
             if mode == 'fwd':
                 for sub in self._local_subsystems:
-                    gs_outputs[sub.name] = outs = OrderedDict()
+                    gs_outputs[sub.name] = outs = {}
                     for voi in vois:
                         if voi in dumat:
                             outs[voi] = set([x for x in dumat[voi]._dat if
                                                    sub.dumat and x not in sub.dumat[voi]])
             else: # rev
                 for sub in self._local_subsystems:
-                    gs_outputs[sub.name] = outs = OrderedDict()
+                    gs_outputs[sub.name] = outs = {}
                     for voi in vois:
                         if voi in dumat:
                             outs[voi] = set([x for x in dumat[voi]._dat if

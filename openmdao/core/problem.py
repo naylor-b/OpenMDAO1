@@ -1539,8 +1539,6 @@ class Problem(object):
                     # Put them in serial groups
                     voi_sets.append((item,))
 
-        voi_keys = {None:None}
-
         voi_counts = self.driver._voi_counts
 
         # If Forward mode, solve linear system for each param

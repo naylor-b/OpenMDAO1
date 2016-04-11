@@ -418,7 +418,7 @@ class Group(System):
             self._shared_dr_vec = np.zeros(max_usize)
             self._shared_dp_vec = np.zeros(max_psize)
 
-            self._create_vecs(my_params, voi=None, impl=impl)
+            self._create_vecs(my_params, voi=(None, None), impl=impl)
             top_unknowns = self.unknowns
         else:
 
@@ -430,7 +430,7 @@ class Group(System):
 
             # map promoted name in parent to corresponding promoted name in this view
             self._relname_map = self._get_relname_map(parent._sysdata.to_prom_name)
-            self._create_views(top_unknowns, parent, my_params, voi=None)
+            self._create_views(top_unknowns, parent, my_params, voi=(None, None))
 
         self._u_size_lists = self.unknowns._get_flattened_sizes()
         self._p_size_lists = self.params._get_flattened_sizes()

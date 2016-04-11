@@ -186,9 +186,9 @@ class MultLinearSolver(LinearSolver):
 
         voi = self.voi
         if mode == 'fwd':
-            sol_vec, rhs_vec = system.dumat[voi], system.drmat[voi]
+            sol_vec, rhs_vec = system.dumat[voi[0]], system.drmat[voi[0]]
         else:
-            sol_vec, rhs_vec = system.drmat[voi], system.dumat[voi]
+            sol_vec, rhs_vec = system.drmat[voi[0]], system.dumat[voi[0]]
 
         # Set incoming vector
         sol_vec.vec[:] = arg

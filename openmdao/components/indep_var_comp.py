@@ -4,6 +4,7 @@ import collections
 from six import string_types, iteritems
 
 from openmdao.core.component import Component
+from openmdao.core.mpi_wrap import debug
 
 class IndepVarComp(Component):
     """A Component that provides an output to connect to a parameter.
@@ -62,7 +63,7 @@ class IndepVarComp(Component):
                              "`str` or an iterable of tuples of the form (name, value) or "
                              "(name, value, keyword_dict).")
 
-    def _sys_apply_linear(self, mode, do_apply, vois=(None, ), gs_outputs=None):
+    def _sys_apply_linear(self, mode, do_apply, vois=((None,None), ), gs_outputs=None):
         """For `IndepVarComp`, just pass on the incoming values.
 
         Args
@@ -82,7 +83,7 @@ class IndepVarComp(Component):
         """
         if mode == 'fwd':
             sol_vec, rhs_vec = self.dumat, self.drmat
-            for voi in vois:
+            for voi,_ in vois:
                 rhs_vec[voi].vec[:] = 0.0
         else:
             sol_vec, rhs_vec = self.drmat, self.dumat
@@ -96,12 +97,14 @@ class IndepVarComp(Component):
         # the same sign as the derivative of the explicit unknown. This
         # introduces a minus one here.
 
+        debug(self.pathname, "sys_apply_linear, sol_vec=",sol_vec)
         for voi in vois:
+            debug("sol_vec[%s]=%s" % (str(voi), sol_vec[voi].vec))
             if gs_outputs is None:
                 rhs_vec[voi].vec[:] -= sol_vec[voi].vec
             else:
                 for var, meta in iteritems(self.dumat[voi]):
-                    if var in gs_outputs[voi]:
+                    if var[0] in gs_outputs[voi[0]]:
                         rhs_vec[voi][var] -= sol_vec[voi][var]
 
     def _sys_linearize(self, params, unknowns, resids, force_fd=False):

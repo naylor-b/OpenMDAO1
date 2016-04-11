@@ -11,6 +11,7 @@ from openmdao.core.mpi_wrap import MPI
 from openmdao.test.mpi_util import MPITestCase
 from openmdao.test.util import assert_rel_error
 from openmdao.util.array_util import evenly_distrib_idxs
+from openmdao.core.mpi_wrap import MPI, under_mpirun, debug
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
@@ -284,6 +285,7 @@ class DistribEvenOddComp(Component):
         else:
             J[('y', 'x')] = numpy.eye(self.arr_size) * 2.0
 
+        debug("%s linearize J:"%self.pathname,J)
         return J
 
 class TestParallelDerivs(MPITestCase):
@@ -294,29 +296,42 @@ class TestParallelDerivs(MPITestCase):
         group = Group()
         group.add('P', IndepVarComp('x', numpy.ones(size)))
         C1 = group.add('C1', DistribEvenOddComp(arr_size=size, numprocs=self.N_PROCS))
-        group.add('C2', ExecComp(['y=3.0*x'],
-                                 y=numpy.zeros(size),
-                                 x=numpy.zeros(size)))
+        C1._striped = True
+        # group.add('C2', ExecComp(['y=3.0*x'],
+        #                          y=numpy.zeros(size),
+        #                          x=numpy.zeros(size)))
 
         prob = Problem(impl=impl, root=group)
 
         prob.root.ln_solver.options['mode'] = 'rev'
 
         prob.root.connect('P.x', 'C1.x')
-        prob.root.connect('C1.y', 'C2.x')
+        #prob.root.connect('C1.y', 'C2.x')
 
         prob.driver.add_desvar('P.x')
-        prob.driver.add_objective('C2.y')
+        prob.driver.add_objective('C1.y')
 
-        prob.driver.parallel_derivs([('C2.y',2)])
+        prob.driver.parallel_derivs([('C1.y',2)])
+
+        import sys
+        sys.path.insert(0, ".")
+        import wingdbstub
 
         prob.setup(check=False)
         prob.run()
 
-        J = prob.calc_gradient(['P.x'], ['C2.y'], mode='rev', return_format='dict')
+        debug("P.x:",prob['P.x'])
+        debug('C1.x:',prob['C1.x'])
+        debug('C1.y:',prob['C1.y'])
+
+        debug("objs:",prob.driver.get_objectives())
+
+        debug("========================================================")
+        J = prob.calc_gradient(['P.x'], ['C1.y'], mode='rev', return_format='dict')
+        debug("J",J)
         if MPI:
             rank = self.comm.rank
-            vals = [6.0, 9.0]
+            vals = [2.0, 3.0]
             expected = numpy.zeros(size)
             for i in range(self.comm.size):
                 start = C1.offsets[i]
@@ -324,9 +339,9 @@ class TestParallelDerivs(MPITestCase):
                 expected[start:start+sz] = vals[i]
             expected = numpy.diag(expected)
 
-            assert_rel_error(self, J['C2.y']['P.x'], expected, 1e-6)
+            assert_rel_error(self, J['C1.y']['P.x'], expected, 1e-6)
         else:
-            assert_rel_error(self, J['C2.y']['P.x'], numpy.eye(size)*6.0, 1e-6)
+            assert_rel_error(self, J['C1.y']['P.x'], numpy.eye(size)*2.0, 1e-6)
 
 
 #class DistComp(Component):

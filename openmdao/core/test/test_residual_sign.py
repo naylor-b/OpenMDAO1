@@ -52,7 +52,7 @@ class SimpleImplicitSL(Component):
         else:
             sol_vec, rhs_vec = self.drmat, self.dumat
 
-        for voi in vois:
+        for voi,_ in vois:
             if mode == "fwd":
                 sol_vec[voi].vec[:] = np.linalg.solve(self.J['x','x'], -rhs_vec[voi].vec)
             else:
@@ -112,7 +112,7 @@ class TestResidual(unittest.TestCase):
         p.root.dumat[None]['x'][:] = np.array([1., 0.])
         p.root.clear_dparams()
 
-        p.root._sys_apply_linear('fwd', do_apply=p.root._do_apply, vois=(None, ))
+        p.root._sys_apply_linear('fwd', do_apply=p.root._do_apply)
         assert_rel_error(self, p.root.drmat[None]['x'][0], 3.0, 1e-8)
         assert_rel_error(self, p.root.drmat[None]['x'][1], 20.0, 1e-8)
 
@@ -122,7 +122,7 @@ class TestResidual(unittest.TestCase):
         p.root.clear_dparams()
         p.root.drmat[None]['x'][:] = np.array([1., 0.])
 
-        p.root._sys_apply_linear('rev', do_apply=p.root._do_apply, vois=(None, ))
+        p.root._sys_apply_linear('rev', do_apply=p.root._do_apply)
         assert_rel_error(self, p.root.dumat[None]['x'][0], 3.0, 1e-8)
         assert_rel_error(self, p.root.dumat[None]['a'], 1.0, 1e-8)
         assert_rel_error(self, p.root.dumat[None]['b'], 0.0, 1e-8)
@@ -133,7 +133,7 @@ class TestResidual(unittest.TestCase):
         p.root.clear_dparams()
         p.root.drmat[None]['x'][:] = np.array([0., 1.])
 
-        p.root._sys_apply_linear('rev', do_apply=p.root._do_apply, vois=(None, ))
+        p.root._sys_apply_linear('rev', do_apply=p.root._do_apply)
         assert_rel_error(self, p.root.dumat[None]['x'][0], 20.0, 1e-8)
 
     def test_explicit_sign(self):
@@ -163,7 +163,7 @@ class TestResidual(unittest.TestCase):
         p.root.dumat[None]['x'][:] = np.array([1., 0.])
         p.root.clear_dparams()
 
-        p.root._sys_apply_linear('fwd', do_apply=p.root._do_apply, vois=(None, ))
+        p.root._sys_apply_linear('fwd', do_apply=p.root._do_apply)
         assert_rel_error(self, p.root.drmat[None]['resid'][0], 3.0, 1e-8)
         assert_rel_error(self, p.root.drmat[None]['resid'][1], 20.0, 1e-8)
 
@@ -173,7 +173,7 @@ class TestResidual(unittest.TestCase):
         p.root.dumat[None].vec[:] = 0.0
         p.root.drmat[None]['resid'][:] = np.array([1., 0.])
 
-        p.root._sys_apply_linear('rev', do_apply=p.root._do_apply, vois=(None, ))
+        p.root._sys_apply_linear('rev', do_apply=p.root._do_apply)
         assert_rel_error(self, p.root.dumat[None]['x'][0], 3.0, 1e-8)
 
         # rev 2
@@ -182,7 +182,7 @@ class TestResidual(unittest.TestCase):
         p.root.dumat[None].vec[:] = 0.0
         p.root.drmat[None]['resid'][:] = np.array([0., 1.])
 
-        p.root._sys_apply_linear('rev', do_apply=p.root._do_apply, vois=(None, ))
+        p.root._sys_apply_linear('rev', do_apply=p.root._do_apply)
 
         assert_rel_error(self, p.root.dumat[None]['x'][0], 20.0, 1e-8)
 

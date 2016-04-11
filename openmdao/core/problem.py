@@ -1442,6 +1442,8 @@ class Problem(object):
         # Linearize Model
         root._sys_linearize(root.params, unknowns, root.resids)
 
+        distrib_vars = {}  # distributed vars. keep track of local and dist size
+
         # Initialize Jacobian
         if return_format == 'dict':
             J = OrderedDict()
@@ -1450,6 +1452,9 @@ class Problem(object):
                     okeys = (okeys,)
                 for okey in okeys:
                     J[okey] = OrderedDict()
+                    meta = unknowns.metadata(okey)
+                    dsize = meta.get('distrib_size', -1)
+                    distrib_vars[okey] = (meta['size'], dsize)
                     for ikeys in indep_list:
                         if isinstance(ikeys, str):
                             ikeys = (ikeys,)
@@ -1458,6 +1463,9 @@ class Problem(object):
                             if sparsity is not None:
                                 if ikey not in sparsity[okey]:
                                     continue
+                            meta = unknowns.metadata(ikey)
+                            dsize = meta.get('distrib_size', -1)
+                            distrib_vars[ikey] = (meta['size'], dsize)
 
                             J[okey][ikey] = None
         else:
@@ -1465,21 +1473,29 @@ class Problem(object):
             psize = 0
             Jslices = OrderedDict()
             for u in unknown_list:
+                meta = unknowns.metadata(u)
+                dsize = meta.get('distrib_size', -1)
+                distrib_vars[u] = (meta['size'], dsize)
+
                 start = usize
                 if u in self._qoi_indices:
                     idx = self._qoi_indices[u]
                     usize += len(idx)
                 else:
-                    usize += self.root.unknowns.metadata(u)['size']
+                    usize += meta['size']
                 Jslices[u] = slice(start, usize)
 
             for p in indep_list:
                 start = psize
+                meta = unknowns.metadata(p)
+                dsize = meta.get('distrib_size', -1)
                 if p in self._poi_indices:
                     idx = self._poi_indices[p]
                     psize += len(idx)
+                    distrib_vars[p] = (len(idx), dsize)
                 else:
-                    psize += unknowns.metadata(p)['size']
+                    psize += meta['size']
+                    distrib_vars[p] = (meta['size'], dsize)
                 Jslices[p] = slice(start, psize)
             J = np.zeros((usize, psize))
 
@@ -1532,20 +1548,22 @@ class Problem(object):
         for params in voi_sets:
             rhs = OrderedDict()
             voi_idxs = {}
+            vkeys = []
 
             # if any vois have a count > 1, we need to repeat them so we get a separate
             # RHS for each one.
             newparams = []
             for p in params:
-                for i in range(voi_counts[p]):
+                for i in range(voi_counts.get(p, 1)):
                     newparams.append(p)
             params = newparams
 
             old_size = None
 
             # Allocate all of our Right Hand Sides for this parallel set.
-            for voi in params:
-                vkey = voi_keys[voi] = self._get_voi_key(voi, params)
+            for idx, voi in enumerate(params):
+                vkey = self._get_voi_key(voi, params, idx)
+                vkeys.append(vkey)
 
                 duvec = dumat[vkey]
                 if vkey not in rhs:
@@ -1557,8 +1575,10 @@ class Problem(object):
                     in_idxs = []
 
                 if len(in_idxs) == 0:
+                    # offset doesn't matter since we only care about the size
+                    # (we only use it to determine loop iterations but don't
+                    #  actually use the indices for anything).
                     if voi in poi_indices:
-                        # offset doesn't matter since we only care about the size
                         in_idxs = duvec.to_idx_array(poi_indices[voi])
                     else:
                         in_idxs = np.arange(0, unknowns_dict[to_abs_uname[voi]]['size'], dtype=int)
@@ -1577,27 +1597,38 @@ class Problem(object):
             # over the *size* of the indices and use the loop index to look
             # up the actual indices for the current members of the group
             # of interest.
+
             for i in range(len(in_idxs)):
-                for voi in params:
-                    vkey = voi_keys[voi]
+                for idx, voi in enumerate(params):
+                    debug("VOI",voi)
+                    vkey = vkeys[idx]
                     rhs[vkey][:] = 0.0
                     # only set a -1.0 in the entry if that var is 'owned' by this rank
                     # Note, we solve a slightly modified version of the unified
                     # derivatives equations in OpenMDAO.
                     # (dR/du) * (du/dr) = -I
-                    if owned[voi] == iproc:
+                    if (vkey[1] is None and owned[voi] == iproc) or vkey[1] == iproc:# \
+                        #  or (voi in distrib_vars and \
+                        #     self.root._subsystem(to_abs_uname[voi].rsplit('.',1)[0]).is_active()):
+                    #if owned[voi] == iproc or vkey[1] is not None:
                         rhs[vkey][voi_idxs[vkey][i]] = -1.0
 
                 # Solve the linear system
+                debug("ln_solver.solve")
+                debug("rhs:",rhs)
                 dx_mat = root.ln_solver.solve(rhs, root, mode)
+                debug("dx_mat:",dx_mat)
 
-                for param, dx in iteritems(dx_mat):
-                    vkey = voi_keys[param]
+                for p_idx, (param, dx) in enumerate(iteritems(dx_mat)):
+                    param = param[0]
+                    debug("param:",str(param))
+                    vkey = vkeys[p_idx]
+                    debug("vkey:",str(vkey))
                     if param is None:
                         param = params[0]
 
                     for item in output_list:
-
+                        debug("item:",item)
                         # Support sparsity
                         if sparsity is not None:
                             if fwd and param not in sparsity[item]:
@@ -1605,8 +1636,9 @@ class Problem(object):
                             elif not fwd and item not in sparsity[param]:
                                 continue
 
-                        if vkey is None or relevance.is_relevant(vkey, item):
-                            if fwd or owned[item] == iproc:
+                        if vkey[0] is None or relevance.is_relevant(vkey[0], item):
+                            #if fwd or owned[item] == iproc:
+                            if fwd or ((vkey[1] is None and owned[voi] == iproc) or vkey[1] == iproc):
                                 out_idxs = dumat[vkey]._get_local_idxs(item,
                                                                  qoi_indices,
                                                                  get_slice=True)
@@ -1623,6 +1655,7 @@ class Problem(object):
                                 dxval = comm.bcast(dxval, root=owned[item])
                                 if trace:
                                     debug("dxval bcast DONE")
+                                    debug("dxval:",dxval)
                         else:  # irrelevant variable.  just give'em zeros
                             if item in qoi_indices:
                                 zsize = len(qoi_indices[item])
@@ -1678,7 +1711,7 @@ class Problem(object):
 
         return J
 
-    def _get_voi_key(self, voi, grp):
+    def _get_voi_key(self, voi, grp, idx):
         """Return the voi name, which allows for parallel derivative calculations
         (currently only works with LinearGaussSeidel), or None for those
         solvers that can only do a single linear solve at a time.
@@ -1687,9 +1720,13 @@ class Problem(object):
                 isinstance(self.root.ln_solver, LinearGaussSeidel)):
             if (len(grp) > 1 or
                     self.root.ln_solver.options['single_voi_relevance_reduction']):
-                return voi
+                first_idx = grp.index(voi)
+                if voi in grp[first_idx+1:]:
+                    return (voi, idx-first_idx)
+                else:
+                    return (voi, None)
 
-        return None
+        return (None, None)
 
     def check_partial_derivatives(self, out_stream=sys.stdout, comps=None,
                                   compact_print=False):

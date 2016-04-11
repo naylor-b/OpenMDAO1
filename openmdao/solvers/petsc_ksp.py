@@ -106,7 +106,7 @@ class PetscKSP(LinearSolver):
         # These are defined whenever we call solve to provide info we need in
         # the callback.
         self.system = None
-        self.voi = None
+        self.voi = (None,None)
         self.mode = None
 
         self.ksp = None
@@ -190,12 +190,12 @@ class PetscKSP(LinearSolver):
             sol_vec = np.zeros(rhs.shape)
             # Set these in the system
             if trace:  # pragma: no cover
-                debug("creating sol_buf petsc vec for voi", voi)
+                debug("creating sol_buf petsc vec for voi", str(voi))
             self.sol_buf_petsc = PETSc.Vec().createWithArray(sol_vec,
                                                              comm=system.comm)
             if trace:  # pragma: no cover
                 debug("sol_buf creation DONE")
-                debug("creating rhs_buf petsc vec for voi", voi)
+                debug("creating rhs_buf petsc vec for voi", str(voi))
             self.rhs_buf_petsc = PETSc.Vec().createWithArray(rhs,
                                                              comm=system.comm)
             if trace: debug("rhs_buf creation DONE")
@@ -250,9 +250,9 @@ class PetscKSP(LinearSolver):
 
         voi = self.voi
         if mode == 'fwd':
-            sol_vec, rhs_vec = system.dumat[voi], system.drmat[voi]
+            sol_vec, rhs_vec = system.dumat[voi[0]], system.drmat[voi[0]]
         else:
-            sol_vec, rhs_vec = system.drmat[voi], system.dumat[voi]
+            sol_vec, rhs_vec = system.drmat[voi[0]], system.dumat[voi[0]]
 
         # Set incoming vector
         # sol_vec.vec[:] = arg.array
@@ -290,9 +290,9 @@ class PetscKSP(LinearSolver):
 
         voi = self.voi
         if mode == 'fwd':
-            sol_vec, rhs_vec = system.dumat[voi], system.drmat[voi]
+            sol_vec, rhs_vec = system.dumat[voi[0]], system.drmat[voi[0]]
         else:
-            sol_vec, rhs_vec = system.drmat[voi], system.dumat[voi]
+            sol_vec, rhs_vec = system.drmat[voi[0]], system.dumat[voi[0]]
 
         # Set incoming vector
         rhs_vec.vec[:] = _get_petsc_vec_array(arg)
@@ -301,9 +301,9 @@ class PetscKSP(LinearSolver):
         system.clear_dparams()
 
         dumat = OrderedDict()
-        dumat[voi] = system.dumat[voi]
+        dumat[voi[0]] = system.dumat[voi[0]]
         drmat = OrderedDict()
-        drmat[voi] = system.drmat[voi]
+        drmat[voi[0]] = system.drmat[voi[0]]
 
         with system._dircontext:
             system.solve_linear(dumat, drmat, (voi, ), mode=mode,

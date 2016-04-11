@@ -131,7 +131,7 @@ class Newton(NonLinearSolver):
             arg.vec[:] = -resids.vec
             with system._dircontext:
                 system.solve_linear(system.dumat, system.drmat,
-                                    [None], mode='fwd', solver=self.ln_solver)
+                                    [(None,None)], mode='fwd', solver=self.ln_solver)
 
             # Step in that direction,
             self.iter_count += 1

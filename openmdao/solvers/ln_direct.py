@@ -111,7 +111,7 @@ class DirectSolver(MultLinearSolver):
         sol_buf = OrderedDict()
 
         for voi, rhs in rhs_mat.items():
-            self.voi = None
+            self.voi = (None,None)
 
             if system._jacobian_changed:
                 self.jacobian = self._assemble_jacobian(rhs, mode)

@@ -14,7 +14,7 @@ import numpy as np
 
 from openmdao.core.basic_impl import BasicImpl
 from openmdao.core.system import System
-from openmdao.core.mpi_wrap import MPI
+from openmdao.core.mpi_wrap import MPI, debug
 from openmdao.core.vec_wrapper import _ByObjWrapper
 from openmdao.core.vec_wrapper_complex_step import ComplexStepSrcVecWrapper, \
                                                    ComplexStepTgtVecWrapper
@@ -336,6 +336,8 @@ class Component(System):
                     debug("allgathering src index sizes:")
                 allsizes = np.zeros((self.comm.size, len(sizes)), dtype=int)
                 self.comm.Allgather(np.array(sizes, dtype=int), allsizes)
+                if trace:
+                    debug("allgather of src index sizes DONE")
                 for i, name in enumerate(names):
                     self._init_unknowns_dict[name]['distrib_size'] = np.sum(allsizes[:, i])
 
@@ -614,8 +616,9 @@ class Component(System):
             or the incoming vector in reverse mode. There is one vector per
             quantity of interest for this problem. (dr)
 
-        vois : list of strings
-            List of all quantities of interest to key into the mats.
+        vois : list of tuples
+            List of all quantities of interest and their occurrence count
+            to key into the mats.
 
         mode : string
             Derivative mode, can be 'fwd' or 'rev', but generally should be
@@ -629,6 +632,7 @@ class Component(System):
             sol_vec, rhs_vec = self.drmat, self.dumat
 
         for voi in vois:
+            debug(self.pathname,"solve_linear, voi",str(voi),"rhs:",rhs_vec[voi].vec)
             sol_vec[voi].vec[:] = -rhs_vec[voi].vec
 
     def dump(self, nest=0, out_stream=sys.stdout, verbose=False, dvecs=False,

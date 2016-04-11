@@ -56,7 +56,7 @@ class ScipyGMRES(MultLinearSolver):
         # These are defined whenever we call solve to provide info we need in
         # the callback.
         self.system = None
-        self.voi = None
+        self.voi = (None,None)
         self.mode = None
         self._norm0 = 0.0
 
@@ -176,9 +176,9 @@ class ScipyGMRES(MultLinearSolver):
 
         voi = self.voi
         if mode == 'fwd':
-            sol_vec, rhs_vec = system.dumat[voi], system.drmat[voi]
+            sol_vec, rhs_vec = system.dumat[voi[0]], system.drmat[voi[0]]
         else:
-            sol_vec, rhs_vec = system.drmat[voi], system.dumat[voi]
+            sol_vec, rhs_vec = system.drmat[voi[0]], system.dumat[voi[0]]
 
         # Set incoming vector
         rhs_vec.vec[:] = arg[:]
@@ -187,9 +187,9 @@ class ScipyGMRES(MultLinearSolver):
         system.clear_dparams()
 
         dumat = OrderedDict()
-        dumat[voi] = system.dumat[voi]
+        dumat[voi[0]] = system.dumat[voi[0]]
         drmat = OrderedDict()
-        drmat[voi] = system.drmat[voi]
+        drmat[voi[0]] = system.drmat[voi[0]]
 
         with system._dircontext:
             system.solve_linear(dumat, drmat, (voi, ), mode=mode,

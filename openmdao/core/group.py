@@ -329,6 +329,7 @@ class Group(System):
                             outs[voi] = set([x for x in dumat[voi]._dat if
                                                    not sub.dumat or
                                                    (sub.dumat and x not in sub.dumat[voi])])
+        debug("gs_outputs:",self._gs_outputs)
         return self._gs_outputs
 
     def _promoted_name(self, name, subsystem):
@@ -759,7 +760,7 @@ class Group(System):
         for sub in self._local_subsystems:
             sub._sys_linearize(sub.params, sub.unknowns, sub.resids)
 
-    def _sys_apply_linear(self, mode, do_apply, vois=(None,), gs_outputs=None):
+    def _sys_apply_linear(self, mode, do_apply, vois=((None,None),), gs_outputs=None):
         """Calls apply_linear on our children. If our child is a `Component`,
         then we need to also take care of the additional 1.0 on the diagonal
         for explicit outputs.
@@ -787,7 +788,7 @@ class Group(System):
 
         if mode == 'fwd':
             for voi in vois:
-                self._transfer_data(deriv=True, var_of_interest=voi)  # Full Scatter
+                self._transfer_data(deriv=True, var_of_interest=voi[0])  # Full Scatter
 
         if self.fd_options['force_fd']:
             # parent class has the code to do the fd
@@ -801,7 +802,7 @@ class Group(System):
         if mode == 'rev':
             for voi in vois:
                 self._transfer_data(mode='rev', deriv=True,
-                                    var_of_interest=voi)  # Full Scatter
+                                    var_of_interest=voi[0])  # Full Scatter
 
     def solve_linear(self, dumat, drmat, vois, mode=None, solver=None):
         """
@@ -850,18 +851,18 @@ class Group(System):
         # Don't solve if user requests finite difference in this group.
         if self.fd_options['force_fd']:
             for voi in vois:
-                sol_vec[voi].vec[:] = -rhs_vec[voi].vec
+                sol_vec[voi[0]].vec[:] = -rhs_vec[voi[0]].vec
                 return
 
         # Solve Jacobian, df |-> du [fwd] or du |-> df [rev]
         rhs_buf = OrderedDict()
         for voi in vois:
             # Skip if we are all zeros.
-            if rhs_vec[voi].norm() < 1e-15:
-                sol_vec[voi].vec[:] = 0.0
+            if rhs_vec[voi[0]].norm() < 1e-15:
+                sol_vec[voi[0]].vec[:] = 0.0
                 continue
 
-            rhs_buf[voi] = rhs_vec[voi].vec.copy()
+            rhs_buf[voi] = rhs_vec[voi[0]].vec.copy()
 
         if len(rhs_buf) == 0:
             return
@@ -869,7 +870,7 @@ class Group(System):
         sol_buf = solver.solve(rhs_buf, self, mode=mode)
 
         for voi in rhs_buf:
-            sol_vec[voi].vec[:] = sol_buf[voi][:]
+            sol_vec[voi[0]].vec[:] = sol_buf[voi][:]
 
     def clear_dparams(self):
         """ Zeros out the dparams (dp) vector."""
@@ -1432,6 +1433,7 @@ class Group(System):
 
         """
         x = self._data_xfer.get((target_sys, mode, var_of_interest))
+        debug("TRANSFER:",x)
         if x is not None:
             if deriv:
                 x.transfer(self.dumat[var_of_interest], self.dpmat[var_of_interest],

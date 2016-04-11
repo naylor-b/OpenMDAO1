@@ -61,6 +61,9 @@ class Driver(object):
         self.dv_conversions = {}
         self.fn_conversions = {}
 
+        self._voi_counts = {}
+
+
     def _setup(self):
         """ Updates metadata for params, constraints and objectives, and
         check for errors. Also determines all variables that need to be
@@ -99,10 +102,10 @@ class Driver(object):
                 if name in self._cons:
                     rootmeta['is_constraint'] = True
 
-                if MPI and 'src_indices' in rootmeta:
-                    raise ValueError("'%s' is a distributed variable and may "
-                                     "not be used as a design var, objective, "
-                                     "or constraint." % name)
+                # if MPI and 'src_indices' in rootmeta:
+                #     raise ValueError("'%s' is a distributed variable and may "
+                #                      "not be used as a design var, objective, "
+                #                      "or constraint." % name)
 
                 if has_gradients and rootmeta.get('pass_by_obj'):
                     if 'optimizer' in self.options:
@@ -148,6 +151,8 @@ class Driver(object):
                 continue
 
             self.fn_conversions[name] = scaler
+
+        self.root._probdata.voi_counts = self._voi_counts
 
     def _setup_communicators(self, comm, parent_dir):
         """
@@ -246,8 +251,6 @@ class Driver(object):
             The names of variables of interest that are to be grouped.
         """
         #import wingdbstub
-
-        self._voi_counts = {}
 
         #make sure all vnames are desvars, constraints, or objectives
         for i, n in enumerate(vnames):
@@ -374,6 +377,7 @@ class Driver(object):
         if indices:
             param['indices'] = np.array(indices, dtype=int)
 
+        self._voi_counts[name] = 1
         self._desvars[name] = param
 
     def add_param(self, name, lower=None, upper=None, indices=None, adder=0.0,
@@ -535,6 +539,7 @@ class Driver(object):
                                    "variable '%s', but driver '%s' doesn't "
                                    "support multiple objectives." %
                                    (name, self.pathname))
+        self._voi_counts[name] = 1
         self._objs[name] = obj
 
     def get_objectives(self, return_type='dict'):
@@ -663,6 +668,7 @@ class Driver(object):
 
         if indices:
             con['indices'] = indices
+        self._voi_counts[name] = 1
         self._cons[name] = con
 
     def get_constraints(self, ctype='all', lintype='all'):

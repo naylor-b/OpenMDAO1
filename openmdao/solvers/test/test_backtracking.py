@@ -35,7 +35,7 @@ class FakeSolver(NonLinearSolver):
 
         # Step waaaaay to far so we have to backtrack
         arg.vec[:] = resids.vec*100
-        system.solve_linear(system.dumat, system.drmat, [None], mode='fwd')
+        system.solve_linear(system.dumat, system.drmat, [(None,None)], mode='fwd')
 
         unknowns.vec += result.vec
 

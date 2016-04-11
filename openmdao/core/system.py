@@ -23,8 +23,7 @@ from openmdao.util.string_util import name_relative_to
 from openmdao.util.type_util import real_types
 
 trace = os.environ.get('OPENMDAO_TRACE')
-if trace:  # pragma: no cover
-    from openmdao.core.mpi_wrap import debug
+from openmdao.core.mpi_wrap import debug
 
 
 class _SysData(object):
@@ -136,6 +135,8 @@ class System(object):
         # this to false and then monitor it so they know when, for example,
         # to regenerate a Jacobian.
         self._jacobian_changed = False
+
+        self._striped = False
 
         self._reset() # initialize some attrs that are set during setup
 
@@ -652,7 +653,7 @@ class System(object):
 
         return jac
 
-    def _sys_apply_linear(self, mode, do_apply, vois=(None,), gs_outputs=None):
+    def _sys_apply_linear(self, mode, do_apply, vois=((None,None),), gs_outputs=None):
         """
         Entry point method for all parent classes to access the apply_linear method.
         This method handles the functionality for self-fd, or otherwise passes the call
@@ -675,11 +676,15 @@ class System(object):
         is_relevant = self._probdata.relevance.is_relevant_system
         fwd = mode == "fwd"
 
-        for voi in vois:
+        for voi, idx in vois:
             # don't call apply_linear if this system is irrelevant
             if not is_relevant(voi, self):
                 continue
+            if idx is not None and MPI and self._striped and idx != self.comm.rank:
+                debug(self.pathname,"skipping (%s,%d)" % (voi, idx))
+                continue
 
+            debug(self.pathname, "NOT skipping (%s,%s)" % (voi, idx))
             dresids = self.drmat[voi]
             dunknowns = self.dumat[voi]
             dparams = self.dpmat[voi]
@@ -815,6 +820,7 @@ class System(object):
 
             # Vectors are flipped during adjoint
 
+            debug(self.pathname, "apply_linear_jac:",unknown, param)
             try:
                 if isvw:
                     if fwd:
@@ -822,7 +828,11 @@ class System(object):
                         vec += J.dot(arg_vec._flat(param))
                     else:
                         shape = arg_vec._dat[param].meta['shape']
+                        debug("shape:",str(shape))
+                        debug("J.T.dot(dresids._flat(%s))" % unknown,J.T.dot(dresids._flat(unknown)))
+                        debug("BEFORE: arg_vec[%s]"%param, arg_vec[param])
                         arg_vec[param] += J.T.dot(dresids._flat(unknown)).reshape(shape)
+                        debug("AFTER: arg_vec[%s]"%param, arg_vec[param])
                 else: # plain dicts were passed in for unit testing...
                     if fwd:
                         vec = dresids[unknown]
@@ -831,6 +841,7 @@ class System(object):
                         shape = arg_vec[param].shape
                         arg_vec[param] += J.T.dot(dresids[unknown].flat).reshape(shape)
             except KeyError:
+                debug("KeyError?")
                 continue # either didn't find param in dparams/dunknowns or
                          # didn't find unknown in dresids
             except ValueError:

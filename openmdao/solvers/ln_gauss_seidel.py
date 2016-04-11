@@ -64,9 +64,9 @@ class LinearGaussSeidel(LinearSolver):
         """
         super(LinearGaussSeidel, self).setup(group)
 
-        self._vois = [None]
+        self._vois = set([None])
         for vois in group._probdata.relevance.vars_of_interest():
-            self._vois.extend(vois)
+            self._vois.update(vois)
 
     def solve(self, rhs_mat, system, mode):
         """ Solves the linear system for the problem in self.system. The

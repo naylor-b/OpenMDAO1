@@ -15,7 +15,7 @@ from six.moves import cStringIO
 import networkx as nx
 import numpy as np
 
-from openmdao.core.system import System
+from openmdao.core.system import System, voi_iter
 from openmdao.core.group import Group
 from openmdao.core.component import Component
 from openmdao.core.parallel_group import ParallelGroup
@@ -422,6 +422,7 @@ class Problem(object):
         self._probdata = _ProbData()
         if isinstance(self.root.ln_solver, LinearGaussSeidel):
             self._probdata.top_lin_gs = True
+        self._probdata.voi_counts = self.driver._voi_counts
 
         self.driver.root = self.root
 
@@ -1548,27 +1549,23 @@ class Problem(object):
             voi_idxs = {}
             vkeys = []
 
-            # if any vois have a count > 1, we need to repeat them so we get a separate
-            # RHS for each one.
-            newparams = []
-            for p in params:
-                for i in range(voi_counts.get(p, 1)):
-                    newparams.append(p)
-            params = newparams
+            # if any vois have a count > 1, we need to repeat them so we
+            # get a separate RHS for each one.
+            params = [v for v in voi_iter(params, voi_counts)]
 
             old_size = None
 
             # Allocate all of our Right Hand Sides for this parallel set.
-            for idx, voi in enumerate(params):
-                vkey = self._get_voi_key(voi, params, idx)
+            for voi in params:
+                vkey = self._get_voi_key(voi, params)
                 vkeys.append(vkey)
 
                 duvec = dumat[vkey]
                 if vkey not in rhs:
                     rhs[vkey] = np.empty((duvec.vec.size, ))
 
-                if voi in duvec:
-                    in_idxs = duvec._get_local_idxs(voi, poi_indices)
+                if voi[0] in duvec:
+                    in_idxs = duvec._get_local_idxs(voi[0], poi_indices)
                 else:
                     in_idxs = []
 
@@ -1576,10 +1573,10 @@ class Problem(object):
                     # offset doesn't matter since we only care about the size
                     # (we only use it to determine loop iterations but don't
                     #  actually use the indices for anything).
-                    if voi in poi_indices:
-                        in_idxs = duvec.to_idx_array(poi_indices[voi])
+                    if voi[0] in poi_indices:
+                        in_idxs = duvec.to_idx_array(poi_indices[voi[0]])
                     else:
-                        in_idxs = np.arange(0, unknowns_dict[to_abs_uname[voi]]['size'], dtype=int)
+                        in_idxs = np.arange(0, unknowns_dict[to_abs_uname[voi[0]]]['size'], dtype=int)
 
                 if old_size is None:
                     old_size = len(in_idxs)
@@ -1598,35 +1595,35 @@ class Problem(object):
 
             for i in range(len(in_idxs)):
                 for idx, voi in enumerate(params):
-                    debug("VOI",voi)
+                    #debug("VOI",voi)
                     vkey = vkeys[idx]
                     rhs[vkey][:] = 0.0
                     # only set a -1.0 in the entry if that var is 'owned' by this rank
                     # Note, we solve a slightly modified version of the unified
                     # derivatives equations in OpenMDAO.
                     # (dR/du) * (du/dr) = -I
-                    if (vkey[1] is None and owned[voi] == iproc) or vkey[1] == iproc:# \
+                    if (vkey[1] is None and owned[voi[0]] == iproc) or vkey[1] == iproc:# \
                         #  or (voi in distrib_vars and \
                         #     self.root._subsystem(to_abs_uname[voi].rsplit('.',1)[0]).is_active()):
                     #if owned[voi] == iproc or vkey[1] is not None:
                         rhs[vkey][voi_idxs[vkey][i]] = -1.0
 
                 # Solve the linear system
-                debug("ln_solver.solve")
-                debug("rhs:",rhs)
+                # debug("ln_solver.solve")
+                # debug("rhs:",rhs)
                 dx_mat = root.ln_solver.solve(rhs, root, mode)
-                debug("dx_mat:",dx_mat)
+                #debug("dx_mat:",dx_mat)
 
                 for p_idx, (param, dx) in enumerate(iteritems(dx_mat)):
                     param = param[0]
-                    debug("param:",str(param))
+                    #debug("param:",str(param))
                     vkey = vkeys[p_idx]
-                    debug("vkey:",str(vkey))
+                    #debug("vkey:",str(vkey))
                     if param is None:
-                        param = params[0]
+                        param = params[0][0]
 
                     for item in output_list:
-                        debug("item:",item)
+                        #debug("item:",item)
                         # Support sparsity
                         if sparsity is not None:
                             if fwd and param not in sparsity[item]:
@@ -1636,7 +1633,7 @@ class Problem(object):
 
                         if vkey[0] is None or relevance.is_relevant(vkey[0], item):
                             #if fwd or owned[item] == iproc:
-                            if fwd or ((vkey[1] is None and owned[voi] == iproc) or vkey[1] == iproc):
+                            if fwd or ((vkey[1] is None and owned[voi[0]] == iproc) or vkey[1] == iproc):
                                 out_idxs = dumat[vkey]._get_local_idxs(item,
                                                                  qoi_indices,
                                                                  get_slice=True)
@@ -1709,20 +1706,16 @@ class Problem(object):
 
         return J
 
-    def _get_voi_key(self, voi, grp, idx):
+    def _get_voi_key(self, voi, grp):
         """Return the voi name, which allows for parallel derivative calculations
         (currently only works with LinearGaussSeidel), or None for those
         solvers that can only do a single linear solve at a time.
         """
-        if (voi in self._driver_vois and
+        if (voi[0] in self._driver_vois and
                 isinstance(self.root.ln_solver, LinearGaussSeidel)):
             if (len(grp) > 1 or
                     self.root.ln_solver.options['single_voi_relevance_reduction']):
-                first_idx = grp.index(voi)
-                if voi in grp[first_idx+1:]:
-                    return (voi, idx-first_idx)
-                else:
-                    return (voi, None)
+                return voi
 
         return (None, None)
 
@@ -1779,7 +1772,7 @@ class Problem(object):
         data = {}
 
         # Derivatives should just be checked without parallel adjoint for now.
-        voi = None
+        voi = (None,None)
 
         # Check derivative calculations for all comps at every level of the
         # system hierarchy.

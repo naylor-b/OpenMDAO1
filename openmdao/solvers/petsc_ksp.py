@@ -250,9 +250,9 @@ class PetscKSP(LinearSolver):
 
         voi = self.voi
         if mode == 'fwd':
-            sol_vec, rhs_vec = system.dumat[voi[0]], system.drmat[voi[0]]
+            sol_vec, rhs_vec = system.dumat[voi], system.drmat[voi]
         else:
-            sol_vec, rhs_vec = system.drmat[voi[0]], system.dumat[voi[0]]
+            sol_vec, rhs_vec = system.drmat[voi], system.dumat[voi]
 
         # Set incoming vector
         # sol_vec.vec[:] = arg.array
@@ -290,9 +290,9 @@ class PetscKSP(LinearSolver):
 
         voi = self.voi
         if mode == 'fwd':
-            sol_vec, rhs_vec = system.dumat[voi[0]], system.drmat[voi[0]]
+            sol_vec, rhs_vec = system.dumat[voi], system.drmat[voi]
         else:
-            sol_vec, rhs_vec = system.drmat[voi[0]], system.dumat[voi[0]]
+            sol_vec, rhs_vec = system.drmat[voi], system.dumat[voi]
 
         # Set incoming vector
         rhs_vec.vec[:] = _get_petsc_vec_array(arg)
@@ -301,9 +301,9 @@ class PetscKSP(LinearSolver):
         system.clear_dparams()
 
         dumat = OrderedDict()
-        dumat[voi[0]] = system.dumat[voi[0]]
+        dumat[voi] = system.dumat[voi]
         drmat = OrderedDict()
-        drmat[voi[0]] = system.drmat[voi[0]]
+        drmat[voi] = system.drmat[voi]
 
         with system._dircontext:
             system.solve_linear(dumat, drmat, (voi, ), mode=mode,

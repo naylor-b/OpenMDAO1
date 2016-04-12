@@ -341,9 +341,9 @@ class TestProblemFullFD(unittest.TestCase):
         assert_rel_error(self, J['comp.y']['comp.x'][0][0], 2.0, 1e-6)
 
         # We should not allocate deriv vectors for full model FD
-        self.assertEqual(len(prob.root.dumat[None].vec), 0)
-        self.assertEqual(len(prob.root.drmat[None].vec), 0)
-        self.assertEqual(len(prob.root.dpmat[None].vec), 0)
+        self.assertEqual(len(prob.root.dumat[(None,None)].vec), 0)
+        self.assertEqual(len(prob.root.drmat[(None,None)].vec), 0)
+        self.assertEqual(len(prob.root.dpmat[(None,None)].vec), 0)
 
     def test_full_model_fd_simple_comp_promoted(self):
 
@@ -365,9 +365,9 @@ class TestProblemFullFD(unittest.TestCase):
         assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
 
         # We should not allocate deriv vectors for full model FD
-        self.assertEqual(len(prob.root.dumat[None].vec), 0)
-        self.assertEqual(len(prob.root.drmat[None].vec), 0)
-        self.assertEqual(len(prob.root.dpmat[None].vec), 0)
+        self.assertEqual(len(prob.root.dumat[(None,None)].vec), 0)
+        self.assertEqual(len(prob.root.drmat[(None,None)].vec), 0)
+        self.assertEqual(len(prob.root.dpmat[(None,None)].vec), 0)
 
     def test_full_model_fd_double_diamond_grouped(self):
 

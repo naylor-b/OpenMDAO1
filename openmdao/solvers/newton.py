@@ -118,8 +118,9 @@ class Newton(NonLinearSolver):
             self.print_norm(self.print_name, system.pathname, 0, f_norm,
                             f_norm0)
 
-        arg = system.drmat[None]
-        result = system.dumat[None]
+        key = (None, None)
+        arg = system.drmat[key]
+        result = system.dumat[key]
 
         while self.iter_count < maxiter and f_norm > atol and \
                 f_norm/f_norm0 > rtol:
@@ -131,7 +132,7 @@ class Newton(NonLinearSolver):
             arg.vec[:] = -resids.vec
             with system._dircontext:
                 system.solve_linear(system.dumat, system.drmat,
-                                    [(None,None)], mode='fwd', solver=self.ln_solver)
+                                    [key], mode='fwd', solver=self.ln_solver)
 
             # Step in that direction,
             self.iter_count += 1

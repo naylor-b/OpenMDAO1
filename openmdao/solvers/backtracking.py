@@ -80,7 +80,7 @@ class BackTracking(LineSearch):
         atol = self.options['atol']
         rtol = self.options['rtol']
         maxiter = self.options['maxiter']
-        result = system.dumat[None]
+        result = system.dumat[(None,None)]
         local_meta = create_local_meta(metadata, system.pathname)
 
         # If our step will violate any upper or lower bounds, then reduce
@@ -135,7 +135,7 @@ class BackTracking(LineSearch):
                                 fnorm, fnorm0, indent=1, solver='LS')
 
         if itercount >= maxiter and self.options['err_on_maxiter']:
-           raise AnalysisError("Solve in '%s': BackTracking failed to converge after %d "
+            raise AnalysisError("Solve in '%s': BackTracking failed to converge after %d "
                                "iterations." % (system.pathname, maxiter))
 
         return fnorm

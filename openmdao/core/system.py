@@ -676,15 +676,15 @@ class System(object):
         is_relevant = self._probdata.relevance.is_relevant_system
         fwd = mode == "fwd"
 
-        for voi, idx in vois:
+        for voi in vois:
             # don't call apply_linear if this system is irrelevant
-            if not is_relevant(voi, self):
+            if not is_relevant(voi[0], self):
                 continue
-            if idx is not None and MPI and self._striped and idx != self.comm.rank:
-                debug(self.pathname,"skipping (%s,%d)" % (voi, idx))
+            if voi[1] is not None and MPI and self._striped and voi[1] != self.comm.rank:
+                debug(self.pathname,"skipping (%s)" % str(voi))
                 continue
 
-            debug(self.pathname, "NOT skipping (%s,%s)" % (voi, idx))
+            #debug(self.pathname, "NOT skipping (%s)" % str(voi))
             dresids = self.drmat[voi]
             dunknowns = self.dumat[voi]
             dparams = self.dpmat[voi]
@@ -820,7 +820,7 @@ class System(object):
 
             # Vectors are flipped during adjoint
 
-            debug(self.pathname, "apply_linear_jac:",unknown, param)
+            #debug(self.pathname, "apply_linear_jac:",unknown, param)
             try:
                 if isvw:
                     if fwd:
@@ -828,11 +828,11 @@ class System(object):
                         vec += J.dot(arg_vec._flat(param))
                     else:
                         shape = arg_vec._dat[param].meta['shape']
-                        debug("shape:",str(shape))
-                        debug("J.T.dot(dresids._flat(%s))" % unknown,J.T.dot(dresids._flat(unknown)))
-                        debug("BEFORE: arg_vec[%s]"%param, arg_vec[param])
+                        #debug("shape:",str(shape))
+                        #debug("J.T.dot(dresids._flat(%s))" % unknown,J.T.dot(dresids._flat(unknown)))
+                        #debug("BEFORE: arg_vec[%s]"%param, arg_vec[param])
                         arg_vec[param] += J.T.dot(dresids._flat(unknown)).reshape(shape)
-                        debug("AFTER: arg_vec[%s]"%param, arg_vec[param])
+                        #debug("AFTER: arg_vec[%s]"%param, arg_vec[param])
                 else: # plain dicts were passed in for unit testing...
                     if fwd:
                         vec = dresids[unknown]
@@ -841,7 +841,7 @@ class System(object):
                         shape = arg_vec[param].shape
                         arg_vec[param] += J.T.dot(dresids[unknown].flat).reshape(shape)
             except KeyError:
-                debug("KeyError?")
+                #debug("KeyError?")
                 continue # either didn't find param in dparams/dunknowns or
                          # didn't find unknown in dresids
             except ValueError:
@@ -854,7 +854,7 @@ class System(object):
                 raise ValueError(msg)
 
     def _create_views(self, top_unknowns, parent, my_params,
-                      voi=None):
+                      voi=(None, None)):
         """
         A manager of the data transfer of a possibly distributed collection of
         variables.  The variables are based on views into an existing
@@ -887,7 +887,7 @@ class System(object):
         # map promoted name in parent to corresponding promoted name in this view
         umap = self._relname_map
 
-        if voi is None:
+        if voi[0] is None:
             self.unknowns = parent.unknowns.get_view(self, comm, umap)
             self.states = set(n for n,m in iteritems(self.unknowns) if m.get('state'))
             self.resids = parent.resids.get_view(self, comm, umap)
@@ -905,8 +905,8 @@ class System(object):
 
         self.dpmat[voi].setup(parent.dpmat[voi], params_dict, top_unknowns,
                   my_params, self.connections,
-                  relevance=relevance, var_of_interest=voi,
-                  shared_vec=self._shared_dp_vec[self._shared_p_offsets[voi]:])
+                  relevance=relevance, var_of_interest=voi[0],
+                  shared_vec=self._shared_dp_vec[self._shared_p_offsets[voi[0]]:])
 
     def get_combined_jac(self, J):
         """
@@ -1363,3 +1363,17 @@ def _iter_J_nested(J):
     for output, subdict in iteritems(J):
         for param, value in iteritems(subdict):
             yield (output, param), value
+
+
+def voi_iter(voi_group, voi_counts):
+    """
+    Given a parallel voi group and a dict of counts, return
+    an iterator over the augmented voi names (of the form (voi, index)).
+    """
+    for voi in voi_group:
+        count = voi_counts.get(voi)
+        if count is None:
+            yield (voi, None)
+        else:
+            for i in range(count):
+                yield (voi, i)

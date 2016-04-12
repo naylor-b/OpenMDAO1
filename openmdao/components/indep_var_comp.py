@@ -83,7 +83,7 @@ class IndepVarComp(Component):
         """
         if mode == 'fwd':
             sol_vec, rhs_vec = self.dumat, self.drmat
-            for voi,_ in vois:
+            for voi in vois:
                 rhs_vec[voi].vec[:] = 0.0
         else:
             sol_vec, rhs_vec = self.drmat, self.dumat
@@ -97,14 +97,14 @@ class IndepVarComp(Component):
         # the same sign as the derivative of the explicit unknown. This
         # introduces a minus one here.
 
-        debug(self.pathname, "sys_apply_linear, sol_vec=",sol_vec)
+        #debug(self.pathname, "sys_apply_linear, sol_vec=",sol_vec)
         for voi in vois:
-            debug("sol_vec[%s]=%s" % (str(voi), sol_vec[voi].vec))
+            #debug("sol_vec[%s]=%s" % (str(voi), sol_vec[voi].vec))
             if gs_outputs is None:
                 rhs_vec[voi].vec[:] -= sol_vec[voi].vec
             else:
                 for var, meta in iteritems(self.dumat[voi]):
-                    if var[0] in gs_outputs[voi[0]]:
+                    if var in gs_outputs[voi]:
                         rhs_vec[voi][var] -= sol_vec[voi][var]
 
     def _sys_linearize(self, params, unknowns, resids, force_fd=False):

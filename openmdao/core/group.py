@@ -16,7 +16,7 @@ import networkx as nx
 from openmdao.components.indep_var_comp import IndepVarComp
 from openmdao.core.component import Component
 from openmdao.core.mpi_wrap import MPI, debug
-from openmdao.core.system import System
+from openmdao.core.system import System, voi_iter
 from openmdao.core.fileref import FileRef
 from openmdao.util.string_util import nearest_child, name_relative_to
 from openmdao.util.graph import collapse_nodes
@@ -438,15 +438,16 @@ class Group(System):
         self._owning_ranks = self._get_owning_ranks()
         self._sysdata.owning_ranks = self._owning_ranks
 
-        self._setup_data_transfer(my_params, None, alloc_derivs)
+        self._setup_data_transfer(my_params, (None,None), alloc_derivs)
 
         all_vois = set([None])
+        voi_counts = self._probdata.voi_counts
         if self._probdata.top_lin_gs:
             # create storage for the relevant vecwrappers,
             # keyed by variable_of_interest
             for vois in relevance.groups:
                 all_vois.update(vois)
-                for voi in vois:
+                for voi in voi_iter(vois, voi_counts):
                     if parent is None:
                         self._create_vecs(my_params, voi, impl)
                     else:
@@ -490,7 +491,7 @@ class Group(System):
         self.comm = comm
 
         # create implementation specific VecWrappers
-        if voi is None:
+        if voi[0] is None:
             self.unknowns = impl.create_src_vecwrapper(self._sysdata,
                                                        self._probdata, comm)
             self.resids = impl.create_src_vecwrapper(self._sysdata,
@@ -524,7 +525,7 @@ class Group(System):
                                 if 'state' in m and m['state'])
 
         # Create derivative VecWrappers
-        if voi is None or self._probdata.top_lin_gs:
+        if voi[0] is None or self._probdata.top_lin_gs:
             dunknowns = impl.create_src_vecwrapper(self._sysdata,
                                                    self._probdata, comm)
             dresids = impl.create_src_vecwrapper(self._sysdata,
@@ -533,15 +534,15 @@ class Group(System):
                                                  self._probdata, comm)
 
             dunknowns.setup(unknowns_dict, relevance=self._probdata.relevance,
-                            var_of_interest=voi,
-                            shared_vec=self._shared_du_vec[self._shared_u_offsets[voi]:])
+                            var_of_interest=voi[0],
+                            shared_vec=self._shared_du_vec[self._shared_u_offsets[voi[0]]:])
             dresids.setup(unknowns_dict, relevance=self._probdata.relevance,
-                          var_of_interest=voi,
-                          shared_vec=self._shared_dr_vec[self._shared_u_offsets[voi]:])
+                          var_of_interest=voi[0],
+                          shared_vec=self._shared_dr_vec[self._shared_u_offsets[voi[0]]:])
             dparams.setup(None, params_dict, self.unknowns, my_params,
                           self.connections, relevance=self._probdata.relevance,
-                          var_of_interest=voi,
-                          shared_vec=self._shared_dp_vec[self._shared_p_offsets[voi]:])
+                          var_of_interest=voi[0],
+                          shared_vec=self._shared_dp_vec[self._shared_p_offsets[voi[0]]:])
 
             self.dumat[voi] = dunknowns
             self.drmat[voi] = dresids
@@ -777,7 +778,7 @@ class Group(System):
 
         if mode == 'fwd':
             for voi in vois:
-                self._transfer_data(deriv=True, var_of_interest=voi[0])  # Full Scatter
+                self._transfer_data(deriv=True, var_of_interest=voi)  # Full Scatter
 
         if self.fd_options['force_fd']:
             # parent class has the code to do the fd
@@ -791,7 +792,7 @@ class Group(System):
         if mode == 'rev':
             for voi in vois:
                 self._transfer_data(mode='rev', deriv=True,
-                                    var_of_interest=voi[0])  # Full Scatter
+                                    var_of_interest=voi)  # Full Scatter
 
     def solve_linear(self, dumat, drmat, vois, mode=None, solver=None):
         """
@@ -840,18 +841,18 @@ class Group(System):
         # Don't solve if user requests finite difference in this group.
         if self.fd_options['force_fd']:
             for voi in vois:
-                sol_vec[voi[0]].vec[:] = -rhs_vec[voi[0]].vec
+                sol_vec[voi].vec[:] = -rhs_vec[voi].vec
                 return
 
         # Solve Jacobian, df |-> du [fwd] or du |-> df [rev]
         rhs_buf = OrderedDict()
         for voi in vois:
             # Skip if we are all zeros.
-            if rhs_vec[voi[0]].norm() < 1e-15:
-                sol_vec[voi[0]].vec[:] = 0.0
+            if rhs_vec[voi].norm() < 1e-15:
+                sol_vec[voi].vec[:] = 0.0
                 continue
 
-            rhs_buf[voi] = rhs_vec[voi[0]].vec.copy()
+            rhs_buf[voi] = rhs_vec[voi].vec.copy()
 
         if len(rhs_buf) == 0:
             return
@@ -859,7 +860,7 @@ class Group(System):
         sol_buf = solver.solve(rhs_buf, self, mode=mode)
 
         for voi in rhs_buf:
-            sol_vec[voi[0]].vec[:] = sol_buf[voi][:]
+            sol_vec[voi].vec[:] = sol_buf[voi][:]
 
     def clear_dparams(self):
         """ Zeros out the dparams (dp) vector."""
@@ -1279,7 +1280,7 @@ class Group(System):
             If True, deriv vecs have been allocated.
         """
 
-        relevant = self._probdata.relevance.relevant.get(var_of_interest, ())
+        relevant = self._probdata.relevance.relevant.get(var_of_interest[0], ())
         to_prom_name = self._sysdata.to_prom_name
         uacc = self.unknowns._dat
         pacc = self.params._dat
@@ -1310,11 +1311,11 @@ class Group(System):
                                 if n in vec_pnames])
 
         unknown_sizes = np.array(unknown_sizes, dtype=self._impl.idx_arr_type)
-        self._local_unknown_sizes[var_of_interest] = unknown_sizes
+        self._local_unknown_sizes[var_of_interest[0]] = unknown_sizes
 
         param_sizes = np.array(param_sizes,
                                dtype=self._impl.idx_arr_type)
-        self._local_param_sizes[var_of_interest] = param_sizes
+        self._local_param_sizes[var_of_interest[0]] = param_sizes
 
         fwd = 0
         rev = 1
@@ -1400,7 +1401,7 @@ class Group(System):
 
 
     def _transfer_data(self, target_sys='', mode='fwd', deriv=False,
-                       var_of_interest=None):
+                       var_of_interest=(None,None)):
         """
         Transfer data to/from target_system depending on mode.
 
@@ -1422,7 +1423,7 @@ class Group(System):
 
         """
         x = self._data_xfer.get((target_sys, mode, var_of_interest))
-        debug("TRANSFER:",x)
+        #debug("TRANSFER:",x)
         if x is not None:
             if deriv:
                 x.transfer(self.dumat[var_of_interest], self.dpmat[var_of_interest],

@@ -13,7 +13,7 @@ from six import iteritems, itervalues, iterkeys
 import numpy as np
 
 from openmdao.core.basic_impl import BasicImpl
-from openmdao.core.system import System
+from openmdao.core.system import System, voi_iter
 from openmdao.core.mpi_wrap import MPI, debug
 from openmdao.core.vec_wrapper import _ByObjWrapper
 from openmdao.core.vec_wrapper_complex_step import ComplexStepSrcVecWrapper, \
@@ -463,15 +463,16 @@ class Component(System):
 
         # we don't get non-deriv vecs (u, p, r) unless we have a None group,
         # so force their creation here
-        self._create_views(top_unknowns, parent, [], None)
+        self._create_views(top_unknowns, parent, [], (None,None))
 
         all_vois = set([None])
+        voi_counts = self._probdata.voi_counts
         if self._probdata.top_lin_gs: # only need voi vecs for lings
             # create storage for the relevant vecwrappers, keyed by
             # variable_of_interest
             for vois in relevance.groups:
                 all_vois.update(vois)
-                for voi in vois:
+                for voi in voi_iter(vois, voi_counts):
                     self._create_views(top_unknowns, parent, [], voi)
 
         # create params vec entries for any unconnected params
@@ -632,7 +633,7 @@ class Component(System):
             sol_vec, rhs_vec = self.drmat, self.dumat
 
         for voi in vois:
-            debug(self.pathname,"solve_linear, voi",str(voi),"rhs:",rhs_vec[voi].vec)
+            #debug(self.pathname,"solve_linear, voi",str(voi),"rhs:",rhs_vec[voi].vec)
             sol_vec[voi].vec[:] = -rhs_vec[voi].vec
 
     def dump(self, nest=0, out_stream=sys.stdout, verbose=False, dvecs=False,

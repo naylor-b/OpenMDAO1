@@ -37,29 +37,31 @@ class TestPetscKSP(MPITestCase):
         prob.setup(check=False)
 
         prob.root.clear_dparams()
-        prob.root.dumat[None].vec[:] = 0.0
 
-        prob.root.comp3.dpmat[None]['x1'] = 7.
-        prob.root.comp3.dpmat[None]['x2'] = 11.
+        key = (None, None)
+        prob.root.dumat[key].vec[:] = 0.0
+
+        prob.root.comp3.dpmat[key]['x1'] = 7.
+        prob.root.comp3.dpmat[key]['x2'] = 11.
         prob.root._transfer_data(mode='rev', deriv=True)
 
         if not MPI or self.comm.rank == 0:
-            self.assertEqual(prob.root.sub.comp1.dumat[None]['y'], 7.)
+            self.assertEqual(prob.root.sub.comp1.dumat[key]['y'], 7.)
 
         if not MPI or self.comm.rank == 1:
-            self.assertEqual(prob.root.sub.comp2.dumat[None]['y'], 11.)
+            self.assertEqual(prob.root.sub.comp2.dumat[key]['y'], 11.)
 
         prob.root.clear_dparams()
 
-        prob.root.comp3.dpmat[None]['x1'] = 0.
-        prob.root.comp3.dpmat[None]['x2'] = 0.
-        self.assertEqual(prob.root.comp3.dpmat[None]['x1'], 0.)
-        self.assertEqual(prob.root.comp3.dpmat[None]['x2'], 0.)
+        prob.root.comp3.dpmat[key]['x1'] = 0.
+        prob.root.comp3.dpmat[key]['x2'] = 0.
+        self.assertEqual(prob.root.comp3.dpmat[key]['x1'], 0.)
+        self.assertEqual(prob.root.comp3.dpmat[key]['x2'], 0.)
 
         prob.root._transfer_data(mode='fwd', deriv=True)
 
-        self.assertEqual(prob.root.comp3.dpmat[None]['x1'], 7.)
-        self.assertEqual(prob.root.comp3.dpmat[None]['x2'], 11.)
+        self.assertEqual(prob.root.comp3.dpmat[key]['x1'], 7.)
+        self.assertEqual(prob.root.comp3.dpmat[key]['x2'], 11.)
 
     def test_fan_in(self):
 

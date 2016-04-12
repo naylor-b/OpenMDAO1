@@ -86,11 +86,8 @@ class LinearGaussSeidel(LinearSolver):
 
         system.clear_dparams()
         vois = rhs_mat.keys()
-        seen = set()
-        for voi,_ in vois:
-            if voi not in seen:
-                seen.add(voi)
-                dumat[voi].vec[:] = 0.0
+        for voi in vois:
+            dumat[voi].vec[:] = 0.0
 
         # John starts with the following. It is not necessary, but
         # uncommenting it helps to debug when comparing print outputs to his.
@@ -109,7 +106,7 @@ class LinearGaussSeidel(LinearSolver):
 
                 for sub in itervalues(system._subsystems):
 
-                    for voi,_ in vois:
+                    for voi in vois:
                         #print('pre scatter', sub.pathname, 'dp', dpmat[voi].vec,
                         #      'du', dumat[voi].vec, 'dr', drmat[voi].vec)
                         system._transfer_data(sub.name, deriv=True,
@@ -134,9 +131,9 @@ class LinearGaussSeidel(LinearSolver):
                     #    print('post apply', dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
 
                     for voi in vois:
-                        drmat[voi[0]].vec *= -1.0
-                        drmat[voi[0]].vec += rhs_mat[voi]
-                        dpmat[voi[0]].vec[:] = 0.0
+                        drmat[voi].vec *= -1.0
+                        drmat[voi].vec += rhs_mat[voi]
+                        dpmat[voi].vec[:] = 0.0
 
                     with sub._dircontext:
                         sub.solve_linear(sub.dumat, sub.drmat, vois, mode=mode)
@@ -145,7 +142,7 @@ class LinearGaussSeidel(LinearSolver):
                     #    print('post solve', dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
 
                 for voi in vois:
-                    sol_buf[voi] = dumat[voi[0]].vec
+                    sol_buf[voi] = dumat[voi].vec
 
             else:
 
@@ -155,15 +152,15 @@ class LinearGaussSeidel(LinearSolver):
 
                     for voi in vois:
                         if active:
-                            dumat[voi[0]].vec[:] = 0.0
+                            dumat[voi].vec[:] = 0.0
 
                         #print('pre scatter', sub.pathname, voi, dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
-                        system._transfer_data(sub.name, mode='rev', deriv=True, var_of_interest=voi[0])
+                        system._transfer_data(sub.name, mode='rev', deriv=True, var_of_interest=voi)
                         #print('post scatter', sub.pathname, voi, dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
 
                         if active:
-                            dumat[voi[0]].vec *= -1.0
-                            dumat[voi[0]].vec += rhs_mat[voi]
+                            dumat[voi].vec *= -1.0
+                            dumat[voi].vec += rhs_mat[voi]
 
                     # we need to loop over all subsystems in order to make
                     # the necessary collective calls to scatter, but only
@@ -187,9 +184,8 @@ class LinearGaussSeidel(LinearSolver):
                         #print('post apply', system.dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
 
                 for voi in vois:
-                    debug("sol_buf[%s] = drmat[%s].vec: %s" %
-                            (str(voi), str(voi[0]), drmat[voi[0]].vec))
-                    sol_buf[voi] = drmat[voi[0]].vec
+                    #debug("sol_buf[%s] = drmat[%s].vec: %s" %(str(voi), str(voi), drmat[voi].vec))
+                    sol_buf[voi] = drmat[voi].vec
 
             self.iter_count += 1
             if maxiter == 1:
@@ -248,7 +244,7 @@ class LinearGaussSeidel(LinearSolver):
             rhs_vec = system.dumat
 
         norm = 0.0
-        for (voi,_), rhs in iteritems(rhs_mat):
+        for voi, rhs in iteritems(rhs_mat):
             rhs_vec[voi].vec[:] -= rhs
             norm += rhs_vec[voi].norm()**2
 

@@ -172,7 +172,7 @@ class TestGroup(unittest.TestCase):
         expected_G1_params   = ['C2.x']
         expected_G1_unknowns = ['C2.y']
 
-        voi = None
+        voi = (None,None)
 
         self.assertEqual(list(root.params.keys()),    expected_root_params)
         self.assertEqual(list(root.dpmat[voi].keys()),   expected_root_params)
@@ -281,7 +281,7 @@ class TestGroup(unittest.TestCase):
         expected_G1_params   = ['C2.x']
         expected_G1_unknowns = ['C2.y']
 
-        voi = None
+        voi = (None,None)
 
         self.assertEqual(list(root.params.keys()),    expected_root_params)
         self.assertEqual(list(root.dpmat[voi].keys()),   expected_root_params)

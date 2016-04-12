@@ -285,7 +285,7 @@ class DistribEvenOddComp(Component):
         else:
             J[('y', 'x')] = numpy.eye(self.arr_size) * 2.0
 
-        debug("%s linearize J:"%self.pathname,J)
+        #debug("%s linearize J:"%self.pathname,J)
         return J
 
 class TestParallelDerivs(MPITestCase):
@@ -313,22 +313,22 @@ class TestParallelDerivs(MPITestCase):
 
         prob.driver.parallel_derivs([('C1.y',2)])
 
-        import sys
-        sys.path.insert(0, ".")
-        import wingdbstub
+        # import sys
+        # sys.path.insert(0, ".")
+        # import wingdbstub
 
         prob.setup(check=False)
         prob.run()
 
-        debug("P.x:",prob['P.x'])
-        debug('C1.x:',prob['C1.x'])
-        debug('C1.y:',prob['C1.y'])
-
-        debug("objs:",prob.driver.get_objectives())
-
-        debug("========================================================")
+        # debug("P.x:",prob['P.x'])
+        # debug('C1.x:',prob['C1.x'])
+        # debug('C1.y:',prob['C1.y'])
+        #
+        # debug("objs:",prob.driver.get_objectives())
+        #
+        # debug("========================================================")
         J = prob.calc_gradient(['P.x'], ['C1.y'], mode='rev', return_format='dict')
-        debug("J",J)
+        #debug("J",J)
         if MPI:
             rank = self.comm.rank
             vals = [2.0, 3.0]

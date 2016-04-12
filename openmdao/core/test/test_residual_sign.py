@@ -109,32 +109,33 @@ class TestResidual(unittest.TestCase):
         p.root.linearize(p.root.params, p.root.unknowns, p.root.resids)
 
         # fwd
-        p.root.dumat[None]['x'][:] = np.array([1., 0.])
+        voi = (None, None)
+        p.root.dumat[voi]['x'][:] = np.array([1., 0.])
         p.root.clear_dparams()
 
         p.root._sys_apply_linear('fwd', do_apply=p.root._do_apply)
-        assert_rel_error(self, p.root.drmat[None]['x'][0], 3.0, 1e-8)
-        assert_rel_error(self, p.root.drmat[None]['x'][1], 20.0, 1e-8)
+        assert_rel_error(self, p.root.drmat[voi]['x'][0], 3.0, 1e-8)
+        assert_rel_error(self, p.root.drmat[voi]['x'][1], 20.0, 1e-8)
 
         # rev 1
-        p.root.drmat[None].vec[:] = 0.0
-        p.root.dumat[None].vec[:] = 0.0
+        p.root.drmat[voi].vec[:] = 0.0
+        p.root.dumat[voi].vec[:] = 0.0
         p.root.clear_dparams()
-        p.root.drmat[None]['x'][:] = np.array([1., 0.])
+        p.root.drmat[voi]['x'][:] = np.array([1., 0.])
 
         p.root._sys_apply_linear('rev', do_apply=p.root._do_apply)
-        assert_rel_error(self, p.root.dumat[None]['x'][0], 3.0, 1e-8)
-        assert_rel_error(self, p.root.dumat[None]['a'], 1.0, 1e-8)
-        assert_rel_error(self, p.root.dumat[None]['b'], 0.0, 1e-8)
+        assert_rel_error(self, p.root.dumat[voi]['x'][0], 3.0, 1e-8)
+        assert_rel_error(self, p.root.dumat[voi]['a'], 1.0, 1e-8)
+        assert_rel_error(self, p.root.dumat[voi]['b'], 0.0, 1e-8)
 
         # rev 2
-        p.root.drmat[None].vec[:] = 0.0
-        p.root.dumat[None].vec[:] = 0.0
+        p.root.drmat[voi].vec[:] = 0.0
+        p.root.dumat[voi].vec[:] = 0.0
         p.root.clear_dparams()
-        p.root.drmat[None]['x'][:] = np.array([0., 1.])
+        p.root.drmat[voi]['x'][:] = np.array([0., 1.])
 
         p.root._sys_apply_linear('rev', do_apply=p.root._do_apply)
-        assert_rel_error(self, p.root.dumat[None]['x'][0], 20.0, 1e-8)
+        assert_rel_error(self, p.root.dumat[voi]['x'][0], 20.0, 1e-8)
 
     def test_explicit_sign(self):
 
@@ -160,31 +161,31 @@ class TestResidual(unittest.TestCase):
         p.root.linearize(p.root.params, p.root.unknowns, p.root.resids)
 
         # fwd
-        p.root.dumat[None]['x'][:] = np.array([1., 0.])
+        p.root.dumat[(None,None)]['x'][:] = np.array([1., 0.])
         p.root.clear_dparams()
 
         p.root._sys_apply_linear('fwd', do_apply=p.root._do_apply)
-        assert_rel_error(self, p.root.drmat[None]['resid'][0], 3.0, 1e-8)
-        assert_rel_error(self, p.root.drmat[None]['resid'][1], 20.0, 1e-8)
+        assert_rel_error(self, p.root.drmat[(None,None)]['resid'][0], 3.0, 1e-8)
+        assert_rel_error(self, p.root.drmat[(None,None)]['resid'][1], 20.0, 1e-8)
 
         # rev 1
         p.root.clear_dparams()
-        p.root.drmat[None].vec[:] = 0.0
-        p.root.dumat[None].vec[:] = 0.0
-        p.root.drmat[None]['resid'][:] = np.array([1., 0.])
+        p.root.drmat[(None,None)].vec[:] = 0.0
+        p.root.dumat[(None,None)].vec[:] = 0.0
+        p.root.drmat[(None,None)]['resid'][:] = np.array([1., 0.])
 
         p.root._sys_apply_linear('rev', do_apply=p.root._do_apply)
-        assert_rel_error(self, p.root.dumat[None]['x'][0], 3.0, 1e-8)
+        assert_rel_error(self, p.root.dumat[(None,None)]['x'][0], 3.0, 1e-8)
 
         # rev 2
         p.root.clear_dparams()
-        p.root.drmat[None].vec[:] = 0.0
-        p.root.dumat[None].vec[:] = 0.0
-        p.root.drmat[None]['resid'][:] = np.array([0., 1.])
+        p.root.drmat[(None,None)].vec[:] = 0.0
+        p.root.dumat[(None,None)].vec[:] = 0.0
+        p.root.drmat[(None,None)]['resid'][:] = np.array([0., 1.])
 
         p.root._sys_apply_linear('rev', do_apply=p.root._do_apply)
 
-        assert_rel_error(self, p.root.dumat[None]['x'][0], 20.0, 1e-8)
+        assert_rel_error(self, p.root.dumat[(None,None)]['x'][0], 20.0, 1e-8)
 
 if __name__ == "__main__":
     unittest.main()

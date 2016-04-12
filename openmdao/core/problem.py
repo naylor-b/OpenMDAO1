@@ -1633,7 +1633,7 @@ class Problem(object):
 
                         if vkey[0] is None or relevance.is_relevant(vkey[0], item):
                             #if fwd or owned[item] == iproc:
-                            if fwd or ((vkey[1] is None and owned[voi[0]] == iproc) or vkey[1] == iproc):
+                            if fwd or ((vkey[1] is None and owned[item] == iproc) or vkey[1] == iproc):
                                 out_idxs = dumat[vkey]._get_local_idxs(item,
                                                                  qoi_indices,
                                                                  get_slice=True)

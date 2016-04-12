@@ -775,6 +775,7 @@ class Group(System):
         if not self.is_active():
             return
 
+        debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
         if mode == 'fwd':
             for voi in vois:
                 self._transfer_data(deriv=True, var_of_interest=voi)  # Full Scatter

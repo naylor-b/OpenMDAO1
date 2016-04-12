@@ -670,6 +670,7 @@ class System(object):
         gs_outputs : dict, optional
             Linear Gauss-Siedel can limit the outputs when calling apply.
         """
+        debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
         force_fd = self.fd_options['force_fd']
         states = self.states
         is_relevant = self._probdata.relevance.is_relevant_system

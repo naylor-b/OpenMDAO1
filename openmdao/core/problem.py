@@ -1582,6 +1582,7 @@ class Problem(object):
                         rhs[vkey][voi_idxs[vkey][i]] = -1.0
 
                 # Solve the linear system
+                debug("ln solve: rhs=",rhs)
                 dx_mat = root.ln_solver.solve(rhs, root, mode)
 
                 for param, dx in iteritems(dx_mat):

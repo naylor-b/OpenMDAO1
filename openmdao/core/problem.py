@@ -1584,6 +1584,7 @@ class Problem(object):
                 # Solve the linear system
                 debug("ln solve: rhs=",rhs)
                 dx_mat = root.ln_solver.solve(rhs, root, mode)
+                debug("dx_mat:",dx_mat)
 
                 for param, dx in iteritems(dx_mat):
                     vkey = self._get_voi_key(param, params)

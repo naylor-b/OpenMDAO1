@@ -829,9 +829,6 @@ class Group(System):
         if not self.is_active():
             return
 
-        if solver is None:
-            solver = self.ln_solver
-
         if mode is None:
             mode = self.fd_options['mode']
 
@@ -858,6 +855,9 @@ class Group(System):
 
         if len(rhs_buf) == 0:
             return
+
+        if solver is None:
+            solver = self.ln_solver
 
         sol_buf = solver.solve(rhs_buf, self, mode=mode)
 

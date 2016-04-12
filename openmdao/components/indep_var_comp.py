@@ -81,6 +81,7 @@ class IndepVarComp(Component):
         gs_outputs : dict, optional
             Linear Gauss-Siedel can limit the outputs when calling apply.
         """
+        debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
         if mode == 'fwd':
             sol_vec, rhs_vec = self.dumat, self.drmat
             for voi in vois:

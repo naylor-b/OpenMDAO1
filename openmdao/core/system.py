@@ -676,6 +676,8 @@ class System(object):
         is_relevant = self._probdata.relevance.is_relevant_system
         fwd = mode == "fwd"
 
+        debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
+
         for voi in vois:
             # don't call apply_linear if this system is irrelevant
             if not is_relevant(voi[0], self):

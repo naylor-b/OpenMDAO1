@@ -307,13 +307,9 @@ class ParallelMPIOptPromoted(MPITestCase):
 
         prob = Problem(impl=impl)
         root = prob.root = Group()
-        #root.ln_solver = lin_solver()
-        root.ln_solver = LinearGaussSeidel()
-        par = root.add('par', ParallelGroup())
-        par.ln_solver = LinearGaussSeidel()
 
+        par = root.add('par', ParallelGroup())
         ser1 = par.add('ser1', Group())
-        ser1.ln_solver = LinearGaussSeidel()
 
         ser1.add('p1', IndepVarComp('x', np.zeros([2])), promotes=['x'])
         ser1.add('comp', SimpleArrayComp(), promotes=['x', 'y'])
@@ -323,7 +319,6 @@ class ParallelMPIOptPromoted(MPITestCase):
                  promotes=['y', 'o'])
 
         ser2 = par.add('ser2', Group())
-        ser2.ln_solver = LinearGaussSeidel()
 
         ser2.add('p1', IndepVarComp('x', np.zeros([2])), promotes=['x'])
         ser2.add('comp', SimpleArrayComp(), promotes=['x', 'y'])

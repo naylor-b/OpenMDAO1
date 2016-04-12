@@ -1546,7 +1546,7 @@ class Problem(object):
         # If Adjoint mode, solve linear system for each unknown
         for params in voi_sets:
             rhs = OrderedDict()
-            voi_idxs = {}
+            voi_idxs = []
             vkeys = []
 
             # if any vois have a count > 1, we need to repeat them so we
@@ -1585,7 +1585,7 @@ class Problem(object):
                                        "be the same size, but"
                                        " in the group %s, %d != %d" % (params,
                                                        old_size, len(in_idxs)))
-                voi_idxs[vkey] = in_idxs
+                voi_idxs.append(in_idxs)
 
             # at this point, we know that for all vars in the current
             # group of interest, the number of indices is the same. We loop
@@ -1606,7 +1606,8 @@ class Problem(object):
                         #  or (voi in distrib_vars and \
                         #     self.root._subsystem(to_abs_uname[voi].rsplit('.',1)[0]).is_active()):
                     #if owned[voi] == iproc or vkey[1] is not None:
-                        rhs[vkey][voi_idxs[vkey][i]] = -1.0
+                        debug("voi_idxs:",voi_idxs,"i",i,"rhs:",rhs[vkey],"vkey",str(vkey))
+                        rhs[vkey][voi_idxs[idx][i]] = -1.0
 
                 # Solve the linear system
                 # debug("ln_solver.solve")

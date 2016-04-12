@@ -81,7 +81,6 @@ class LinearGaussSeidel(LinearSolver):
         drmat = system.drmat
         dpmat = system.dpmat
         gs_outputs = system._get_gs_outputs(mode)
-        relevance = system._probdata.relevance
         fwd = mode == 'fwd'
 
         system.clear_dparams()

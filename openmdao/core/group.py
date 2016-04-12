@@ -774,8 +774,10 @@ class Group(System):
             Linear Gauss-Siedel can limit the outputs when calling apply.
         """
         if not self.is_active():
+            debug("%s NOT ACTIVE" % self.pathname)
             return
 
+        debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
         if mode == 'fwd':
             for voi in vois:
                 self._transfer_data(deriv=True, var_of_interest=voi)  # Full Scatter
@@ -1285,7 +1287,7 @@ class Group(System):
         uacc = self.unknowns._dat
         pacc = self.params._dat
 
-        # create ordered dicts that map relevant vars to their index into
+        # create dicts that map relevant vars to their index into
         # the sizes table.
         vec_unames = {}
         i = 0

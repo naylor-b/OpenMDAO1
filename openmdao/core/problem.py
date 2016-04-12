@@ -1612,7 +1612,7 @@ class Problem(object):
                 # Solve the linear system
                 debug("ln solve: rhs=",rhs)
                 dx_mat = root.ln_solver.solve(rhs, root, mode)
-                #debug("dx_mat:",dx_mat)
+                debug("dx_mat:",dx_mat)
 
                 for p_idx, (param, dx) in enumerate(iteritems(dx_mat)):
                     param = param[0]

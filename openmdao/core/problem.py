@@ -1576,7 +1576,8 @@ class Problem(object):
                     if voi[0] in poi_indices:
                         in_idxs = duvec.to_idx_array(poi_indices[voi[0]])
                     else:
-                        in_idxs = np.arange(0, unknowns_dict[to_abs_uname[voi[0]]]['size'], dtype=int)
+                        in_idxs = np.arange(0, unknowns_dict[to_abs_uname[voi[0]]]['size'],
+                                            dtype=int)
 
                 if old_size is None:
                     old_size = len(in_idxs)

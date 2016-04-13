@@ -100,7 +100,7 @@ class LinearGaussSeidel(LinearSolver):
         maxiter = self.options['maxiter']
         while self.iter_count < maxiter and f_norm > self.options['atol'] \
                   and f_norm/f_norm0 > self.options['rtol']:
-            debug(system.pathname,"VOIS:",str(vois))
+
             if fwd:
 
                 for sub in itervalues(system._subsystems):

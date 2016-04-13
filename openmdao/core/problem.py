@@ -1578,7 +1578,9 @@ class Problem(object):
                     # Note, we solve a slightly modified version of the unified
                     # derivatives equations in OpenMDAO.
                     # (dR/du) * (du/dr) = -I
+                    debug("VOI:",voi_srcs[vkey],"idxs:",voi_idxs[vkey],"i:",i)
                     if self.root._owning_ranks[voi_srcs[vkey]] == iproc:
+                        debug("SET -1")
                         rhs[vkey][voi_idxs[vkey][i]] = -1.0
 
                 # Solve the linear system

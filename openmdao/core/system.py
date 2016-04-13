@@ -14,7 +14,7 @@ from six import string_types, iteritems, itervalues, iterkeys
 
 import numpy as np
 
-from openmdao.core.mpi_wrap import MPI
+from openmdao.core.mpi_wrap import MPI, debug
 from openmdao.core.vec_wrapper import VecWrapper, _PlaceholderVecWrapper
 from openmdao.units.units import get_conversion_tuple
 from openmdao.util.file_util import DirContext

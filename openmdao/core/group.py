@@ -837,6 +837,9 @@ class Group(System):
         else:
             sol_vec, rhs_vec = drmat, dumat
 
+        debug("dumat:",[(k,v.vec) for k,v in dumat.items()])
+        debug("drmat:",[(k,v.vec) for k,v in drmat.items()])
+
         # Don't solve if user requests finite difference in this group.
         if self.fd_options['force_fd']:
             for voi in vois:

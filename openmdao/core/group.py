@@ -775,7 +775,6 @@ class Group(System):
         if not self.is_active():
             return
 
-        debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
         if mode == 'fwd':
             for voi in vois:
                 self._transfer_data(deriv=True, var_of_interest=voi)  # Full Scatter
@@ -836,9 +835,6 @@ class Group(System):
             sol_vec, rhs_vec = dumat, drmat
         else:
             sol_vec, rhs_vec = drmat, dumat
-
-        debug("dumat:",[(k,v.vec) for k,v in dumat.items()])
-        debug("drmat:",[(k,v.vec) for k,v in drmat.items()])
 
         # Don't solve if user requests finite difference in this group.
         if self.fd_options['force_fd']:

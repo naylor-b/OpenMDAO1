@@ -261,8 +261,9 @@ class Driver(object):
             # framework that they want to do this by using a tuple containing the var name and
             # a count.
             if isinstance(n, tuple):
-                self._voi_counts[n[0]] = n[1]
-                n = n[0]
+                n, count = n
+                if count > 1:
+                    self._voi_counts[n] = count
 
             if not (n in self._desvars or n in self._objs or n in self._cons):
                 raise RuntimeError("'%s' is not a param, objective, or "

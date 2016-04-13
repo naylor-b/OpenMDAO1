@@ -1651,7 +1651,11 @@ class Problem(object):
                                 if trace:
                                     debug("calc_gradient_ln_solver dxval bcast. dxval=%s, root=%s, param=%s, item=%s" %
                                             (dxval, owned[item], param, item))
-                                dxval = comm.bcast(dxval, root=owned[item])
+                                if vkey[1] is None:
+                                    rootproc = owned[item]
+                                else:
+                                    rootproc = vkey[1]
+                                dxval = comm.bcast(dxval, root=rootproc)
                                 if trace:
                                     debug("dxval bcast DONE")
                                     debug("dxval:",dxval)

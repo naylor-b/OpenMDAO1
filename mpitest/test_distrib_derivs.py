@@ -312,9 +312,9 @@ class TestParallelDerivs(MPITestCase):
 
         prob.driver.parallel_derivs([('C1.y',2)])
 
-        # import sys
-        # sys.path.insert(0, ".")
-        # import wingdbstub
+        #import sys
+        #sys.path.insert(0, ".")
+        #import wingdbstub
 
         prob.setup(check=False)
         prob.run()

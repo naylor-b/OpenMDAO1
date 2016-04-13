@@ -61,8 +61,10 @@ class Driver(object):
         self.dv_conversions = {}
         self.fn_conversions = {}
 
+        # this contains the number of times the voi is repeated when we
+        # have 'striped' vois.  Note that a voi only appears in this dict
+        # if it has a count of > 1.
         self._voi_counts = {}
-
 
     def _setup(self):
         """ Updates metadata for params, constraints and objectives, and
@@ -261,8 +263,7 @@ class Driver(object):
             if isinstance(n, tuple):
                 self._voi_counts[n[0]] = n[1]
                 n = n[0]
-            else:
-                self._voi_counts[n] = 1
+
             if not (n in self._desvars or n in self._objs or n in self._cons):
                 raise RuntimeError("'%s' is not a param, objective, or "
                                    "constraint" % n)
@@ -377,7 +378,6 @@ class Driver(object):
         if indices:
             param['indices'] = np.array(indices, dtype=int)
 
-        self._voi_counts[name] = 1
         self._desvars[name] = param
 
     def add_param(self, name, lower=None, upper=None, indices=None, adder=0.0,
@@ -539,7 +539,6 @@ class Driver(object):
                                    "variable '%s', but driver '%s' doesn't "
                                    "support multiple objectives." %
                                    (name, self.pathname))
-        self._voi_counts[name] = 1
         self._objs[name] = obj
 
     def get_objectives(self, return_type='dict'):
@@ -668,7 +667,6 @@ class Driver(object):
 
         if indices:
             con['indices'] = indices
-        self._voi_counts[name] = 1
         self._cons[name] = con
 
     def get_constraints(self, ctype='all', lintype='all'):

@@ -1373,9 +1373,8 @@ def voi_iter(voi_group, voi_counts):
     an iterator over the augmented voi names (of the form (voi, index)).
     """
     for voi in voi_group:
-        count = voi_counts.get(voi)
-        if count is None:
-            yield (voi, None)
-        else:
-            for i in range(count):
+        if voi in voi_counts:
+            for i in range(voi_counts[voi]):
                 yield (voi, i)
+        else:
+            yield (voi, None)

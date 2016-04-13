@@ -1596,18 +1596,16 @@ class Problem(object):
 
             for i in range(len(in_idxs)):
                 for idx, voi in enumerate(params):
-                    #debug("VOI",voi)
                     vkey = vkeys[idx]
+                    var, proc_idx = voi
                     rhs[vkey][:] = 0.0
                     # only set a -1.0 in the entry if that var is 'owned' by this rank
                     # Note, we solve a slightly modified version of the unified
                     # derivatives equations in OpenMDAO.
                     # (dR/du) * (du/dr) = -I
-                    if (vkey[1] is None and owned[voi[0]] == iproc) or vkey[1] == iproc:# \
-                        #  or (voi in distrib_vars and \
-                        #     self.root._subsystem(to_abs_uname[voi].rsplit('.',1)[0]).is_active()):
-                    #if owned[voi] == iproc or vkey[1] is not None:
-                        debug("voi_idxs:",voi_idxs,"i",i,"rhs:",rhs[vkey],"vkey",str(vkey))
+                    if var in voi_counts and proc_idx == iproc:
+                        rhs[vkey][voi_idxs[idx][i]] = -1.0
+                    elif owned[var] == iproc:
                         rhs[vkey][voi_idxs[idx][i]] = -1.0
 
                 # Solve the linear system

@@ -1590,13 +1590,10 @@ class Problem(object):
                                                        old_size, len(in_idxs)))
                 voi_idxs.append(in_idxs)
 
-                if var in voi_counts and proc_idx == iproc:
-                    set_rhs.append(True)
-                elif owned[var] == iproc:
-                    set_rhs.append(True)
+                if var in voi_counts: # 'striped' var
+                    set_rhs.append(proc_idx == iproc)
                 else:
-                    set_rhs.append(False)
-
+                    set_rhs.append(owned[var] == iproc)
 
             # at this point, we know that for all vars in the current
             # group of interest, the number of indices is the same. We loop

@@ -1548,6 +1548,7 @@ class Problem(object):
             rhs = OrderedDict()
             voi_idxs = []
             vkeys = []
+            set_rhs = []
 
             # if any vois have a count > 1, we need to repeat them so we
             # get a separate RHS for each one.
@@ -1558,14 +1559,15 @@ class Problem(object):
             # Allocate all of our Right Hand Sides for this parallel set.
             for voi in params:
                 vkey = self._get_voi_key(voi, params)
+                var, proc_idx = voi
                 vkeys.append(vkey)
 
                 duvec = dumat[vkey]
                 if vkey not in rhs:
                     rhs[vkey] = np.empty((duvec.vec.size, ))
 
-                if voi[0] in duvec:
-                    in_idxs = duvec._get_local_idxs(voi[0], poi_indices)
+                if var in duvec:
+                    in_idxs = duvec._get_local_idxs(var, poi_indices)
                 else:
                     in_idxs = []
 
@@ -1573,10 +1575,10 @@ class Problem(object):
                     # offset doesn't matter since we only care about the size
                     # (we only use it to determine loop iterations but don't
                     #  actually use the indices for anything).
-                    if voi[0] in poi_indices:
-                        in_idxs = duvec.to_idx_array(poi_indices[voi[0]])
+                    if var in poi_indices:
+                        in_idxs = duvec.to_idx_array(poi_indices[var])
                     else:
-                        in_idxs = np.arange(0, unknowns_dict[to_abs_uname[voi[0]]]['size'],
+                        in_idxs = np.arange(0, unknowns_dict[to_abs_uname[var]]['size'],
                                             dtype=int)
 
                 if old_size is None:
@@ -1587,6 +1589,14 @@ class Problem(object):
                                        " in the group %s, %d != %d" % (params,
                                                        old_size, len(in_idxs)))
                 voi_idxs.append(in_idxs)
+
+                if var in voi_counts and proc_idx == iproc:
+                    set_rhs.append(True)
+                elif owned[var] == iproc:
+                    set_rhs.append(True)
+                else:
+                    set_rhs.append(False)
+
 
             # at this point, we know that for all vars in the current
             # group of interest, the number of indices is the same. We loop
@@ -1603,9 +1613,7 @@ class Problem(object):
                     # Note, we solve a slightly modified version of the unified
                     # derivatives equations in OpenMDAO.
                     # (dR/du) * (du/dr) = -I
-                    if var in voi_counts and proc_idx == iproc:
-                        rhs[vkey][voi_idxs[idx][i]] = -1.0
-                    elif owned[var] == iproc:
+                    if set_rhs[idx]:
                         rhs[vkey][voi_idxs[idx][i]] = -1.0
 
                 # Solve the linear system

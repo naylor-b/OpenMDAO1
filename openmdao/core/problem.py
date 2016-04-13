@@ -1551,7 +1551,7 @@ class Problem(object):
 
             # if any vois have a count > 1, we need to repeat them so we
             # get a separate RHS for each one.
-            params = [v for v in voi_iter(params, voi_counts)]
+            params = list(voi_iter(params, voi_counts))
 
             old_size = None
 
@@ -1609,9 +1609,9 @@ class Problem(object):
                         rhs[vkey][voi_idxs[idx][i]] = -1.0
 
                 # Solve the linear system
-                debug("ln solve: rhs=",rhs)
+                #debug("ln solve: rhs=",rhs)
                 dx_mat = root.ln_solver.solve(rhs, root, mode)
-                debug("dx_mat:",dx_mat)
+                #debug("dx_mat:",dx_mat)
 
                 for p_idx, (param, dx) in enumerate(iteritems(dx_mat)):
                     param = param[0]

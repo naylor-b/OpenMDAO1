@@ -317,7 +317,8 @@ class Group(System):
 
             for sub in self._local_subsystems:
                 gs_outputs[sub.name] = {
-                    v : set(dumat[v]).difference(sub.dumat[v]) for v in dumat }
+                    v : set(dumat[v]).difference(sub.dumat[v]) for v in dumat
+                }
 
         return self._gs_outputs
 
@@ -774,10 +775,9 @@ class Group(System):
             Linear Gauss-Siedel can limit the outputs when calling apply.
         """
         if not self.is_active():
-            debug("%s NOT ACTIVE" % self.pathname)
             return
 
-        debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
+        #debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
 
         if mode == 'fwd':
             for voi in vois:
@@ -838,8 +838,8 @@ class Group(System):
         else:
             sol_vec, rhs_vec = drmat, dumat
 
-        debug("dumat:",[(k,v.vec) for k,v in dumat.items()])
-        debug("drmat:",[(k,v.vec) for k,v in drmat.items()])
+        #debug("dumat:",[(k,v.vec) for k,v in dumat.items()])
+        #debug("drmat:",[(k,v.vec) for k,v in drmat.items()])
 
         # Don't solve if user requests finite difference in this group.
         if self.fd_options['force_fd']:
@@ -1429,7 +1429,6 @@ class Group(System):
 
         """
         x = self._data_xfer.get((target_sys, mode, var_of_interest))
-        #debug("TRANSFER:",x)
         if x is not None:
             if deriv:
                 x.transfer(self.dumat[var_of_interest], self.dpmat[var_of_interest],

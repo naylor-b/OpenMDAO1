@@ -674,16 +674,18 @@ class System(object):
         force_fd = self.fd_options['force_fd']
         states = self.states
         is_relevant = self._probdata.relevance.is_relevant_system
+        voi_counts = self._probdata.voi_counts
+
         fwd = mode == "fwd"
 
-        debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
+        #debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
 
         for voi in vois:
             # don't call apply_linear if this system is irrelevant
             if not is_relevant(voi[0], self):
                 continue
-            if voi[1] is not None and MPI and self._striped and voi[1] != self.comm.rank:
-                debug(self.pathname,"skipping (%s)" % str(voi))
+            if MPI and self._striped and voi[0] in voi_counts and voi[1] != self.comm.rank:
+                #debug(self.pathname,"skipping (%s)" % str(voi))
                 continue
 
             #debug(self.pathname, "NOT skipping (%s)" % str(voi))
@@ -843,7 +845,6 @@ class System(object):
                         shape = arg_vec[param].shape
                         arg_vec[param] += J.T.dot(dresids[unknown].flat).reshape(shape)
             except KeyError:
-                #debug("KeyError?")
                 continue # either didn't find param in dparams/dunknowns or
                          # didn't find unknown in dresids
             except ValueError:

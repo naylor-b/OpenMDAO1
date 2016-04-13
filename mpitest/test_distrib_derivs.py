@@ -285,7 +285,6 @@ class DistribEvenOddComp(Component):
         else:
             J[('y', 'x')] = numpy.eye(self.arr_size) * 2.0
 
-        #debug("%s linearize J:"%self.pathname,J)
         return J
 
 class TestParallelDerivs(MPITestCase):

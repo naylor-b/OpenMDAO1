@@ -159,8 +159,9 @@ class LinearGaussSeidel(LinearSolver):
 
                         if active:
                             dumat[voi].vec *= -1.0
-                            debug(sub.pathname, "dumat:",dumat[voi].vec)
-                            debug(sub.pathname, "dumat += RHS:", rhs_mat[voi])
+                            debug(sub.pathname, str(voi), "RHS:",rhs_mat[voi])
+                            debug(sub.pathname, str(voi), "dumat:",dumat[voi].vec)
+                            debug(sub.pathname, str(voi), "dumat += RHS:", rhs_mat[voi])
                             dumat[voi].vec += rhs_mat[voi]
 
                     # we need to loop over all subsystems in order to make

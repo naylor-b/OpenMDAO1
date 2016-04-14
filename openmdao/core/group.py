@@ -1349,6 +1349,7 @@ class Group(System):
 
             tgt_sys = nearest_child(self.pathname, param)
             src_sys = nearest_child(self.pathname, unknown)
+
             for sname, mode in ((tgt_sys, fwd), (src_sys, rev)):
                 src_idx_list, dest_idx_list, vec_conns, byobj_conns = \
                     xfer_dict.setdefault((sname, mode), ([], [], [], []))

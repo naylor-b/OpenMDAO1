@@ -6,6 +6,7 @@ from six import iteritems, itervalues
 from collections import OrderedDict
 
 from openmdao.core.system import AnalysisError
+from openmdao.core.mpi_wrap import debug
 from openmdao.solvers.solver_base import LinearSolver
 
 
@@ -158,6 +159,8 @@ class LinearGaussSeidel(LinearSolver):
                         #print('post scatter', sub.pathname, voi, dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
 
                         if active:
+                            debug(sub.pathname, "dumat:",dumat[voi].vec)
+                            debug(sub.pathname, "dumat += RHS:", rhs_mat[voi])
                             dumat[voi].vec *= -1.0
                             dumat[voi].vec += rhs_mat[voi]
 

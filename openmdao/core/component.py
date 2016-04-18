@@ -435,14 +435,15 @@ class Component(System):
         alloc_derivs : bool(True)
             If True, allocate the derivative vectors.
         """
+        if not self.is_active():
+            return
+
         self.params = self.unknowns = self.resids = None
         self.dumat, self.dpmat, self.drmat = OrderedDict(), OrderedDict(), OrderedDict()
         self.connections = self._probdata.connections
 
         relevance = self._probdata.relevance
-
-        if not self.is_active():
-            return
+        voi_counts = self._probdata.voi_counts
 
         self._setup_prom_map()
 
@@ -456,9 +457,9 @@ class Component(System):
         # order to conserve memory. Components don't actually own their params,
         # so we just use an empty shared array for dp (with an offset of 0)
         self._shared_dp_vec = empty_arr
-        self._shared_p_offsets = { None:0 }
+        self._shared_p_offsets = { (None,None):0 }
         for vois in chain(relevance.inputs, relevance.outputs):
-            for voi in vois:
+            for voi in voi_iter(vois, voi_counts):
                 self._shared_p_offsets[voi] = 0
 
         # we don't get non-deriv vecs (u, p, r) unless we have a None group,
@@ -632,8 +633,10 @@ class Component(System):
         else:
             sol_vec, rhs_vec = self.drmat, self.dumat
 
+        #debug(self.pathname,"solve_linear")
         for voi in vois:
-            #debug(self.pathname,"solve_linear, voi",str(voi),"rhs:",rhs_vec[voi].vec)
+            #debug("drmat[%s]=%s" % (str(voi), self.drmat[voi].vec))
+            #debug("dumat[%s]=%s" % (str(voi), self.dumat[voi].vec))
             sol_vec[voi].vec[:] = -rhs_vec[voi].vec
 
     def dump(self, nest=0, out_stream=sys.stdout, verbose=False, dvecs=False,

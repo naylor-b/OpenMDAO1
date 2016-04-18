@@ -4,7 +4,7 @@ import collections
 from six import string_types, iteritems
 
 from openmdao.core.component import Component
-from openmdao.core.mpi_wrap import debug
+from openmdao.core.mpi_wrap import MPI, debug
 
 class IndepVarComp(Component):
     """A Component that provides an output to connect to a parameter.
@@ -81,6 +81,7 @@ class IndepVarComp(Component):
         gs_outputs : dict, optional
             Linear Gauss-Siedel can limit the outputs when calling apply.
         """
+
         #debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
         if mode == 'fwd':
             sol_vec, rhs_vec = self.dumat, self.drmat
@@ -98,9 +99,15 @@ class IndepVarComp(Component):
         # the same sign as the derivative of the explicit unknown. This
         # introduces a minus one here.
 
-        #debug(self.pathname, "sys_apply_linear, sol_vec=",sol_vec)
+        #debug(self.pathname, "sys_apply_linear")
         for voi in vois:
+            if MPI and self._striped and voi[0] in voi_counts and voi[1] != self.comm.rank:
+                #debug(self.pathname,"skipping (%s)" % str(voi))
+                continue
+
             #debug("sol_vec[%s]=%s" % (str(voi), sol_vec[voi].vec))
+            #debug("drmat[%s]=%s" % (str(voi), self.drmat[voi].vec))
+            #debug("dumat[%s]=%s" % (str(voi), self.dumat[voi].vec))
             if gs_outputs is None:
                 rhs_vec[voi].vec[:] -= sol_vec[voi].vec
             else:

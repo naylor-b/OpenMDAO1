@@ -1606,6 +1606,7 @@ class Problem(object):
                     vkey = vkeys[idx]
                     var, proc_idx = voi
                     rhs[vkey][:] = 0.0
+
                     # only set a -1.0 in the entry if that var is 'owned' by this rank
                     # Note, we solve a slightly modified version of the unified
                     # derivatives equations in OpenMDAO.
@@ -1622,6 +1623,13 @@ class Problem(object):
                     param = param[0]
                     #debug("param:",str(param))
                     vkey = vkeys[p_idx]
+                    tot_len_idxs = len_idxs = len(voi_idxs[p_idx])
+
+                    # if we're doing striped comps, allocate space for
+                    # all procs
+                    if vkey[1] is not None:
+                        tot_len_idxs *= voi_counts[vkey[0]]
+
                     #debug("vkey:",str(vkey))
                     if param is None:
                         param = params[0][0]
@@ -1636,7 +1644,6 @@ class Problem(object):
                                 continue
 
                         if vkey[0] is None or relevance.is_relevant(vkey[0], item):
-                            #if fwd or owned[item] == iproc:
                             if fwd or ((vkey[1] is None and owned[item] == iproc) or vkey[1] == iproc):
                                 out_idxs = dumat[vkey]._get_local_idxs(item,
                                                                  qoi_indices,
@@ -1657,7 +1664,7 @@ class Problem(object):
                                     rootproc = vkey[1]
                                 dxval = comm.bcast(dxval, root=rootproc)
                                 if trace:
-                                    debug("dxval bcast DONE")
+                                    debug("dxval bcast DONE, root=",rootproc)
                                     debug("dxval:",dxval)
                         else:  # irrelevant variable.  just give'em zeros
                             if item in qoi_indices:
@@ -1668,46 +1675,51 @@ class Problem(object):
 
                         if dxval is not None:
                             nk = len(dxval)
+                            if vkey[1] is not None: # striped var
+                                ii = i + len_idxs * vkey[1]
+                            else:
+                                ii = i
 
                             if return_format == 'dict':
+
                                 if fwd:
                                     if J[item][param] is None:
-                                        J[item][param] = np.zeros((nk, len(in_idxs)))
-                                    J[item][param][:, i] = dxval
+                                        J[item][param] = np.zeros((nk, tot_len_idxs))
+                                    J[item][param][:, ii] = dxval
 
                                     # Driver scaling
                                     if param in in_scale:
-                                        J[item][param][:, i] *= in_scale[param]
+                                        J[item][param][:, ii] *= in_scale[param]
                                     if item in un_scale:
-                                        J[item][param][:, i] *= un_scale[item]
+                                        J[item][param][:, ii] *= un_scale[item]
                                 else:
                                     if J[param][item] is None:
-                                        J[param][item] = np.zeros((len(in_idxs), nk))
-                                    J[param][item][i, :] = dxval
+                                        J[param][item] = np.zeros((tot_len_idxs, nk))
+                                    J[param][item][ii, :] = dxval
 
                                     # Driver scaling
                                     if param in in_scale:
-                                        J[param][item][i, :] *= in_scale[param]
+                                        J[param][item][ii, :] *= in_scale[param]
                                     if item in un_scale:
-                                        J[param][item][i, :] *= un_scale[item]
+                                        J[param][item][ii, :] *= un_scale[item]
                             else:
                                 if fwd:
-                                    J[Jslices[item], Jslices[param].start+i] = dxval
+                                    J[Jslices[item], Jslices[param].start+ii] = dxval
 
                                     # Driver scaling
                                     if param in in_scale:
-                                        J[Jslices[item], Jslices[param].start+i] *= in_scale[param]
+                                        J[Jslices[item], Jslices[param].start+ii] *= in_scale[param]
                                     if item in un_scale:
-                                        J[Jslices[item], Jslices[param].start+i] *= un_scale[item]
+                                        J[Jslices[item], Jslices[param].start+ii] *= un_scale[item]
 
                                 else:
-                                    J[Jslices[param].start+i, Jslices[item]] = dxval
+                                    J[Jslices[param].start+ii, Jslices[item]] = dxval
 
                                     # Driver scaling
                                     if param in in_scale:
-                                        J[Jslices[param].start+i, Jslices[item]] *= in_scale[param]
+                                        J[Jslices[param].start+ii, Jslices[item]] *= in_scale[param]
                                     if item in un_scale:
-                                        J[Jslices[param].start+i, Jslices[item]] *= un_scale[item]
+                                        J[Jslices[param].start+ii, Jslices[item]] *= un_scale[item]
 
         # Clean up after ourselves
         root.clear_dparams()

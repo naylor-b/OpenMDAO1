@@ -437,7 +437,7 @@ class PetscDataTransfer(object):
             # all targets. This does not involve pass_by_object.
             if trace:  # pragma: no cover
                 conns = ['%s <-- %s' % (u, v) for v, u in self.vec_conns]
-                debug("%s rev scatter %s  %s <-- %s" %
+                debug(str(self.voi), "%s rev scatter %s  %s <-- %s" %
                       (srcvec._sysdata.pathname, conns, self.src_idxs, self.tgt_idxs))
                 debug("%s:    srcvec = %s" % (tgtvec._sysdata.pathname,
                                               tgtvec.petsc_vec.array))
@@ -449,7 +449,7 @@ class PetscDataTransfer(object):
             # forward mode, source to target including pass_by_object
             if trace:  # pragma: no cover
                 conns = ['%s --> %s' % (u, v) for v, u in self.vec_conns]
-                debug("%s fwd scatter %s  %s --> %s" %
+                debug(str(self.voi), "%s fwd scatter %s  %s --> %s" %
                       (srcvec._sysdata.pathname, conns, self.src_idxs, self.tgt_idxs))
                 debug("%s:    srcvec = %s" % (srcvec._sysdata.pathname,
                                               srcvec.petsc_vec.array))

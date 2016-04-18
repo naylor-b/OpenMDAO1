@@ -153,16 +153,17 @@ class LinearGaussSeidel(LinearSolver):
                         if active:
                             dumat[voi].vec[:] = 0.0
 
-                        #print('pre scatter', sub.pathname, voi, dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
+                        #debug('pre scatter', sub.pathname, str(voi),
+                        #      'dp', dpmat[voi].vec, 'du', dumat[voi].vec, 'dr', drmat[voi].vec)
                         system._transfer_data(sub.name, mode='rev', deriv=True, var_of_interest=voi)
-                        #print('post scatter', sub.pathname, voi, dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
+                        #debug('post scatter', sub.pathname, str(voi),
+                        #      'dp', dpmat[voi].vec, 'du', dumat[voi].vec, 'dr', drmat[voi].vec)
 
                         if active:
                             dumat[voi].vec *= -1.0
-                            debug(sub.pathname, str(voi), "RHS:",rhs_mat[voi])
-                            debug(sub.pathname, str(voi), "dumat:",dumat[voi].vec)
-                            debug(sub.pathname, str(voi), "dumat += RHS:", rhs_mat[voi])
+                            #debug(sub.pathname, str(voi), "RHS:",rhs_mat[voi])
                             dumat[voi].vec += rhs_mat[voi]
+                            #debug(sub.pathname, str(voi), "dumat:", [(d,dumat[d].vec) for d in dumat])
 
                     # we need to loop over all subsystems in order to make
                     # the necessary collective calls to scatter, but only

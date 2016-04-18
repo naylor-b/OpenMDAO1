@@ -65,3 +65,6 @@ from openmdao.units.units import get_conversion_tuple, convert_units
 #util
 from openmdao.util.options import OptionsDictionary
 from openmdao.util.file_util import DirContext
+
+# viewers
+from openmdao.devtools.d3graph import view_connections, view_tree

@@ -678,7 +678,7 @@ class System(object):
 
         fwd = mode == "fwd"
 
-        #debug("%s: sys_apply_linear: vois=%s"%(self.pathname, str(vois)))
+        #debug(self.pathname, "sys_apply_linear")
 
         for voi in vois:
             # don't call apply_linear if this system is irrelevant
@@ -693,6 +693,10 @@ class System(object):
             dunknowns = self.dumat[voi]
             dparams = self.dpmat[voi]
             gsouts = None if gs_outputs is None else gs_outputs[voi]
+
+            #debug("drmat[%s]=%s" % (str(voi), self.drmat[voi].vec))
+            #debug("dumat[%s]=%s" % (str(voi), self.dumat[voi].vec))
+            #debug("dpmat[%s]=%s" % (str(voi), self.dpmat[voi].vec))
 
             if fwd:
                 dresids.vec[:] = 0.0
@@ -801,7 +805,6 @@ class System(object):
         """ See apply_linear. This method allows the framework to override
         any derivative specification in any `Component` or `Group` to perform
         finite difference."""
-
         if self._jacobian_cache is None:
             msg = ("No derivatives defined for Component '{name}'")
             msg = msg.format(name=self.pathname)
@@ -822,6 +825,7 @@ class System(object):
             else:
                 arg_vec = dparams
 
+            #debug(unknown, param, "J:",J,"ARG_VEC:",arg_vec.vec)
             # Vectors are flipped during adjoint
 
             #debug(self.pathname, "apply_linear_jac:",unknown, param)
@@ -855,6 +859,8 @@ class System(object):
                 msg += "but has shape '{}' instead."
                 msg = msg.format(self.pathname, unknown, param, req_shape, J.shape)
                 raise ValueError(msg)
+
+            #debug(self.pathname, "APPLY_LINEAR_JAC, arg_vec[%s]=%s" % (param,arg_vec[param]))
 
     def _create_views(self, top_unknowns, parent, my_params,
                       voi=(None, None)):
@@ -909,7 +915,7 @@ class System(object):
         self.dpmat[voi].setup(parent.dpmat[voi], params_dict, top_unknowns,
                   my_params, self.connections,
                   relevance=relevance, var_of_interest=voi[0],
-                  shared_vec=self._shared_dp_vec[self._shared_p_offsets[voi[0]]:])
+                  shared_vec=self._shared_dp_vec[self._shared_p_offsets[voi]:])
 
     def get_combined_jac(self, J):
         """
@@ -1061,19 +1067,21 @@ class System(object):
         full_size = sum(m['size'] for m in metas)  # 'None' vecs are this size
         max_size = full_size
 
-        offsets = { None: 0 }
+        offsets = { (None,None): 0 }
 
         # no parallel rhs vecs, so biggest one will just be the one containing
         # all vars.
         if not self._probdata.top_lin_gs:
             return max_size, offsets
 
+        voi_counts = self._probdata.voi_counts
         relevant = self._probdata.relevance.relevant
+
         for vois in self._probdata.relevance.groups:
             vec_size = 0
-            for voi in vois:
+            for voi in voi_iter(vois, voi_counts):
                 offsets[voi] = vec_size
-                rel_voi = relevant[voi]
+                rel_voi = relevant[voi[0]]
                 vec_size += sum(m['size'] for m in metas
                                  if m['top_promoted_name'] in rel_voi)
 

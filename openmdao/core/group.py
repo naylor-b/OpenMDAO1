@@ -441,13 +441,11 @@ class Group(System):
 
         self._setup_data_transfer(my_params, (None,None), alloc_derivs)
 
-        all_vois = set([None])
         voi_counts = self._probdata.voi_counts
         if self._probdata.top_lin_gs:
             # create storage for the relevant vecwrappers,
             # keyed by variable_of_interest
             for vois in relevance.groups:
-                all_vois.update(vois)
                 for voi in voi_iter(vois, voi_counts):
                     if parent is None:
                         self._create_vecs(my_params, voi, impl)
@@ -536,14 +534,14 @@ class Group(System):
 
             dunknowns.setup(unknowns_dict, relevance=self._probdata.relevance,
                             var_of_interest=voi[0],
-                            shared_vec=self._shared_du_vec[self._shared_u_offsets[voi[0]]:])
+                            shared_vec=self._shared_du_vec[self._shared_u_offsets[voi]:])
             dresids.setup(unknowns_dict, relevance=self._probdata.relevance,
                           var_of_interest=voi[0],
-                          shared_vec=self._shared_dr_vec[self._shared_u_offsets[voi[0]]:])
+                          shared_vec=self._shared_dr_vec[self._shared_u_offsets[voi]:])
             dparams.setup(None, params_dict, self.unknowns, my_params,
                           self.connections, relevance=self._probdata.relevance,
                           var_of_interest=voi[0],
-                          shared_vec=self._shared_dp_vec[self._shared_p_offsets[voi[0]]:])
+                          shared_vec=self._shared_dp_vec[self._shared_p_offsets[voi]:])
 
             self.dumat[voi] = dunknowns
             self.drmat[voi] = dresids
@@ -838,6 +836,7 @@ class Group(System):
         else:
             sol_vec, rhs_vec = drmat, dumat
 
+        #debug(self.pathname, "solve_linear")
         #debug("dumat:",[(k,v.vec) for k,v in dumat.items()])
         #debug("drmat:",[(k,v.vec) for k,v in drmat.items()])
 
@@ -1167,7 +1166,7 @@ class Group(System):
         return (min_procs, max_procs)
 
     def _get_global_idxs(self, uname, pname, u_var_idxs,
-                         u_sizes, p_var_idxs, p_sizes, mode):
+                         u_sizes, p_var_idxs, p_sizes, mode, voi_idx):
         """
         Return the global indices into the distributed unknowns and params vectors
         for the given unknown and param.  The given unknown and param have already
@@ -1197,6 +1196,11 @@ class Group(System):
 
         mode : str
             Solution mode, either 'fwd' or 'rev'
+
+        voi_idx : int or None
+            When we take parallel derivatives across distributed components,
+            voi_idx will be an index indicating which 'stripe' of a striped
+            component is active.  Othewise it will be None.
 
         Returns
         -------
@@ -1236,6 +1240,11 @@ class Group(System):
                 end = start + u_sizes[irank, ivar]
                 on_irank = np.logical_and(start <= arg_idxs, arg_idxs < end)
 
+                if rev and voi_idx == irank:
+                    arg_idxs += start
+                    on_irank2 = np.logical_and(start <= arg_idxs, arg_idxs < end)
+                    arg_idxs -= start
+
                 # Compute conversion to new ordering
 
                 # arg_idxs are provided wrt the full distributed variable,
@@ -1249,6 +1258,9 @@ class Group(System):
 
                 # Apply conversion only to relevant parts of input
                 new_indices[on_irank] = arg_idxs[on_irank] + offset
+
+                if rev and voi_idx == irank:
+                    new_indices[on_irank2] = arg_idxs[on_irank2] + (offset+start)
 
             src_idxs = new_indices
             p_rank = self._owning_ranks[pname] if (rev and pacc.remote) else iproc
@@ -1362,8 +1374,12 @@ class Group(System):
                     sidxs, didxs = self._get_global_idxs(urelname, prelname,
                                                          vec_unames, unknown_sizes,
                                                          vec_pnames, param_sizes,
-                                                         modename[mode])
+                                                         modename[mode],
+                                                         var_of_interest[1])
                     vec_conns.append((prelname, urelname))
+                    #debug(modename[mode],"xfer for VOI:",str(var_of_interest))
+                    #debug(modename[mode],"src idxs: %s" % sidxs)
+                    #debug(modename[mode],"dest idxs: %s" % didxs)
                     src_idx_list.append(sidxs)
                     dest_idx_list.append(didxs)
 
@@ -1375,9 +1391,9 @@ class Group(System):
             pvec = self.params
 
         # create a DataTransfer object that combines all of the
-        # individual subsystem src_idxs, tgt_idxs, and byobj_conns, so that a 'full'
-        # scatter to all subsystems can be done at the same time.  Store that DataTransfer
-        # object under the name ''.
+        # individual subsystem src_idxs, tgt_idxs, and byobj_conns, so that a
+        # 'full' scatter to all subsystems can be done at the same time.  Store
+        # that DataTransfer object under the name ''.
         for mode in (fwd, rev):
             start = 0
             full_srcs = []
@@ -1431,6 +1447,7 @@ class Group(System):
         """
         x = self._data_xfer.get((target_sys, mode, var_of_interest))
         if x is not None:
+            x.voi = var_of_interest
             if deriv:
                 x.transfer(self.dumat[var_of_interest], self.dpmat[var_of_interest],
                            mode, deriv=True)
@@ -1446,10 +1463,10 @@ class Group(System):
         """
         if MPI:
             ranks = {}
-            local_vars = [k for k, acc in iteritems(self.unknowns._dat)
+            local_vars = [k for k, acc in chain(iteritems(self.unknowns._dat),
+                                                iteritems(self.params._dat))
                                   if not acc.remote]
-            local_vars.extend(k for k, acc in iteritems(self.params._dat)
-                                       if not acc.remote)
+
             if trace:  # pragma: no cover
                 debug("allgathering local varnames: locals = ", local_vars)
             all_locals = self.comm.allgather(local_vars)
@@ -1467,7 +1484,7 @@ class Group(System):
         else:
             self._sysdata.all_locals = [n for n in chain(self.unknowns._dat,
                                                          self.params._dat)]
-            ranks = { n:0 for n in chain(self.unknowns._dat, self.params._dat) }
+            ranks = { n:0 for n in self._sysdata.all_locals }
 
 
         return ranks

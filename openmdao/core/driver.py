@@ -262,7 +262,7 @@ class Driver(object):
             # a count.
             if isinstance(n, tuple):
                 n, count = n
-                if count > 1:
+                if MPI and count > 1:
                     self._voi_counts[n] = count
 
             if not (n in self._desvars or n in self._objs or n in self._cons):

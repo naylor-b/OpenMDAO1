@@ -315,9 +315,11 @@ class Group(System):
             dumat = self.dumat
             gs_outputs = self._gs_outputs[mode] = {}
 
+            dusets = [(v, set(dumat[v])) for v in dumat]
             for sub in self._local_subsystems:
                 gs_outputs[sub.name] = {
-                    v : set(dumat[v]).difference(sub.dumat[v]) for v in dumat }
+                    v : duset.difference(sub.dumat[v]) for v, duset in dusets
+                }
 
         return self._gs_outputs
 

@@ -756,6 +756,8 @@ class TestProblem(unittest.TestCase):
         mode = prob._mode('auto', ['a'], ['x'])
         self.assertEqual(mode, 'fwd')
 
+        # reset the calculated mode
+        prob._calculated_mode = None
         mode = prob._mode('auto', ['a', 'b'], ['x'])
         self.assertEqual(mode, 'rev')
 

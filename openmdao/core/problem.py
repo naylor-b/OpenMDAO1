@@ -78,6 +78,7 @@ class Problem(object):
         super(Problem, self).__init__()
         self.root = root
         self._probdata = _ProbData()
+        self._calculated_mode = None
 
         if MPI:
             from openmdao.core.petsc_impl import PetscImpl
@@ -1103,43 +1104,44 @@ class Problem(object):
         precedence. If that is 'auto', then mode is determined by the width
         of the independent variable and quantity space."""
 
-        self._p_length = 0
-        self._u_length = 0
-        uset = set()
-        for unames in unknown_list:
-            if isinstance(unames, tuple):
-                uset.update(unames)
+        if self._calculated_mode is None:
+            self._p_length = 0
+            self._u_length = 0
+            uset = set()
+            for unames in unknown_list:
+                if isinstance(unames, tuple):
+                    uset.update(unames)
+                else:
+                    uset.add(unames)
+            pset = set()
+            for pnames in indep_list:
+                if isinstance(pnames, tuple):
+                    pset.update(pnames)
+                else:
+                    pset.add(pnames)
+
+            to_prom_name = self.root._sysdata.to_prom_name
+
+            for path, meta in chain(iteritems(self.root._unknowns_dict),
+                                    iteritems(self.root._params_dict)):
+                prom_name = to_prom_name[path]
+                if prom_name in uset:
+                    self._u_length += meta['size']
+                    uset.remove(prom_name)
+                if prom_name in pset:
+                    self._p_length += meta['size']
+                    pset.remove(prom_name)
+
+            if uset:
+                raise RuntimeError("Can't determine size of unknowns %s." % list(uset))
+            if pset:
+                raise RuntimeError("Can't determine size of params %s." % list(pset))
+
+            # Choose mode based on size
+            if self._p_length > self._u_length:
+                self._calculated_mode = 'rev'
             else:
-                uset.add(unames)
-        pset = set()
-        for pnames in indep_list:
-            if isinstance(pnames, tuple):
-                pset.update(pnames)
-            else:
-                pset.add(pnames)
-
-        to_prom_name = self.root._sysdata.to_prom_name
-
-        for path, meta in chain(iteritems(self.root._unknowns_dict),
-                                iteritems(self.root._params_dict)):
-            prom_name = to_prom_name[path]
-            if prom_name in uset:
-                self._u_length += meta['size']
-                uset.remove(prom_name)
-            if prom_name in pset:
-                self._p_length += meta['size']
-                pset.remove(prom_name)
-
-        if uset:
-            raise RuntimeError("Can't determine size of unknowns %s." % list(uset))
-        if pset:
-            raise RuntimeError("Can't determine size of params %s." % list(pset))
-
-        # Choose mode based on size
-        if self._p_length > self._u_length:
-            self._calculated_mode = 'rev'
-        else:
-            self._calculated_mode = 'fwd'
+                self._calculated_mode = 'fwd'
 
         if mode == 'auto':
             mode = self.root.ln_solver.options['mode']

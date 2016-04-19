@@ -1339,13 +1339,13 @@ class Problem(object):
                     idx = self._qoi_indices[u]
                     usize += len(idx)
                 else:
-                    usize += self.root.unknowns.metadata(u)['size']
+                    usize += self.root.unknowns._dat[u].meta['size']
             for p in indep_list:
                 if p in self._poi_indices:
                     idx = self._poi_indices[p]
                     psize += len(idx)
                 else:
-                    psize += self.root.unknowns.metadata(p)['size']
+                    psize += self.root.unknowns._dat[p].meta['size']
             J = np.zeros((usize, psize))
 
             ui = 0
@@ -1437,13 +1437,15 @@ class Problem(object):
 
         # Prepare model for calculation
         root.clear_dparams()
-        for names in root._probdata.relevance.vars_of_interest(mode):
-            for name in names:
-                if name in root.dumat:
-                    root.dumat[name].vec[:] = 0.0
-                    root.drmat[name].vec[:] = 0.0
-        root.dumat[None].vec[:] = 0.0
-        root.drmat[None].vec[:] = 0.0
+        # for names in root._probdata.relevance.vars_of_interest(mode):
+        #     for name in names:
+        #         if name in root.dumat:
+        #             root.dumat[name].vec[:] = 0.0
+        #             root.drmat[name].vec[:] = 0.0
+        # root.dumat[None].vec[:] = 0.0
+        # root.drmat[None].vec[:] = 0.0
+        root._shared_du_vec[:] = 0.0
+        root._shared_dr_vec[:] = 0.0
 
         # Linearize Model
         root._sys_linearize(root.params, unknowns, root.resids)
@@ -1536,7 +1538,8 @@ class Problem(object):
         # If Adjoint mode, solve linear system for each unknown
         for params in voi_sets:
             rhs = OrderedDict()
-            voi_idxs = {}
+            voi_idxs = []
+            set_rhs = []
 
             old_size = None
 
@@ -1565,7 +1568,9 @@ class Problem(object):
                 elif old_size != len(in_idxs):
                     raise RuntimeError("Indices within the same VOI group must be the same size, but"
                                        " in the group %s, %d != %d" % (params, old_size, len(in_idxs)))
-                voi_idxs[vkey] = in_idxs
+
+                voi_idxs.append(in_idxs)
+                set_rhs.append(owned[voi] == iproc)
 
             # at this point, we know that for all vars in the current
             # group of interest, the number of indices is the same. We loop
@@ -1573,15 +1578,15 @@ class Problem(object):
             # up the actual indices for the current members of the group
             # of interest.
             for i in range(len(in_idxs)):
-                for voi in params:
+                for idx, voi in enumerate(params):
                     vkey = self._get_voi_key(voi, params)
                     rhs[vkey][:] = 0.0
                     # only set a -1.0 in the entry if that var is 'owned' by this rank
                     # Note, we solve a slightly modified version of the unified
                     # derivatives equations in OpenMDAO.
                     # (dR/du) * (du/dr) = -I
-                    if self.root._owning_ranks[voi_srcs[vkey]] == iproc:
-                        rhs[vkey][voi_idxs[vkey][i]] = -1.0
+                    if set_rhs[idx]:
+                        rhs[vkey][voi_idxs[idx][i]] = -1.0
 
                 # Solve the linear system
                 dx_mat = root.ln_solver.solve(rhs, root, mode)

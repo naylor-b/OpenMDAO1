@@ -81,7 +81,6 @@ class LinearGaussSeidel(LinearSolver):
         drmat = system.drmat
         dpmat = system.dpmat
         gs_outputs = system._get_gs_outputs(mode)
-        relevance = system._probdata.relevance
         fwd = mode == 'fwd'
 
         system.clear_dparams()
@@ -89,6 +88,7 @@ class LinearGaussSeidel(LinearSolver):
             dumat[voi].vec[:] = 0.0
 
         vois = rhs_mat.keys()
+
         # John starts with the following. It is not necessary, but
         # uncommenting it helps to debug when comparing print outputs to his.
         # for voi in vois:
@@ -152,15 +152,13 @@ class LinearGaussSeidel(LinearSolver):
 
                     for voi in vois:
                         if active:
-                            dumat[voi].vec *= 0.0
+                            dumat[voi].vec[:] = 0.0
 
                         #print('pre scatter', sub.pathname, voi, dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
                         system._transfer_data(sub.name, mode='rev', deriv=True, var_of_interest=voi)
                         #print('post scatter', sub.pathname, voi, dpmat[voi].vec, dumat[voi].vec, drmat[voi].vec)
 
                         if active:
-                            debug(sub.pathname, "dumat:",dumat[voi].vec)
-                            debug(sub.pathname, "dumat += RHS:", rhs_mat[voi])
                             dumat[voi].vec *= -1.0
                             dumat[voi].vec += rhs_mat[voi]
 

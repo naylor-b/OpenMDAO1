@@ -534,7 +534,7 @@ class VecWrapper(object):
         if name in idx_dict:
             #TODO: possible slice conversion
             idxs = self.to_idx_array(idx_dict[name]) + start
-            if idxs.size > (end-start) or max(idxs) >= end:
+            if idxs.size > (end-start) or numpy.max(idxs) >= end:
                 raise RuntimeError("Indices of interest specified for '%s'"
                                    "are too large" % name)
             return idxs

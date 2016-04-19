@@ -424,6 +424,7 @@ class TestGroup(unittest.TestCase):
         prob.setup(check=False)
         save = StringIO()
         prob.root.dump(out_stream=save)
+        prob.root.dump(out_stream=save, verbose=True)
 
         # don't want to write a test that does a string compare of a dump, so
         # for now, just verify that calling dump doesn't raise an exception.

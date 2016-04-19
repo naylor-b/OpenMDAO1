@@ -100,11 +100,11 @@ class PetscImpl(object):
         tgt_idxs : array
             Indices of the target variables in the target vector.
 
-        vec_conns : dict
+        vec_conns : list of (dest,src) tuples
             Mapping of 'pass by vector' variables to the source variables that
             they are connected to.
 
-        byobj_conns : dict
+        byobj_conns : list of (dest,src) tuples
             Mapping of 'pass by object' variables to the source variables that
             they are connected to.
 
@@ -373,6 +373,7 @@ class PetscDataTransfer(object):
         src_idxs = src_vec.merge_idxs(src_idxs)
         tgt_idxs = tgt_vec.merge_idxs(tgt_idxs)
 
+        self.vec_conns = vec_conns
         self.byobj_conns = byobj_conns
         self.comm = comm = src_vec.comm
         self.sysdata = sysdata

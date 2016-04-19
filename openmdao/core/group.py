@@ -1063,7 +1063,7 @@ class Group(System):
 
         out_stream.write("  NL: %s  LN: %s" % (self.nl_solver.__class__.__name__,
                                                self.ln_solver.__class__.__name__))
-        if sizes:
+        if sizes and self.is_active():
             commsz = self.comm.size if hasattr(self.comm, 'size') else 0
             template = "    req: %s  usize:%d  psize:%d  commsize:%d"
             out_stream.write(template % (self.get_req_procs(),
@@ -1072,13 +1072,17 @@ class Group(System):
                                          commsz))
         out_stream.write("\n")
 
-        if verbose:  # pragma: no cover
-            vec_conns = dict(self._data_xfer[('', 'fwd', None)].vec_conns)
-            byobj_conns = dict(self._data_xfer[('', 'fwd', None)].byobj_conns)
+        if verbose and self.is_active():  # pragma: no cover
+            try:
+                vec_conns = self._data_xfer[('', 'fwd', (None,None))].vec_conns
+                byobj_conns = self._data_xfer[('', 'fwd', (None,None))].byobj_conns
+            except KeyError:
+                vec_conns = []
+                byobj_conns = []
 
             # collect width info
             lens = [len(u)+sum(map(len, v)) for u, v in
-                    chain(iteritems(vec_conns), iteritems(byobj_conns))]
+                    chain(vec_conns, byobj_conns)]
             if lens:
                 nwid = max(lens) + 9
             else:
@@ -1090,7 +1094,7 @@ class Group(System):
                     continue
                 out_stream.write(" "*(nest+8))
                 uslice = '{0}[{1[0]}:{1[1]}]'.format(ulabel, uvec._dat[v].slice)
-                pnames = [p for p, u in iteritems(vec_conns) if u == v]
+                pnames = [p for p, u in vec_conns if u == v]
 
                 if pnames:
                     if len(pnames) == 1:
@@ -1105,7 +1109,7 @@ class Group(System):
                             ps = pvec._dat[p].slice
                             if ps is None:
                                 ps = (-1, -1)
-                            pslice.append(['%d:%d' % ps])
+                            pslice.append('%d:%d' % ps)
                         if len(pslice) > 1:
                             pslice = ','.join(pslice)
                         else:
@@ -1128,7 +1132,7 @@ class Group(System):
                                                      nwid=nwid))
 
             if not dvecs:
-                for dest, src in iteritems(byobj_conns):
+                for dest, src in byobj_conns:
                     out_stream.write(" "*(nest+8))
                     connstr = '%s -> %s:' % (src, dest)
                     template = "{0:<{nwid}} (by_obj)  ({1})\n"

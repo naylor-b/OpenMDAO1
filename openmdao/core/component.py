@@ -675,7 +675,7 @@ class Component(System):
         template = "%s %s '%s'"
         out_stream.write(template % (" "*nest, klass, self.name))
 
-        if sizes:
+        if sizes and self.is_active():
             commsz = self.comm.size if hasattr(self.comm, 'size') else 0
             template = "    req: %s  usize:%d  psize:%d  commsize:%d"
             out_stream.write(template % (self.get_req_procs(),
@@ -684,7 +684,7 @@ class Component(System):
                                          commsz))
         out_stream.write("\n")
 
-        if verbose:  # pragma: no cover
+        if verbose and self.is_active():  # pragma: no cover
             lens = [len(n) for n in uvec]
             nwid = max(lens) if lens else 12
 

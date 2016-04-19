@@ -84,11 +84,11 @@ class BasicImpl(object):
         tgt_idxs : array
             Indices of the target variables in the target vector.
 
-        vec_conns : dict
+        vec_conns : list of (dest,src) tuples
             Mapping of 'pass by vector' variables to the source variables that
             they are connected to.
 
-        byobj_conns : dict
+        byobj_conns : list of (dest,src) tuples
             Mapping of 'pass by object' variables to the source variables that
             they are connected to.
 

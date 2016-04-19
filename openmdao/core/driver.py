@@ -256,7 +256,7 @@ class Driver(object):
 
         #make sure all vnames are desvars, constraints, or objectives
         for i, n in enumerate(vnames):
-            # When we have distributed compnents that are 'striped', we can calculate
+            # When we have distributed components that are 'striped', we can calculate
             # derivs in parallel for each rank of the distributed comp.  The user tells the
             # framework that they want to do this by using a tuple containing the var name and
             # a count.
@@ -267,7 +267,7 @@ class Driver(object):
 
             if not (n in self._desvars or n in self._objs or n in self._cons):
                 raise RuntimeError("'%s' is not a param, objective, or "
-                                   "constraint" % n)
+                                   "constraint: %s" % (n,self._cons.keys()))
             # turn vname back into just a name
             vnames[i] = n
 

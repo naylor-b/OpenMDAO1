@@ -410,6 +410,7 @@ class Problem(object):
         out_stream : a file-like object, optional
             Stream where report will be written if check is performed.
         """
+        self._calculated_mode = None
         self._setup_errors = []
 
         # if we modify the system tree, we'll need to call _init_sys_data,
@@ -1104,43 +1105,44 @@ class Problem(object):
         precedence. If that is 'auto', then mode is determined by the width
         of the independent variable and quantity space."""
 
-        self._p_length = 0
-        self._u_length = 0
-        uset = set()
-        for unames in unknown_list:
-            if isinstance(unames, tuple):
-                uset.update(unames)
+        if self._calculated_mode is None:
+            self._p_length = 0
+            self._u_length = 0
+            uset = set()
+            for unames in unknown_list:
+                if isinstance(unames, tuple):
+                    uset.update(unames)
+                else:
+                    uset.add(unames)
+            pset = set()
+            for pnames in indep_list:
+                if isinstance(pnames, tuple):
+                    pset.update(pnames)
+                else:
+                    pset.add(pnames)
+
+            to_prom_name = self.root._sysdata.to_prom_name
+
+            for path, meta in chain(iteritems(self.root._unknowns_dict),
+                                    iteritems(self.root._params_dict)):
+                prom_name = to_prom_name[path]
+                if prom_name in uset:
+                    self._u_length += meta['size']
+                    uset.remove(prom_name)
+                if prom_name in pset:
+                    self._p_length += meta['size']
+                    pset.remove(prom_name)
+
+            if uset:
+                raise RuntimeError("Can't determine size of unknowns %s." % list(uset))
+            if pset:
+                raise RuntimeError("Can't determine size of params %s." % list(pset))
+
+            # Choose mode based on size
+            if self._p_length > self._u_length:
+                self._calculated_mode = 'rev'
             else:
-                uset.add(unames)
-        pset = set()
-        for pnames in indep_list:
-            if isinstance(pnames, tuple):
-                pset.update(pnames)
-            else:
-                pset.add(pnames)
-
-        to_prom_name = self.root._sysdata.to_prom_name
-
-        for path, meta in chain(iteritems(self.root._unknowns_dict),
-                                iteritems(self.root._params_dict)):
-            prom_name = to_prom_name[path]
-            if prom_name in uset:
-                self._u_length += meta['size']
-                uset.remove(prom_name)
-            if prom_name in pset:
-                self._p_length += meta['size']
-                pset.remove(prom_name)
-
-        if uset:
-            raise RuntimeError("Can't determine size of unknowns %s." % list(uset))
-        if pset:
-            raise RuntimeError("Can't determine size of params %s." % list(pset))
-
-        # Choose mode based on size
-        if self._p_length > self._u_length:
-            self._calculated_mode = 'rev'
-        else:
-            self._calculated_mode = 'fwd'
+                self._calculated_mode = 'fwd'
 
         if mode == 'auto':
             mode = self.root.ln_solver.options['mode']
@@ -1565,6 +1567,7 @@ class Problem(object):
                 duvec = dumat[vkey]
                 if vkey not in rhs:
                     rhs[vkey] = np.empty((duvec.vec.size, ))
+                    #print ("VOI:", str(vkey))
 
                 if var in duvec:
                     in_idxs = duvec._get_local_idxs(var, poi_indices)
@@ -1731,6 +1734,7 @@ class Problem(object):
         (currently only works with LinearGaussSeidel), or None for those
         solvers that can only do a single linear solve at a time.
         """
+        #print("grp:",grp,"\nvoi:",voi[0],"\ndriver.vois",str(self._driver_vois))
         if (voi[0] in self._driver_vois and
                 isinstance(self.root.ln_solver, LinearGaussSeidel)):
             if (len(grp) > 1 or

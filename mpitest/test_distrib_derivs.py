@@ -319,13 +319,6 @@ class TestParallelDerivs(MPITestCase):
         prob.setup(check=False)
         prob.run()
 
-        # debug("P.x:",prob['P.x'])
-        # debug('C1.x:',prob['C1.x'])
-        # debug('C1.y:',prob['C1.y'])
-        #
-        # debug("objs:",prob.driver.get_objectives())
-        #
-        # debug("========================================================")
         J = prob.calc_gradient(['P.x'], ['C1.y'], mode='rev', return_format='dict')
         #debug("J",J)
         if MPI:

@@ -25,20 +25,23 @@ class Relevance(object):
         param_groups = []
         output_groups = []
 
-        # turn all inputs and outputs, even singletons, into tuples
-        self.inputs = []
-        for inp in inputs:
-            if isinstance(inp, string_types):
-                inp = (inp,)
-            param_groups.append(tuple(inp))
-            self.inputs.append(tuple(inp))
+        self.inputs = inputs
+        self.outputs = outputs
 
-        self.outputs = []
-        for out in outputs:
-            if isinstance(out, string_types):
-                out = (out,)
-            output_groups.append(tuple(out))
-            self.outputs.append(tuple(out))
+        # # turn all inputs and outputs, even singletons, into tuples
+        # self.inputs = []
+        # for inp in inputs:
+        #     if isinstance(inp, string_types):
+        #         inp = (inp,)
+        #     param_groups.append(tuple(inp))
+        #     self.inputs.append(tuple(inp))
+        #
+        # self.outputs = []
+        # for out in outputs:
+        #     if isinstance(out, string_types):
+        #         out = (out,)
+        #     output_groups.append(tuple(out))
+        #     self.outputs.append(tuple(out))
 
         self._sgraph = self._setup_sys_graph(group, connections)
         self._compute_relevant_vars(group, connections)
@@ -50,9 +53,9 @@ class Relevance(object):
                                     for m in itervalues(params_dict))
 
         if mode == 'fwd':
-            self.groups = param_groups
+            self.groups = self.inputs #param_groups
         else:
-            self.groups = output_groups
+            self.groups = self.outputs #output_groups
 
     def __getitem__(self, name):
         try:

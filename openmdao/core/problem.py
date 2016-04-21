@@ -411,6 +411,8 @@ class Problem(object):
             Stream where report will be written if check is performed.
         """
         self._setup_errors = []
+        self._all_vois = {}
+        self._flat_vois = {}
 
         # if we modify the system tree, we'll need to call _init_sys_data,
         # _setup_variables and _setup_connections again
@@ -1373,6 +1375,12 @@ class Problem(object):
                 ui += rows
         return J
 
+    def _get_all_vois(self, mode):
+        if mode not in self._all_vois:
+            self._all_vois[mode] = all_vois = self.root._probdata.relevance.vars_of_interest(mode)
+            self._flat_vois[mode] = set([item for sublist in all_vois for item in sublist])
+        return self._all_vois[mode], self._flat_vois[mode]
+
     def _calc_gradient_ln_solver(self, indep_list, unknown_list, return_format, mode,
                                  dv_scale=None, cn_scale=None, sparsity=None):
         """ Returns the gradient for the system that is specified in
@@ -1436,13 +1444,6 @@ class Problem(object):
 
         # Prepare model for calculation
         root.clear_dparams()
-        # for names in root._probdata.relevance.vars_of_interest(mode):
-        #     for name in names:
-        #         if name in root.dumat:
-        #             root.dumat[name].vec[:] = 0.0
-        #             root.drmat[name].vec[:] = 0.0
-        # root.dumat[None].vec[:] = 0.0
-        # root.drmat[None].vec[:] = 0.0
         root._shared_du_vec[:] = 0.0
         root._shared_dr_vec[:] = 0.0
 
@@ -1501,14 +1502,20 @@ class Problem(object):
             in_scale, un_scale = cn_scale, dv_scale
 
         # Process our inputs/outputs of interest for parallel groups
-        all_vois = self.root._probdata.relevance.vars_of_interest(mode)
+        all_vois, flat_voi = self._get_all_vois(mode)
 
         input_set = set()
+        singles = []
         for inp in input_list:
             if isinstance(inp, str):
                 input_set.add(inp)
+                if inp not in flat_voi:
+                    singles.append(inp)
             else:
                 input_set.update(inp)
+                for ii in inp:
+                    if ii not in flat_voi:
+                        singles.append(ii)
 
         # Our variables of interest include all sets for which at least
         # one variable is requested.
@@ -1522,14 +1529,7 @@ class Problem(object):
         # Add any variables that the user "forgot". TODO: This won't be
         # necessary when we have an API to automatically generate the
         # IOI and OOI.
-        flat_voi = [item for sublist in all_vois for item in sublist]
-        for items in input_list:
-            if isinstance(items, str):
-                items = (items,)
-            for item in items:
-                if item not in flat_voi:
-                    # Put them in serial groups
-                    voi_sets.append((item,))
+        voi_sets.extend((s,) for s in singles)
 
         voi_srcs = {}
 

@@ -83,29 +83,16 @@ class BM(unittest.TestCase):
         st = time.time()
         prob.setup(check=False)
 
-        # print("num connections:",len(prob.root.connections))
-        # print("num unknowns:", len(prob.root._unknowns_dict),
-        #       "size:", prob.root.unknowns.vec.size)
-        # print("num params:", len(prob.root._params_dict),
-        #       "size:", prob.root.params.vec.size)
-        #
         return prob
 
     def benchmark_setup_5K(self):
         self._setup_bm(5000)
-
-    def benchmark_setup_2K(self):
-        self._setup_bm(2000)
 
     def benchmark_setup_1K(self):
         self._setup_bm(1000)
 
     def benchmark_run_5K(self):
         p = self._setup_bm(5000)
-        p.run()
-
-    def benchmark_run_2K(self):
-        p = self._setup_bm(2000)
         p.run()
 
     def benchmark_run_1K(self):

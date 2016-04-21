@@ -33,7 +33,6 @@ from openmdao.solvers.ln_gauss_seidel import LinearGaussSeidel
 
 from openmdao.units.units import get_conversion_tuple
 from openmdao.util.string_util import get_common_ancestor, nearest_child, name_relative_to
-from openmdao.util.graph import plain_bfs
 from openmdao.util.options import OptionsDictionary
 
 force_check = os.environ.get('OPENMDAO_FORCE_CHECK_SETUP')

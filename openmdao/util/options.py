@@ -59,7 +59,6 @@ class OptionsDictionary(object):
             String containing documentation of this option.
         """
         if name in self._options:
-            print("raising an error")
             raise ValueError("Option '{}' already exists".format(name))
 
         opt = {

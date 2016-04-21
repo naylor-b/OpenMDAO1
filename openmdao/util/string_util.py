@@ -3,7 +3,7 @@
 import ast
 
 #public symbols
-__all__ = ['get_common_ancestor', 'nearest_child', 'name_relative_to', 'parse_for_vars']
+__all__ = ['get_common_ancestor', 'nearest_child', 'name_relative_to']
 
 def get_common_ancestor(name1, name2):
     """
@@ -72,43 +72,3 @@ def name_relative_to(parent_abspath, child_abspath):
     """
     start = len(parent_abspath)+1 if parent_abspath else 0
     return child_abspath[start:]
-
-class ExprVarScanner(ast.NodeVisitor):
-    """
-    This node visitor collects all variable names found in the
-    AST, and excludes names of functions.  Variables having
-    dotted names are not supported.
-    """
-    def __init__(self, vnames=()):
-        self.varnames = set()
-        self._lookfor = vnames
-
-    def visit_Name(self, node):
-        self.varnames.add(node.id)
-
-    def visit_Call(self, node):
-        if not isinstance(node.func, ast.Name):
-            self.visit(node.func)
-        for arg in node.args:
-            self.visit(arg)
-
-    def visit_Attribute(self, node):
-        if isinstance(node.value, ast.Name) and node.value.id in self._lookfor:
-            self.varnames.add(node.value.id)
-
-def parse_for_vars(expr, vnames=()):
-    """
-    Args
-    ----
-    expr : str
-        An expression string that we want to parse for variable names.
-
-    Returns
-    -------
-    list of str
-        Names of variables from the given string.
-    """
-    root = ast.parse(expr, mode='exec')
-    scanner = ExprVarScanner(vnames)
-    scanner.visit(root)
-    return scanner.varnames

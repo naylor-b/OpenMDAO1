@@ -16,10 +16,11 @@ This module is based on the PhysicalQuantities module
 in Scientific Python, by Konrad Hinsen. Modifications by
 Justin Gray."""
 
+import sys
 import re
 import os.path
 from collections import OrderedDict
-from six import iteritems
+from six import iteritems, PY3
 from six.moves.configparser import RawConfigParser as ConfigParser
 
 # pylint: disable=E0611, F0401
@@ -880,5 +881,10 @@ def get_conversion_tuple(src_units, target_units):
 
 
 # Load in the default unit library
-with open(os.path.join(os.path.dirname(__file__), 'unit_library.ini')) as default_lib:
-    import_library(default_lib)
+path = os.path.join(os.path.dirname(__file__), 'unit_library.ini')
+if PY3:
+    with open(path, 'r', encoding="ascii") as f:
+            import_library(f)
+else:
+    with open(path, 'r') as f:
+            import_library(f)

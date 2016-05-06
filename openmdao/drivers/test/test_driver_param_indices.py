@@ -9,7 +9,7 @@ import numpy as np
 from openmdao.api import Problem, Group, IndepVarComp, ExecComp, ScipyOptimizer, \
     LinearGaussSeidel
 from openmdao.test.sellar import SellarStateConnection
-from openmdao.test.util import assert_rel_error
+from openmdao.test.util import assert_rel_error, ConcurrentTestCaseMixin
 from openmdao.util.options import OptionsDictionary
 
 # check that pyoptsparse is installed
@@ -129,7 +129,7 @@ class TestParamIndicesScipy(unittest.TestCase):
         assert_rel_error(self, prob['x'], 0.0, 1e-3)
 
 
-class TestParamIndicesPyoptsparse(unittest.TestCase):
+class TestParamIndicesPyoptsparse(unittest.TestCase, ConcurrentTestCaseMixin):
 
     def setUp(self):
         if OPT is None:
@@ -138,17 +138,10 @@ class TestParamIndicesPyoptsparse(unittest.TestCase):
         if OPTIMIZER is None:
             raise unittest.SkipTest("pyoptsparse is not providing SNOPT or SLSQP")
 
-    def tearDown(self):
-        try:
-            os.remove('SLSQP.out')
-        except OSError:
-            pass
+        self.concurrent_setUp(prefix='param_idx_pyoptsparse-')
 
-        try:
-            os.remove('SNOPT_print.out')
-            os.remove('SNOPT_summary.out')
-        except OSError:
-            pass
+    def tearDown(self):
+        self.concurrent_tearDown()
 
     def test_driver_param_indices(self):
         """ Test driver param indices with pyOptSparse and force_fd=False

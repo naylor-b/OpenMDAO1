@@ -6,7 +6,7 @@ import sys
 import os
 import re
 from collections import OrderedDict
-from fnmatch import fnmatch, translate
+from fnmatch import fnmatchcase
 from itertools import chain
 import warnings
 
@@ -176,9 +176,8 @@ class System(object):
         abs_unames = self._sysdata.to_abs_uname
         abs_pnames = self._sysdata.to_abs_pnames
 
-        for prom in self._prom_regex:
-            m = prom.match(name)
-            if (m is not None and m.group()==name) and (name in abs_pnames or name in abs_unames):
+        for prom in self._promotes:
+            if (name in abs_pnames or name in abs_unames) and fnmatchcase(name, prom):
                 return True
 
         return False
@@ -212,11 +211,9 @@ class System(object):
                             (self.name, self._promotes))
 
         to_prom_name = self._sysdata.to_prom_name
-        for i,prom in enumerate(self._prom_regex):
+        for i,prom in enumerate(self._promotes):
             for name in chain(self._params_dict, self._unknowns_dict):
-                pname = to_prom_name[name]
-                m = prom.match(pname)
-                if (m is not None and m.group()==pname):
+                if fnmatchcase(to_prom_name[name], prom):
                     break
             else:
                 msg = "'%s' promotes '%s' but has no variables matching that specification"
@@ -273,9 +270,6 @@ class System(object):
             raise TypeError("'%s' promotes must be specified as a list, "
                             "tuple or other iterator of strings, but '%s' was specified" %
                             (self.name, self._promotes))
-
-        # pre-compile regex translations of variable glob patterns
-        self._prom_regex = [re.compile(translate(p)) for p in self._promotes]
 
         if parent_path:
             self.pathname = '.'.join((parent_path, self.name))
@@ -1172,7 +1166,7 @@ class System(object):
                 # loop over all systems from here down and find all matching names
                 for s in self.subsystems(recurse=True, include_self=True):
                     for n,acc in chain(iteritems(s.unknowns._dat), iteritems(s.params._dat)):
-                        if fnmatch(n, name):
+                        if fnmatchcase(n, name):
                             absnames.add(acc.meta['pathname'])
 
             if not absnames:

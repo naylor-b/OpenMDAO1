@@ -4,7 +4,6 @@ import os
 import sys
 import time
 import inspect
-import fnmatch
 import argparse
 import json
 import atexit

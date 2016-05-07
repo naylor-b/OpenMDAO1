@@ -101,7 +101,7 @@ class TestComponent(unittest.TestCase):
         for name in self.comp._init_unknowns_dict:
             self.assertTrue(self.comp._promoted(name))
 
-        self.assertFalse(self.comp._promoted('blah'))
+        self.assertFalse(self.comp._promoted('blah'), "'blah' is not promoted")
 
         self.comp._promotes = ('x*',)
         p.setup(check=False)

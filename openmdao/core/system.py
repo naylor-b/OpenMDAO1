@@ -103,12 +103,14 @@ class System(object):
 
         opt = self.fd_options = OptionsDictionary()
         opt.add_option('force_fd', False,
-                       desc="Set to True to finite difference this system.")
+                       desc="Set to True to finite difference this system.",
+                       lock_on_setup=True)
         opt.add_option('form', 'forward',
                        values=['forward', 'backward', 'central', 'complex_step'],
                        desc="Finite difference mode. (forward, backward, central) "
                        "You can also set to 'complex_step' to peform the complex "
-                       "step method if your components support it.")
+                       "step method if your components support it.",
+                       lock_on_setup=True)
         opt.add_option("step_size", 1.0e-6, lower=0.0,
                        desc="Default finite difference stepsize")
         opt.add_option("step_type", 'absolute',
@@ -118,7 +120,8 @@ class System(object):
                        values=[None, 'forward', 'backward', 'central', 'complex_step'],
                        desc='Finite difference mode: ("forward", "backward", "central", "complex_step")'
                        " During check_partial_derivatives, you can optionally do a "
-                       "second finite difference with a different mode.")
+                       "second finite difference with a different mode.",
+                       lock_on_setup=True)
         opt.add_option('linearize', False,
                        desc='Set to True if you want linearize to be called even though you are using FD.')
 
@@ -437,11 +440,11 @@ class System(object):
 
         # Prepare for calculating partial derivatives or total derivatives
         if total_derivs:
-            run_model = self.solve_nonlinear
+            run_model = self._sys_solve_nonlinear
             resultvec = unknowns
             states = ()
         else:
-            run_model = self.apply_nonlinear
+            run_model = self._sys_apply_nonlinear
             resultvec = resids
             states = self.states
 
@@ -687,10 +690,12 @@ class System(object):
 
                 if do_apply[(self.pathname, voi)]:
                     dparams._apply_unit_derivatives()
+                    dunknowns._scale_derivatives()
                     if force_fd:
                         self._apply_linear_jac(self.params, self.unknowns, dparams, dunknowns, dresids, mode)
                     else:
                         self.apply_linear(self.params, self.unknowns, dparams, dunknowns, dresids, mode)
+                    dresids._scale_derivatives()
 
                 for var, val in dunknowns.vec_val_iter():
                     # Skip all states
@@ -702,23 +707,24 @@ class System(object):
                 # do dparams.vec[:] = 0.0 for example.
                 for _, val in dparams.vec_val_iter():
                     val[:] = 0.0
-                for _, val in dunknowns.vec_val_iter():
-                    val[:] = 0.0
-
-                if do_apply[(self.pathname, voi)]:
-                    try:
-                        if force_fd:
-                            self._apply_linear_jac(self.params, self.unknowns, dparams, dunknowns, dresids, mode)
-                        else:
-                            self.apply_linear(self.params, self.unknowns, dparams, dunknowns, dresids, mode)
-                    finally:
-                        dparams._apply_unit_derivatives()
+                dunknowns.vec[:] = 0.0
 
                 for var, val in dresids.vec_val_iter():
                     # Skip all states
                     if (gsouts is None or var in gsouts) and \
                             var not in states:
                         dunknowns._dat[var].val -= val
+
+                if do_apply[(self.pathname, voi)]:
+                    try:
+                        dresids._scale_derivatives()
+                        if force_fd:
+                            self._apply_linear_jac(self.params, self.unknowns, dparams, dunknowns, dresids, mode)
+                        else:
+                            self.apply_linear(self.params, self.unknowns, dparams, dunknowns, dresids, mode)
+                    finally:
+                        dparams._apply_unit_derivatives()
+                        dunknowns._scale_derivatives()
 
     def _sys_linearize(self, params, unknowns, resids, total_derivs=None):
         """
@@ -805,21 +811,22 @@ class System(object):
                              if p not in dparams])
 
         for (unknown, param), J in iteritems(self._jacobian_cache):
+
             if param in states:
                 arg_vec = dunknowns
             else:
                 arg_vec = dparams
 
             # Vectors are flipped during adjoint
-
             try:
                 if isvw:
                     if fwd:
                         vec = dresids._flat(unknown)
                         vec += J.dot(arg_vec._flat(param))
                     else:
-                        shape = arg_vec._dat[param].meta['shape']
-                        arg_vec[param] += J.T.dot(dresids._flat(unknown)).reshape(shape)
+                        vec = arg_vec._flat(param)
+                        vec += J.T.dot(dresids._flat(unknown))
+
                 else: # plain dicts were passed in for unit testing...
                     if fwd:
                         vec = dresids[unknown]
@@ -827,9 +834,11 @@ class System(object):
                     else:
                         shape = arg_vec[param].shape
                         arg_vec[param] += J.T.dot(dresids[unknown].flat).reshape(shape)
+
             except KeyError:
                 continue # either didn't find param in dparams/dunknowns or
                          # didn't find unknown in dresids
+
             except ValueError:
                 # Provide a user-readable message that locates the problem
                 # derivative term.
@@ -1064,18 +1073,6 @@ class System(object):
                 max_size = vec_size
 
         return max_size, offsets
-
-    def _setup_prom_map(self):
-        """
-        Sets up the internal dict that maps absolute name to promoted name.
-        """
-        to_prom_name = self._sysdata.to_prom_name
-
-        for pathname, meta in iteritems(self._unknowns_dict):
-            prom = to_prom_name[pathname]
-
-        for pathname, meta in iteritems(self._params_dict):
-            prom = to_prom_name[pathname]
 
     def list_connections(self, group_by_comp=True, unconnected=True,
                          var=None, stream=sys.stdout):
@@ -1329,6 +1326,70 @@ class System(object):
 
             return tuples
         return []
+
+    def list_params(self, stream=sys.stdout):
+        """ Returns a list of parameters that are unconnected, and a list of
+        params that are only connected at a higher level of the hierarchy.
+
+        Args
+        ----
+        stream : output stream, optional
+            Stream to write the params info to. Default is sys.stdout.
+
+        Returns
+        -------
+            List of unconnected params, List of params connected in a higher scope.
+        """
+
+        pdict = self._params_dict
+        conns = self.connections
+        to_prom_name = self._sysdata.to_prom_name
+
+        p_conn = [p for p in pdict if p in conns]
+        p_unconn = [p for p in pdict if p not in conns]
+
+        name = self.pathname
+        if name != '':
+            name += '.'
+
+        p_outscope = [p for p in p_conn if not conns[p][0].startswith(name)]
+
+        if len(p_unconn) == 0:
+            print('', file=stream)
+            print("No unconnected parameters found.", file=stream)
+            print("---------------------------------", file=stream)
+        else:
+            print('', file=stream)
+            print("Unconnected parameters:", file=stream)
+            print("-------------------------", file=stream)
+
+        for param in p_unconn:
+            prom_param = to_prom_name[param]
+            if param.startswith(name):
+                param = param[len(name):]
+
+            if prom_param != param:
+                print("%s (%s))" % (param, prom_param), file=stream)
+            else:
+                print(param, file=stream)
+
+        if len(p_outscope) == 0:
+            print('', file=stream)
+            print("No parameters connected to sources in higher groups.",
+                  file=stream)
+            print("-----------------------------------------------------",
+                  file=stream)
+        else:
+            print('', file=stream)
+            print("Parameters connected to sources in higher groups:", file=stream)
+            print("--------------------------------------------------", file=stream)
+
+        for param in p_outscope:
+            print("%s: connected to '%s'" % (param.lstrip(name), conns[param][0]),
+                  file=stream)
+
+        print('', file=stream)
+        return p_unconn, p_outscope
 
 
 class _DummyContext(object):

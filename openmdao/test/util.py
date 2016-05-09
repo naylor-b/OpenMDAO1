@@ -1,5 +1,9 @@
 """Utilities for the OpenMDAO test process."""
 
+import os
+import tempfile
+import shutil
+
 from six import iteritems
 
 from math import isnan
@@ -133,3 +137,51 @@ def assert_equal_jacobian(test_case, computed_jac, expected_jac, tolerance):
         if err > tolerance:
             test_case.fail('error for %s is %.3e, is larger than'
                 'tolerance %.3e' % (str(up_pair), err, tolerance))
+
+
+def assert_no_force_fd(group):
+    """ Traverses the given group recursively.  If any subsystems are found
+    where `fd_options['force_fd'] = True`, an AssertionError is raised.
+
+    Parameters
+    ----------
+    group : OpenMDAO Group
+        The system which is recursively checked for the use of
+        `fd_options["force_fd"]=True`
+
+    Raises
+    ------
+    AssertionError
+        If a subsystem of group is found to be using
+        `fd_options["force_fd"]=True`
+    """
+    subs = [s.pathname for s in group.subsystems(recurse=True, include_self=True)
+            if s.fd_options['force_fd']]
+    assert not subs, "One or more systems are using " \
+                     "fd_options['force_fd']=True: " + str(subs)
+
+
+class ConcurrentTestCaseMixin(object):
+    def concurrent_setUp(self, prefix=''):
+        """Sets up a temp dir to execute a test in so that our test cases
+        can run concurrently without interfering with each other's
+        input/output files.
+
+        Args
+        ----
+
+        prefix : str, optional
+            Temp directory will have this prefix.
+
+        """
+        self.startdir = os.getcwd()
+        self.tempdir = tempfile.mkdtemp(prefix=prefix)
+        os.chdir(self.tempdir)
+
+    def concurrent_tearDown(self):
+        os.chdir(self.startdir)
+        if not os.environ.get('OPENMDAO_KEEPDIRS', False):
+            try:
+                shutil.rmtree(self.tempdir)
+            except OSError:
+                pass

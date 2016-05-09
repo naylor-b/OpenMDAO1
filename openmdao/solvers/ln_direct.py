@@ -12,8 +12,8 @@ from openmdao.solvers.solver_base import MultLinearSolver
 
 class DirectSolver(MultLinearSolver):
     """ OpenMDAO LinearSolver that explicitly solves the linear system using
-    linalg.solve. The user can choose to have the jacobian assemblled
-    directly or throuugh matrix-vector product.
+    linalg.solve. The user can choose to have the jacobian assembled
+    directly or through matrix-vector product.
 
     Options
     -------
@@ -29,9 +29,9 @@ class DirectSolver(MultLinearSolver):
         Jacobian by calling apply_linear with columns of identity. Select
         'assemble' to build the Jacobian by taking the calculated Jacobians in
         each component and placing them directly into a clean identity matrix.
-    options['save_LU_decomposition'] : bool(True)
-        Save the LU decomposition of the Jacobian and only regenerate when
-        it changes.
+    options['solve_method'] : str('LU')
+        Solution method, either 'solve' for linalg.solve, or 'LU' for
+        linalg.lu_factor and linalg.lu_solve.
     """
 
     def __init__(self):
@@ -40,7 +40,9 @@ class DirectSolver(MultLinearSolver):
         self.options.add_option('mode', 'auto', values=['fwd', 'rev', 'auto'],
                        desc="Derivative calculation mode, set to 'fwd' for " +
                        "forward mode, 'rev' for reverse mode, or 'auto' to " +
-                       "let OpenMDAO determine the best mode.")
+                       "let OpenMDAO determine the best mode.",
+                       lock_on_setup=True)
+
         self.options.add_option('jacobian_method', 'MVP', values=['MVP', 'assemble'],
                                 desc="Method to assemble the jacobian to solve. " +
                                 "Select 'MVP' to build the Jacobian by calling " +
@@ -48,9 +50,9 @@ class DirectSolver(MultLinearSolver):
                                 "'assemble' to build the Jacobian by taking the " +
                                 "calculated Jacobians in each component and placing " +
                                 "them directly into a clean identity matrix.")
-        self.options.add_option('save_LU_decomposition', True,
-                                desc="Save the LU decomposition of the Jacobian and " +
-                                "only regenerate when it changes.")
+        self.options.add_option('solve_method', 'LU', values=['LU', 'solve'],
+                                desc="Solution method, either 'solve' for linalg.solve, " +
+                                "or 'LU' for linalg.lu_factor and linalg.lu_solve.")
 
         self.jacobian = None
         self.lup = None
@@ -115,10 +117,10 @@ class DirectSolver(MultLinearSolver):
                 self.jacobian = self._assemble_jacobian(rhs, mode)
                 system._jacobian_changed = False
 
-                if self.options['save_LU_decomposition']:
+                if self.options['solve_method'] == 'LU':
                     self.lup = lu_factor(self.jacobian)
 
-            if self.options['save_LU_decomposition']:
+            if self.options['solve_method'] == 'LU':
                 deriv = lu_solve(self.lup, rhs)
             else:
                 deriv = np.linalg.solve(self.jacobian, rhs)

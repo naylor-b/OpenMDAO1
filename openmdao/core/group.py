@@ -239,6 +239,11 @@ class Group(System):
         super(Group, self)._init_sys_data(parent_path, probdata)
         self._sys_graph = None
         self._gs_outputs = None
+        self.ln_solver.pathname = self.pathname + '.' + self.ln_solver.__class__.__name__
+        self.nl_solver.pathname = self.pathname + '.' + self.nl_solver.__class__.__name__
+        self.ln_solver.recorders.pathname = self.ln_solver.pathname+'.'+'recorders'
+        self.nl_solver.recorders.pathname = self.nl_solver.pathname+'.'+'recorders'
+
         for sub in itervalues(self._subsystems):
             sub._init_sys_data(self.pathname, probdata)
 
@@ -366,7 +371,7 @@ class Group(System):
                 self._local_subsystems.append(sub)
 
     def _setup_vectors(self, param_owners, parent=None,
-                       top_unknowns=None, impl=None):
+                       top_unknowns=None, impl=None, alloc_derivs=True):
         """Create `VecWrappers` for this `Group` and all below it in the
         `System` tree.
 
@@ -385,6 +390,9 @@ class Group(System):
         impl : an implementation factory, optional
             Specifies the factory object used to create `VecWrapper` and
             `DataTransfer` objects.
+
+        alloc_derivs : bool(True)
+            If True, allocate the derivative vectors.
         """
         self._sysdata.comm = self.comm
 
@@ -398,8 +406,6 @@ class Group(System):
 
         if not self.is_active():
             return
-
-        self._setup_prom_map()
 
         self._impl = impl
 
@@ -416,6 +422,10 @@ class Group(System):
             max_usize, self._shared_u_offsets = \
                 self._get_shared_vec_info(self._unknowns_dict)
 
+            # Only allocate deriv vectors if needed.
+            if not alloc_derivs:
+                max_usize = max_psize = 0
+
             # other vecs will be sub-sliced from this one
             self._shared_du_vec = np.zeros(max_usize)
             self._shared_dr_vec = np.zeros(max_usize)
@@ -424,6 +434,11 @@ class Group(System):
             self._create_vecs(my_params, voi=None, impl=impl)
             top_unknowns = self.unknowns
         else:
+
+            # Only allocate deriv vectors if needed.
+            if not alloc_derivs:
+                max_psize = 0
+
             self._shared_dp_vec = np.zeros(max_psize)
 
             # map promoted name in parent to corresponding promoted name in this view
@@ -436,7 +451,7 @@ class Group(System):
         self._owning_ranks = self._get_owning_ranks()
         self._sysdata.owning_ranks = self._owning_ranks
 
-        self._setup_data_transfer(my_params, None)
+        self._setup_data_transfer(my_params, None, alloc_derivs)
 
         all_vois = set([None])
         if self._probdata.top_lin_gs:
@@ -451,12 +466,12 @@ class Group(System):
                         self._create_views(top_unknowns, parent, my_params,
                                            voi)
 
-                    self._setup_data_transfer(my_params, voi)
+                    self._setup_data_transfer(my_params, voi, alloc_derivs)
 
         for sub in itervalues(self._subsystems):
             sub._setup_vectors(param_owners, parent=self,
                                top_unknowns=top_unknowns,
-                               impl=self._impl)
+                               impl=self._impl, alloc_derivs=alloc_derivs)
 
 
         # now that all of the vectors and subvecs are allocated, calculate
@@ -508,10 +523,11 @@ class Group(System):
             self.unknowns.setup(unknowns_dict,
                                 relevance=self._probdata.relevance,
                                 var_of_interest=None, store_byobjs=True,
-                                alloc_complex=alloc_complex)
+                                alloc_complex=alloc_complex, vectype='u')
             self.resids.setup(unknowns_dict,
                               relevance=self._probdata.relevance,
-                              var_of_interest=None, alloc_complex=alloc_complex)
+                              var_of_interest=None, alloc_complex=alloc_complex,
+                              vectype='r')
             self.params.setup(None, params_dict, self.unknowns,
                               my_params, self.connections,
                               relevance=self._probdata.relevance,
@@ -532,10 +548,12 @@ class Group(System):
 
             dunknowns.setup(unknowns_dict, relevance=self._probdata.relevance,
                             var_of_interest=voi,
-                            shared_vec=self._shared_du_vec[self._shared_u_offsets[voi]:])
+                            shared_vec=self._shared_du_vec[self._shared_u_offsets[voi]:],
+                            vectype='du')
             dresids.setup(unknowns_dict, relevance=self._probdata.relevance,
                           var_of_interest=voi,
-                          shared_vec=self._shared_dr_vec[self._shared_u_offsets[voi]:])
+                          shared_vec=self._shared_dr_vec[self._shared_u_offsets[voi]:],
+                          vectype='dr')
             dparams.setup(None, params_dict, self.unknowns, my_params,
                           self.connections, relevance=self._probdata.relevance,
                           var_of_interest=voi,
@@ -646,6 +664,28 @@ class Group(System):
 
         return connections
 
+    def _sys_solve_nonlinear(self, params=None, unknowns=None, resids=None, metadata=None):
+        """
+        Solves the group using the nonlinear solver specified in
+        self.nl_solver. This wrapper performs any necessary pre/post
+        operations.
+
+        Args
+        ----
+        params : `VecWrapper`, optional
+            `VecWrapper` containing parameters. (p)
+
+        unknowns : `VecWrapper`, optional
+            `VecWrapper` containing outputs and states. (u)
+
+        resids : `VecWrapper`, optional
+            `VecWrapper` containing residuals. (r)
+
+        metadata : dict, optional
+            Dictionary containing execution metadata (e.g. iteration coordinate).
+        """
+        self.solve_nonlinear(params, unknowns, resids, metadata=metadata)
+
     def solve_nonlinear(self, params=None, unknowns=None, resids=None, metadata=None):
         """
         Solves the group using the nonlinear solver specified in self.nl_solver.
@@ -687,9 +727,30 @@ class Group(System):
             if sub.is_active():
                 with sub._dircontext:
                     if isinstance(sub, Component):
-                        sub.solve_nonlinear(sub.params, sub.unknowns, sub.resids)
+                        sub._sys_solve_nonlinear(sub.params, sub.unknowns, sub.resids)
                     else:
                         sub.solve_nonlinear(sub.params, sub.unknowns, sub.resids, metadata)
+
+    def _sys_apply_nonlinear(self, params, unknowns, resids, metadata=None):
+        """
+        Evaluates the residuals of our children systems. This wrapper
+        performs any necessary pre/post operations.
+
+        Args
+        ----
+        params : `VecWrapper`
+            `VecWrapper` containing parameters. (p)
+
+        unknowns : `VecWrapper`
+            `VecWrapper` containing outputs and states. (u)
+
+        resids : `VecWrapper`
+            `VecWrapper` containing residuals. (r)
+
+        metadata : dict, optional
+            Dictionary containing execution metadata (e.g. iteration coordinate).
+        """
+        self.apply_nonlinear(params, unknowns, resids, metadata=metadata)
 
     def apply_nonlinear(self, params, unknowns, resids, metadata=None):
         """
@@ -725,7 +786,7 @@ class Group(System):
             self._transfer_data(sub.name)
             if sub.is_active():
                 if isinstance(sub, Component):
-                    sub.apply_nonlinear(sub.params, sub.unknowns, sub.resids)
+                    sub._sys_apply_nonlinear(sub.params, sub.unknowns, sub.resids)
                 else:
                     sub.apply_nonlinear(sub.params, sub.unknowns, sub.resids, metadata)
 
@@ -1262,7 +1323,7 @@ class Group(System):
 
         return src_idxs, tgt_idxs
 
-    def _setup_data_transfer(self, my_params, var_of_interest):
+    def _setup_data_transfer(self, my_params, var_of_interest, alloc_derivs):
         """
         Create `DataTransfer` objects to handle data transfer for all of the
         connections that involve parameters for which this `Group`
@@ -1278,6 +1339,8 @@ class Group(System):
         var_of_interest : str or None
             The name of a variable of interest.
 
+        alloc_derivs : bool
+            If True, deriv vecs have been allocated.
         """
 
         relevant = self._probdata.relevance.relevant.get(var_of_interest, ())
@@ -1360,6 +1423,13 @@ class Group(System):
                     src_idx_list.append(sidxs)
                     dest_idx_list.append(didxs)
 
+        if alloc_derivs:
+            uvec = self.dumat[var_of_interest]
+            pvec = self.dpmat[var_of_interest]
+        else:
+            uvec = self.unknowns
+            pvec = self.params
+
         # create a DataTransfer object that combines all of the
         # individual subsystem src_idxs, tgt_idxs, and byobj_conns, so that a 'full'
         # scatter to all subsystems can be done at the same time.  Store that DataTransfer
@@ -1381,19 +1451,16 @@ class Group(System):
                     if flats or byobjs:
                         # create a 'partial' scatter to each subsystem
                         self._data_xfer[(tgt_sys, modename[mode], var_of_interest)] = \
-                            self._impl.create_data_xfer(self.dumat[var_of_interest],
-                                                        self.dpmat[var_of_interest],
+                            self._impl.create_data_xfer(uvec, pvec,
                                                         srcs, tgts, flats, byobjs,
                                                         modename[mode], self._sysdata)
 
             # add a full scatter for the current direction
             self._data_xfer[('', modename[mode], var_of_interest)] = \
-                self._impl.create_data_xfer(self.dumat[var_of_interest],
-                                            self.dpmat[var_of_interest],
+                self._impl.create_data_xfer(uvec, pvec,
                                             full_srcs, full_tgts,
                                             full_flats, full_byobjs,
                                             modename[mode], self._sysdata)
-
 
     def _transfer_data(self, target_sys='', mode='fwd', deriv=False,
                        var_of_interest=None):

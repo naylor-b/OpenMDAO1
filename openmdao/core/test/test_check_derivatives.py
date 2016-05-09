@@ -13,6 +13,7 @@ from openmdao.test.paraboloid import Paraboloid
 from openmdao.test.simple_comps import SimpleArrayComp, SimpleImplicitComp, \
                                       SimpleCompDerivMatVec
 from openmdao.test.util import assert_rel_error
+from openmdao.util.options import OptionsDictionary
 
 
 class TestProblemCheckPartials(unittest.TestCase):
@@ -234,6 +235,59 @@ class TestProblemCheckPartials(unittest.TestCase):
         else:
             self.fail("Error expected")
 
+    def test_incorrect_jacobian(self):
+
+        class MyComp(Component):
+
+            def __init__(self, multiplier=2.0):
+                super(MyComp, self).__init__()
+
+                # Params
+                self.add_param('x1', 3.0)
+                self.add_param('x2', 5.0)
+
+                # Unknowns
+                self.add_output('y', 5.5)
+
+            def solve_nonlinear(self, params, unknowns, resids):
+                """ Doesn't do much. """
+                unknowns['y'] = 3.0*params['x1'] + 4.0*params['x2']
+
+            def linearize(self, params, unknowns, resids):
+                """Intentionally incorrect derivative."""
+
+                J = {}
+                J['y', 'x1'] = np.array([4.0])
+                J['y', 'x2'] = np.array([40])
+                return J
+
+        prob = Problem()
+        prob.root = Group()
+        prob.root.add('comp', MyComp())
+        prob.root.add('p1', IndepVarComp('x1', 3.0))
+        prob.root.add('p2', IndepVarComp('x2', 5.0))
+
+        prob.root.connect('p1.x1', 'comp.x1')
+        prob.root.connect('p2.x2', 'comp.x2')
+
+        prob.setup(check=False)
+        prob.run()
+
+        stringstream = StringIO()
+
+        data = prob.check_partial_derivatives(out_stream=stringstream)
+
+        lines = stringstream.getvalue().split("\n")
+
+        y_wrt_x1_line = lines.index("  comp: 'y' wrt 'x1'")
+
+        self.assertTrue(lines[y_wrt_x1_line+6].endswith('*'),
+                        msg='Error flag expected in output but not displayed')
+        self.assertTrue(lines[y_wrt_x1_line+7].endswith('*'),
+                        msg='Error flag expected in output but not displayed')
+        self.assertFalse(lines[y_wrt_x1_line+8].endswith('*'),
+                        msg='Error flag not expected in output but displayed')
+
     def test_big_boy_Jacobian(self):
 
         class MyComp(Component):
@@ -339,6 +393,10 @@ class TestProblemFullFD(unittest.TestCase):
         J = prob.calc_gradient(indep_list, unknown_list, mode='fwd', return_format='dict')
         assert_rel_error(self, J['comp.y']['comp.x'][0][0], 2.0, 1e-6)
 
+        # We should not allocate deriv vectors for full model FD
+        self.assertEqual(len(prob.root.dumat[None].vec), 0)
+        self.assertEqual(len(prob.root.drmat[None].vec), 0)
+        self.assertEqual(len(prob.root.dpmat[None].vec), 0)
 
     def test_full_model_fd_simple_comp_promoted(self):
 
@@ -359,14 +417,20 @@ class TestProblemFullFD(unittest.TestCase):
         J = prob.calc_gradient(indep_list, unknown_list, mode='fwd', return_format='dict')
         assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
 
+        # We should not allocate deriv vectors for full model FD
+        self.assertEqual(len(prob.root.dumat[None].vec), 0)
+        self.assertEqual(len(prob.root.drmat[None].vec), 0)
+        self.assertEqual(len(prob.root.dpmat[None].vec), 0)
+
     def test_full_model_fd_double_diamond_grouped(self):
 
         prob = Problem()
         prob.root = ConvergeDivergeGroups()
-        prob.setup(check=False)
-        prob.run()
 
         prob.root.fd_options['force_fd'] = True
+
+        prob.setup(check=False)
+        prob.run()
 
         indep_list = ['sub1.comp1.x1']
         unknown_list = ['comp7.y1']
@@ -374,7 +438,11 @@ class TestProblemFullFD(unittest.TestCase):
         J = prob.calc_gradient(indep_list, unknown_list, mode='fwd', return_format='dict')
         assert_rel_error(self, J['comp7.y1']['sub1.comp1.x1'][0][0], -40.75, 1e-6)
 
+        # Cheat a bit so I can twiddle mode
+        OptionsDictionary.locked = False
+
         prob.root.fd_options['form'] = 'central'
+
         J = prob.calc_gradient(indep_list, unknown_list, mode='fwd', return_format='dict')
         assert_rel_error(self, J['comp7.y1']['sub1.comp1.x1'][0][0], -40.75, 1e-6)
 
@@ -385,10 +453,10 @@ class TestProblemFullFD(unittest.TestCase):
         par = root.add('par', ParallelGroup())
         par.add('sub', ConvergeDivergeGroups())
 
+        prob.root.fd_options['force_fd'] = True
+
         prob.setup(check=False)
         prob.run()
-
-        prob.root.fd_options['force_fd'] = True
 
         # Make sure we don't get a key error.
         data = prob.check_total_derivatives(out_stream=None)

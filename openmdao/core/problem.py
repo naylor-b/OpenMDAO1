@@ -7,6 +7,7 @@ import sys
 import json
 import warnings
 import traceback
+from collections import OrderedDict
 from itertools import chain
 from six import iteritems, itervalues
 from six.moves import cStringIO
@@ -31,12 +32,13 @@ from openmdao.solvers.ln_direct import DirectSolver
 from openmdao.solvers.ln_gauss_seidel import LinearGaussSeidel
 
 from openmdao.units.units import get_conversion_tuple
-from collections import OrderedDict
 from openmdao.util.string_util import get_common_ancestor, nearest_child, name_relative_to
 from openmdao.util.graph import plain_bfs
+from openmdao.util.options import OptionsDictionary
 
 force_check = os.environ.get('OPENMDAO_FORCE_CHECK_SETUP')
 trace = os.environ.get('OPENMDAO_TRACE')
+
 
 class _ProbData(object):
     """
@@ -70,24 +72,6 @@ class Problem(object):
     comm : an MPI communicator (real or fake), optional
         A communicator that can be used for distributed operations when running
         under MPI. If not specified, the default "COMM_WORLD" will be used.
-
-    Options
-    -------
-    fd_options['force_fd'] :  bool(False)
-        Set to True to finite difference this system.
-    fd_options['form'] :  str('forward')
-        Finite difference mode. (forward, backward, central) You can also set to 'complex_step' to peform the complex step method if your components support it.
-    fd_options['step_size'] :  float(1e-06)
-        Default finite difference stepsize
-    fd_options['step_type'] :  str('absolute')
-        Set to absolute, relative
-    fd_options['extra_check_partials_form'] :  None or str
-        Finite difference mode: ("forward", "backward", "central", "complex_step")
-        During check_partial_derivatives, you can optionally do a
-        second finite difference with a different mode.
-    fd_options['linearize'] : bool(False)
-        Set to True if you want linearize to be called even though you are using FD.
-
     """
 
     def __init__(self, root=None, driver=None, impl=None, comm=None):
@@ -113,6 +97,7 @@ class Problem(object):
             self.driver = driver
 
         self.pathname = ''
+
 
     def __getitem__(self, name):
         """Retrieve unflattened value of named unknown or unconnected
@@ -393,7 +378,6 @@ class Problem(object):
                                   "values: %s" % (promname,
                                       sorted([(v,k) for k,v in forms.items()])))
 
-
     def _get_ubc_vars(self, connections):
         """Return a list of any connected inputs that are used before they
         are set by their connected unknowns.
@@ -439,8 +423,10 @@ class Problem(object):
             self._probdata.top_lin_gs = True
 
         self.driver.root = self.root
+        self.driver.pathname = self.pathname + "." + self.driver.__class__.__name__
+        self.driver.recorders.pathname = self.driver.pathname + ".recorders"
 
-        # Give every system an absolute pathname
+        # Give every system and solver an absolute pathname
         self.root._init_sys_data(self.pathname, self._probdata)
 
         # divide MPI communicators among subsystems
@@ -620,8 +606,14 @@ class Problem(object):
         # sourceless connected inputs
         self._check_input_diffs(connections, params_dict, unknowns_dict)
 
+        # If we force_fd root and don't need derivatives in solvers, then we
+        # don't have to allocate any deriv vectors.
+        alloc_derivs = not self.root.fd_options['force_fd']
+        for sub in self.root.subgroups(recurse=True, include_self=True):
+            alloc_derivs = alloc_derivs or sub.nl_solver.supports['uses_derivatives']
+
         # create VecWrappers for all systems in the tree.
-        self.root._setup_vectors(param_owners, impl=self._impl)
+        self.root._setup_vectors(param_owners, impl=self._impl, alloc_derivs=alloc_derivs)
 
         # Prepare Driver
         self.driver._setup()
@@ -645,6 +637,9 @@ class Problem(object):
             for err in self._setup_errors:
                 stream.write("%s\n" % err)
             raise RuntimeError(stream.getvalue())
+
+        # Lock any restricted options in the options dictionaries.
+        OptionsDictionary.locked = True
 
         # check for any potential issues
         if check or force_check:
@@ -1053,8 +1048,22 @@ class Problem(object):
 
         return results
 
+    def pre_run_check(self):
+        """ Last chance for some checks. The checks that should be performed
+        here are those that would generate a cryptic error message. We can
+        raise a readable error for the user."""
+
+        # New message if you forget to run setup first, or if you assign a
+        # new ln or nl solver and forget to run setup.
+        if not self.root.fd_options.locked:
+            msg = "Before running the model, setup() must be called. If " + \
+                 "the configuration has changed since it was called, then " + \
+                 "setup must be called again before running the model."
+            raise RuntimeError(msg)
+
     def run(self):
         """ Runs the Driver in self.driver. """
+        self.pre_run_check()
         if self.root.is_active():
             self.driver.run(self)
 
@@ -1071,6 +1080,7 @@ class Problem(object):
     def run_once(self):
         """ Execute run_once in the driver, executing the model at the
         the current design point. """
+        self.pre_run_check()
         root = self.root
         driver = self.driver
         if root.is_active():
@@ -1191,17 +1201,18 @@ class Problem(object):
             msg = "return_format must be 'array' or 'dict'"
             raise ValueError(msg)
 
-        # Either analytic or finite difference
-        if mode == 'fd' or self.root.fd_options['force_fd']:
-            return self._calc_gradient_fd(indep_list, unknown_list,
-                                          return_format, dv_scale=dv_scale,
-                                          cn_scale=cn_scale, sparsity=sparsity)
-        else:
-            return self._calc_gradient_ln_solver(indep_list, unknown_list,
-                                                 return_format, mode,
-                                                 dv_scale=dv_scale,
-                                                 cn_scale=cn_scale,
-                                                 sparsity=sparsity)
+        with self.root._dircontext:
+            # Either analytic or finite difference
+            if mode == 'fd' or self.root.fd_options['force_fd']:
+                return self._calc_gradient_fd(indep_list, unknown_list,
+                                              return_format, dv_scale=dv_scale,
+                                              cn_scale=cn_scale, sparsity=sparsity)
+            else:
+                return self._calc_gradient_ln_solver(indep_list, unknown_list,
+                                                     return_format, mode,
+                                                     dv_scale=dv_scale,
+                                                     cn_scale=cn_scale,
+                                                     sparsity=sparsity)
 
     def _calc_gradient_fd(self, indep_list, unknown_list, return_format,
                           dv_scale=None, cn_scale=None, sparsity=None):
@@ -1546,7 +1557,11 @@ class Problem(object):
                     in_idxs = []
 
                 if len(in_idxs) == 0:
-                    in_idxs = np.arange(0, unknowns_dict[to_abs_uname[voi]]['size'], dtype=int)
+                    if voi in poi_indices:
+                        # offset doesn't matter since we only care about the size
+                        in_idxs = duvec.to_idx_array(poi_indices[voi])
+                    else:
+                        in_idxs = np.arange(0, unknowns_dict[to_abs_uname[voi]]['size'], dtype=int)
 
                 if old_size is None:
                     old_size = len(in_idxs)
@@ -1601,9 +1616,8 @@ class Problem(object):
                             if nproc > 1:
                                 # TODO: make this use Bcast for efficiency
                                 if trace:
-                                    debug("calc_gradient_ln_solver dxval bcast. dxval=%s, root=%s"%
-                                            (dxval, owned[item]))
-                                    debug("input_list: %s, output_list: %s" % (input_list, output_list))
+                                    debug("calc_gradient_ln_solver dxval bcast. dxval=%s, root=%s, param=%s, item=%s" %
+                                            (dxval, owned[item], param, item))
                                 dxval = comm.bcast(dxval, root=owned[item])
                                 if trace:
                                     debug("dxval bcast DONE")
@@ -1677,7 +1691,8 @@ class Problem(object):
         return None
 
     def check_partial_derivatives(self, out_stream=sys.stdout, comps=None,
-                                  compact_print=False):
+                                  compact_print=False, abs_err_tol=1.0E-6,
+                                  rel_err_tol=1.0E-6):
         """ Checks partial derivatives comprehensively for all components in
         your model.
 
@@ -1695,6 +1710,18 @@ class Problem(object):
         compact_print : bool
             Set to True to just print the essentials, one line per unknown-param
             pair.
+
+        abs_err_tol : float
+            Threshold value for absolute error.  Errors about this value will
+            have a '*' displayed next to them in output, making them easy
+            to search for. Default is 1.0E-6.
+
+        rel_err_tol : float
+            Threshold value for relative error.  Errors about this value will
+            have a '*' displayed next to them in output, making them easy
+            to search for. Note at times there may be a significant relative
+            error due to a minor absolute error.  Default is 1.0E-6.
+
 
         Returns
         -------
@@ -1851,11 +1878,13 @@ class Problem(object):
                         dunknowns.vec[:] = 0.0
 
                         dresids._dat[u_name].val[idx] = 1.0
+                        dresids._scale_derivatives()
                         try:
                             comp.apply_linear(params, unknowns, dparams,
                                               dunknowns, dresids, 'rev')
                         finally:
                             dparams._apply_unit_derivatives()
+                            dunknowns._scale_derivatives()
 
                         for p_name in param_list:
 
@@ -1877,8 +1906,10 @@ class Problem(object):
 
                         dinputs._dat[p_name].val[idx] = 1.0
                         dparams._apply_unit_derivatives()
+                        dunknowns._scale_derivatives()
                         comp.apply_linear(params, unknowns, dparams,
                                           dunknowns, dresids, 'fwd')
+                        dresids._scale_derivatives()
 
                         for u_name, u_val in dresids.vec_val_iter():
                             jac_fwd[(u_name, p_name)][:, idx] = u_val
@@ -1910,21 +1941,26 @@ class Problem(object):
 
                 # Cache old form so we can overide temporarily
                 save_form = opt['form']
+                OptionsDictionary.locked = False
                 opt['form'] = opt['extra_check_partials_form']
 
                 jac_fd2 = fd_func(params, unknowns, resids)
 
                 opt['form'] = save_form
+                OptionsDictionary.locked = True
 
             # Assemble and Return all metrics.
             _assemble_deriv_data(chain(dparams, states), resids, data[cname],
                                  jac_fwd, jac_rev, jac_fd, out_stream,
                                  c_name=cname, jac_fd2=jac_fd2, fd_desc=fd_desc,
-                                 fd_desc2=fd_desc2, compact_print=compact_print)
+                                 fd_desc2=fd_desc2, compact_print=compact_print,
+                                 abs_err_tol=abs_err_tol,
+                                 rel_err_tol=rel_err_tol)
 
         return data
 
-    def check_total_derivatives(self, out_stream=sys.stdout):
+    def check_total_derivatives(self, out_stream=sys.stdout, abs_err_tol=1.0E-6,
+                                rel_err_tol=1.0E-6):
         """ Checks total derivatives for problem defined at the top.
 
         Args
@@ -1933,6 +1969,17 @@ class Problem(object):
         out_stream : file_like
             Where to send human readable output. Default is sys.stdout. Set to
             None to suppress.
+
+        abs_err_tol : float
+            Threshold value for absolute error.  Errors about this value will
+            have a '*' displayed next to them in output, making them easy
+            to search for. Default is 1.0E-6.
+
+        rel_err_tol : float
+            Threshold value for relative error.  Errors about this value will
+            have a '*' displayed next to them in output, making them easy
+            to search for. Note at times there may be a significant relative
+            error due to a minor absolute error.  Default is 1.0E-6.
 
         Returns
         -------
@@ -2025,7 +2072,8 @@ class Problem(object):
         # Assemble and Return all metrics.
         data = {}
         _assemble_deriv_data(indep_list, unknown_list, data,
-                             Jfor, Jrev, Jfd, out_stream)
+                             Jfor, Jrev, Jfd, out_stream,
+                             abs_err_tol=abs_err_tol, rel_err_tol=rel_err_tol)
 
         return data
 
@@ -2149,6 +2197,12 @@ class Problem(object):
 
             # units must be in both src and target to have a conversion
             if 'units' not in tmeta or 'units' not in smeta:
+
+                # We treat a scaler in the source as a type of unit
+                # conversion.
+                if 'scaler' in smeta:
+                    tmeta['unit_conv'] = (smeta['scaler'], 0.0)
+
                 continue
 
             src_unit = smeta['units']
@@ -2161,13 +2215,19 @@ class Problem(object):
                     msg = "Unit '{0}' in source {1} "\
                         "is incompatible with unit '{2}' "\
                         "in target {3}.".format(src_unit,
-                                                  _both_names(smeta, to_prom_name),
-                                                  tgt_unit,
-                                                  _both_names(tmeta, to_prom_name))
+                                                _both_names(smeta, to_prom_name),
+                                                tgt_unit,
+                                                _both_names(tmeta, to_prom_name))
                     self._setup_errors.append(msg)
                     continue
                 else:
                     raise
+
+            # We treat a scaler in the source as a type of unit
+            # conversion.
+            if 'scaler' in smeta:
+                scale *= smeta['scaler']
+                offset /= smeta['scaler']
 
             # If units are not equivalent, store unit conversion tuple
             # in the parameter metadata
@@ -2269,7 +2329,8 @@ def _pad_name(name, pad_num=13, quotes=True):
 
 def _assemble_deriv_data(params, resids, cdata, jac_fwd, jac_rev, jac_fd,
                          out_stream, c_name='root', jac_fd2=None, fd_desc=None,
-                         fd_desc2=None, compact_print=False):
+                         fd_desc2=None, compact_print=False, rel_err_tol=1.0E-6,
+                         abs_err_tol=1.0E-6):
     """ Assembles dictionaries and prints output for check derivatives
     functions. This is used by both the partial and total derivative
     checks.
@@ -2430,23 +2491,31 @@ def _assemble_deriv_data(params, resids, cdata, jac_fwd, jac_rev, jac_fd,
                 out_stream.write('\n')
 
                 if jac_fwd:
-                    out_stream.write('    Absolute Error (Jfor - Jfd) : %.6e\n' % abs1)
+                    flag = '' if abs1 < abs_err_tol else ' *'
+                    out_stream.write('    Absolute Error (Jfor - Jfd) : %.6e%s\n' % (abs1, flag))
                 if jac_rev:
-                    out_stream.write('    Absolute Error (Jrev - Jfd) : %.6e\n' % abs2)
+                    flag = '' if abs2 < abs_err_tol else ' *'
+                    out_stream.write('    Absolute Error (Jrev - Jfd) : %.6e%s\n' % (abs2, flag))
                 if jac_fwd and jac_rev:
-                    out_stream.write('    Absolute Error (Jfor - Jrev): %.6e\n' % abs3)
+                    flag = '' if abs3 < abs_err_tol else ' *'
+                    out_stream.write('    Absolute Error (Jfor - Jrev): %.6e%s\n' % (abs3, flag))
                 if jac_fd2:
-                    out_stream.write('    Absolute Error (Jfd2 - Jfd): %.6e\n' % abs4)
+                    flag = '' if abs4 < abs_err_tol else ' *'
+                    out_stream.write('    Absolute Error (Jfd2 - Jfd): %.6e%s\n' % (abs4, flag))
                 out_stream.write('\n')
 
                 if jac_fwd:
-                    out_stream.write('    Relative Error (Jfor - Jfd) : %.6e\n' % rel1)
+                    flag = '' if np.isnan(rel1) or rel1 < rel_err_tol else ' *'
+                    out_stream.write('    Relative Error (Jfor - Jfd) : %.6e%s\n' % (rel1, flag))
                 if jac_rev:
-                    out_stream.write('    Relative Error (Jrev - Jfd) : %.6e\n' % rel2)
+                    flag = '' if np.isnan(rel2) or rel2 < rel_err_tol else ' *'
+                    out_stream.write('    Relative Error (Jrev - Jfd) : %.6e%s\n' % (rel2, flag))
                 if jac_fwd and jac_rev:
-                    out_stream.write('    Relative Error (Jfor - Jrev): %.6e\n' % rel3)
+                    flag = '' if np.isnan(rel3) or rel3 < rel_err_tol else ' *'
+                    out_stream.write('    Relative Error (Jfor - Jrev): %.6e%s\n' % (rel3, flag))
                 if jac_fd2:
-                    out_stream.write('    Relative Error (Jfd2 - Jfd) : %.6e\n' % rel4)
+                    flag = '' if np.isnan(rel4) or rel4 < rel_err_tol else ' *'
+                    out_stream.write('    Relative Error (Jfd2 - Jfd) : %.6e%s\n' % (rel4, flag))
                 out_stream.write('\n')
 
                 if jac_fwd:

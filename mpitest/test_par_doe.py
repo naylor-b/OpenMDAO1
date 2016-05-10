@@ -70,7 +70,7 @@ class ParallelDOETestCase(MPITestCase):
             fail_rank = 0
 
         if self.comm.rank == fail_rank:
-            root.add('mult', ExecComp4Test("y=c*x", fails=[3], critical=True))
+            root.add('mult', ExecComp4Test("y=c*x", fails=[3], fail_hard=True))
         else:
             root.add('mult', ExecComp4Test("y=c*x"))
 
@@ -211,7 +211,7 @@ class LBParallelDOETestCase(MPITestCase):
             fail_rank = 0
 
         if self.comm.rank == fail_rank:
-            root.add('mult', ExecComp4Test("y=c*x", fails=[3], critical=True))
+            root.add('mult', ExecComp4Test("y=c*x", fails=[3], fail_hard=True))
         else:
             root.add('mult', ExecComp4Test("y=c*x"))
 

@@ -40,12 +40,29 @@ class FileRef(object):
             mode += 'b'
         return open(self._abspath(), mode)
 
+    def write(self, data):
+        """ Write the given data to the file referenced by this
+        FileRef.
+        """
+        with self.open('w') as f:
+            f.write(data)
+
+    def read(self):
+        """Return the full contents of the file referenced by this
+        FileRef.
+        """
+        with self.open('r') as f:
+            return f.read()
+
     def _abspath(self):
         """ Return absolute path to file. """
         if os.path.isabs(self.fname):
             return self.fname
         else:
             return os.path.join(self.parent_dir, self.fname)
+
+    def _dirname(self):
+        return os.path.dirname(self._abspath())
 
     def validate(self, src_fref):
         """

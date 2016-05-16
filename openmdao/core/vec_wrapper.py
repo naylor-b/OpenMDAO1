@@ -12,6 +12,8 @@ from openmdao.core.fileref import FileRef
 from openmdao.util.type_util import is_differentiable
 from openmdao.util.string_util import get_common_ancestor
 
+_empty_slice = slice(0,0)
+
 class _ByObjWrapper(object):
     """
     We have to wrap byobj values in these in order to have param vec entries
@@ -619,13 +621,15 @@ class VecWrapper(object):
         ndarray
             Index array containing all local indices for the named variable.
         """
+        global _empty_slice
+
         try:
             slc = self._dat[name].slice
             if slc is None:
-                return self.make_idx_array(0, 0)
+                return _empty_slice if get_slice else self.make_idx_array(0, 0)
         except KeyError:
             # this happens if 'name' doesn't exist in this process
-            return self.make_idx_array(0, 0)
+            return _empty_slice if get_slice else self.make_idx_array(0, 0)
 
         start, end = slc
 

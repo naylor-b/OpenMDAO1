@@ -1537,6 +1537,8 @@ class Problem(object):
         voi_sets.extend((s,) for s in singles)
 
         voi_srcs = {}
+        voi_keys = { None: None }
+        out_idx_dct = {}
 
         # If Forward mode, solve linear system for each param
         # If Adjoint mode, solve linear system for each unknown
@@ -1550,6 +1552,7 @@ class Problem(object):
             # Allocate all of our Right Hand Sides for this parallel set.
             for voi in params:
                 vkey = self._get_voi_key(voi, params)
+                voi_keys[voi] = vkey
 
                 duvec = self.root.dumat[vkey]
                 rhs[vkey] = np.empty((len(duvec.vec), ))
@@ -1583,7 +1586,7 @@ class Problem(object):
             # of interest.
             for i in range(len(in_idxs)):
                 for idx, voi in enumerate(params):
-                    vkey = self._get_voi_key(voi, params)
+                    vkey = voi_keys[voi]#self._get_voi_key(voi, params)
                     rhs[vkey][:] = 0.0
                     # only set a -1.0 in the entry if that var is 'owned' by this rank
                     # Note, we solve a slightly modified version of the unified
@@ -1596,7 +1599,7 @@ class Problem(object):
                 dx_mat = root.ln_solver.solve(rhs, root, mode)
 
                 for param, dx in iteritems(dx_mat):
-                    vkey = self._get_voi_key(param, params)
+                    vkey = voi_keys[param]# self._get_voi_key(param, params)
                     if param is None:
                         param = params[0]
 
@@ -1611,9 +1614,13 @@ class Problem(object):
 
                         if relevance.is_relevant(vkey, item):
                             if fwd or owned[item] == iproc:
-                                out_idxs = self.root.dumat[vkey]._get_local_idxs(item,
-                                                                                 qoi_indices,
-                                                                                 get_slice=True)
+                                vtup = (vkey,item)
+                                out_idxs = out_idx_dct.get(vtup)
+                                if out_idxs is None:
+                                    out_idxs = self.root.dumat[vkey]._get_local_idxs(item,
+                                                                                     qoi_indices,
+                                                                                     get_slice=True)
+                                    out_idx_dct[vtup] = out_idxs
                                 dxval = dx[out_idxs]
                                 if dxval.size == 0:
                                     dxval = None

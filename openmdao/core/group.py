@@ -7,7 +7,7 @@ import os
 import re
 from collections import Counter, OrderedDict
 from six import iteritems, itervalues
-from six.moves import zip_longest
+from six.moves import zip_longest, range
 from itertools import chain
 
 import numpy as np

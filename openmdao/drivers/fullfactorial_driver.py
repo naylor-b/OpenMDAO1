@@ -5,7 +5,7 @@ OpenMDAO design-of-experiments driver implementing the Full Factorial method.
 from collections import OrderedDict
 import itertools
 from six import iteritems
-from six.moves import zip
+from six.moves import zip, range
 
 import numpy as np
 

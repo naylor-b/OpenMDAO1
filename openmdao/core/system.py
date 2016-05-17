@@ -11,6 +11,7 @@ from itertools import chain
 import warnings
 
 from six import string_types, iteritems, itervalues, iterkeys
+from six.moves import range
 
 import numpy as np
 

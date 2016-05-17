@@ -12,6 +12,7 @@ from scikit-learn package here to avoid scikit-learn dependency.
 
 ISAE/DMSM - ONERA/DCPS
 """
+from six.moves import range
 
 import numpy as np
 from numpy import atleast_2d as array2d
@@ -368,7 +369,7 @@ tol: float
         self._R_adj = nlevel*[None]
 
         y_best = y[nlevel-1]
-        for i in range(nlevel-1)[::-1]:
+        for i in range(nlevel-2, -1, -1):
             y_best = np.concatenate((y[i][:-n_samples[i+1]],y_best))
         self.y_best = y_best
 

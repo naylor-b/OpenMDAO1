@@ -10,7 +10,7 @@ import traceback
 from collections import OrderedDict
 from itertools import chain
 from six import iteritems, itervalues
-from six.moves import cStringIO
+from six.moves import cStringIO, range
 
 import networkx as nx
 import numpy as np

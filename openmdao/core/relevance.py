@@ -5,6 +5,7 @@ from __future__ import print_function
 from collections import OrderedDict
 import json
 from six import string_types, itervalues, iteritems
+from six.moves import range
 
 import networkx as nx
 

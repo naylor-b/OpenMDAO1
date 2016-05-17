@@ -3,7 +3,9 @@ OpenMDAO design-of-experiments driver implementing the Uniform method.
 """
 
 from openmdao.drivers.predeterminedruns_driver import PredeterminedRunsDriver
-from six import moves, iteritems
+from six import iteritems
+from six.moves import range
+
 import numpy as np
 
 
@@ -39,7 +41,7 @@ class UniformDriver(PredeterminedRunsDriver):
         if self.seed is not None:
             np.random.seed(self.seed)
 
-        for i in moves.range(self.num_samples):
+        for i in range(self.num_samples):
             sample = []
             for key, meta in iteritems(self.get_desvar_metadata()):
                 nval = meta['size']

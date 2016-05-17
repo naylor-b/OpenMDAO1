@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import os
 from six import itervalues
+from six.moves import range
 
 from openmdao.core.group import Group
 from openmdao.util.array_util import evenly_distrib_idxs

@@ -9,6 +9,7 @@ import warnings
 from collections import OrderedDict
 from itertools import chain
 from six import iteritems, itervalues, iterkeys
+from six.moves import range
 
 import numpy as np
 

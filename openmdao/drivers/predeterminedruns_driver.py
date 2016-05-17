@@ -7,7 +7,7 @@ from __future__ import print_function
 import sys
 import os
 import traceback
-from six.moves import zip
+from six.moves import zip, range
 from six import next, PY3
 
 import numpy

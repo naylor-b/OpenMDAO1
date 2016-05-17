@@ -4,6 +4,8 @@ import itertools
 import os
 import warnings
 import pprint
+import logging
+
 from six import string_types, iteritems
 
 from fnmatch import fnmatch
@@ -201,3 +203,12 @@ class DirContext(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         os.chdir(self.start)
+
+def add_file_log_handler(fname, level=logging.DEBUG, logger=None):
+    if logger is None:
+        logger = logging.getLogger()
+    hdlr = logging.FileHandler(fname)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr)
+    logger.setLevel(level)

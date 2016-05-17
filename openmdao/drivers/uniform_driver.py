@@ -56,6 +56,6 @@ class UniformDriver(PredeterminedRunsDriver):
                         high = high[k]
 
                     values.append(np.random.uniform(low, high))
-                sample.append([key, np.array(values)])
+                sample.append((key, np.array(values)))
 
             yield sample

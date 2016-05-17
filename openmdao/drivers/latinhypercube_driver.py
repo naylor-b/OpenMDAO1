@@ -87,10 +87,10 @@ class LatinHypercubeDriver(PredeterminedRunsDriver):
         for i in range(self.num_samples):
             sample = []
             for key, bounds in iteritems(buckets):
-                sample.append([key, np.array([np.random.uniform(bounds[k][i][0],
+                sample.append((key, np.array([np.random.uniform(bounds[k][i][0],
                                                                 bounds[k][i][1])
                                               for k in range(design_vars[key]['size'])])
-                               ])
+                               ))
             yield sample
 
     def _distrib_build_runlist(self):

@@ -127,20 +127,20 @@ class DumpRecorder(BaseRecorder):
 
         if self.options['record_params']:
             write("Params:\n")
-            for param, val in sorted(iteritems(self._filter_vector(params,
-                                                   'p',iteration_coordinate))):
+            for param, val in sorted(self._filter_vector(params,
+                                                   'p',iteration_coordinate)):
                 write("  {0}: {1}\n".format(param, str(val)))
 
         if self.options['record_unknowns']:
             write("Unknowns:\n")
-            for unknown, val in sorted(iteritems(self._filter_vector(unknowns,
-                                                   'u',iteration_coordinate))):
+            for unknown, val in sorted(self._filter_vector(unknowns,
+                                                   'u',iteration_coordinate)):
                 write("  {0}: {1}\n".format(unknown, str(val)))
 
         if self.options['record_resids']:
             write("Resids:\n")
-            for resid, val in sorted(iteritems(self._filter_vector(resids,
-                                                   'r',iteration_coordinate))):
+            for resid, val in sorted(self._filter_vector(resids,
+                                                   'r',iteration_coordinate)):
                 write("  {0}: {1}\n".format(resid, str(val)))
 
         # Flush once per iteration to allow external scripts to process the data.

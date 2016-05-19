@@ -99,13 +99,13 @@ class SqliteRecorder(BaseRecorder):
         data['msg'] = metadata['msg']
 
         if self.options['record_params']:
-            data['Parameters'] = self._filter_vector(params, 'p', iteration_coordinate)
+            data['Parameters'] = dict(self._filter_vector(params, 'p', iteration_coordinate))
 
         if self.options['record_unknowns']:
-            data['Unknowns'] = self._filter_vector(unknowns, 'u', iteration_coordinate)
+            data['Unknowns'] = dict(self._filter_vector(unknowns, 'u', iteration_coordinate))
 
         if self.options['record_resids']:
-            data['Residuals'] = self._filter_vector(resids, 'r', iteration_coordinate)
+            data['Residuals'] = dict(self._filter_vector(resids, 'r', iteration_coordinate))
 
         self.out[group_name] = data
 

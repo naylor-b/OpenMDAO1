@@ -101,26 +101,26 @@ class CsvRecorder(BaseRecorder):
         iteration_coordinate = metadata['coord']
 
         if self.options['record_params']:
-            params = self._filter_vector(params, 'p', iteration_coordinate)
+            params = list(self._filter_vector(params, 'p', iteration_coordinate))
         else:
             params = None
         if self.options['record_unknowns']:
-            unknowns = self._filter_vector(unknowns, 'u', iteration_coordinate)
+            unknowns = list(self._filter_vector(unknowns, 'u', iteration_coordinate))
         else:
             unknowns = None
         if self.options['record_resids']:
-            resids = self._filter_vector(resids, 'r', iteration_coordinate)
+            resids = list(self._filter_vector(resids, 'r', iteration_coordinate))
         else:
             resids = None
 
         if self._wrote_header is False:
             header = ['success'] # add column for success flag
             if params is not None:
-                header.extend(params)
+                header.extend(p for p,_ in params)
             if unknowns is not None:
-                header.extend(unknowns)
+                header.extend(u for u, _ in unknowns)
             if resids is not None:
-                header.extend(resids)
+                header.extend(r for r, _ in resids)
             if self.options['record_derivs']:
                 header.append('Derivatives')
 
@@ -131,11 +131,11 @@ class CsvRecorder(BaseRecorder):
         row = [metadata['success']] # add column for success flag
 
         if params is not None:
-            row.extend(serialize(value) for value in itervalues(params))
+            row.extend(serialize(value) for _, value in params)
         if unknowns is not None:
-            row.extend(serialize(value) for value in itervalues(unknowns))
+            row.extend(serialize(value) for _, value in unknowns)
         if resids is not None:
-            row.extend(serialize(value) for value in itervalues(resids))
+            row.extend(serialize(value) for _, value in resids)
         if self.options['record_derivs']:
             row.append(None)
 

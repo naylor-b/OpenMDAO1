@@ -48,6 +48,7 @@ class ParallelDOETestCase(MPITestCase):
         problem.run()
 
         for data in problem.driver.recorders[0].iters:
+            data['unknowns'] = dict(data['unknowns'])
             self.assertEqual(data['unknowns']['indep_var.x']*2.0,
                              data['unknowns']['mult.y'])
 
@@ -99,6 +100,7 @@ class ParallelDOETestCase(MPITestCase):
                             "an exception was raised by another MPI process.")
 
         for data in problem.driver.recorders[0].iters:
+            data['unknowns'] = dict(data['unknowns'])
             self.assertEqual(data['unknowns']['indep_var.x']*2.0,
                              data['unknowns']['mult.y'])
 
@@ -138,6 +140,7 @@ class ParallelDOETestCase(MPITestCase):
         problem.run()
 
         for data in problem.driver.recorders[0].iters:
+            data['unknowns'] = dict(data['unknowns'])
             self.assertEqual(data['unknowns']['indep_var.x']*2.0,
                              data['unknowns']['mult.y'])
 
@@ -188,6 +191,7 @@ class LBParallelDOETestCase(MPITestCase):
         problem.run()
 
         for data in problem.driver.recorders[0].iters:
+            data['unknowns'] = dict(data['unknowns'])
             self.assertEqual(data['unknowns']['indep_var.x']*2.0,
                              data['unknowns']['mult.y'])
 
@@ -240,6 +244,7 @@ class LBParallelDOETestCase(MPITestCase):
                 self.fail("expected exception")
 
         for data in problem.driver.recorders[0].iters:
+            data['unknowns'] = dict(data['unknowns'])
             self.assertEqual(data['unknowns']['indep_var.x']*2.0,
                              data['unknowns']['mult.y'])
 
@@ -292,6 +297,7 @@ class LBParallelDOETestCase(MPITestCase):
         problem.run()
 
         for data in problem.driver.recorders[0].iters:
+            data['unknowns'] = dict(data['unknowns'])
             self.assertEqual(data['unknowns']['indep_var.x']*2.0,
                              data['unknowns']['mult.y'])
 
@@ -305,6 +311,7 @@ class LBParallelDOETestCase(MPITestCase):
         nfails = 0
         cases_in_fail_rank = 0
         for data in problem.driver.recorders[0].iters:
+            data['unknowns'] = dict(data['unknowns'])
             if not data['success']:
                 nfails += 1
             if data['unknowns']['mult.case_rank'] == fail_rank:
@@ -358,6 +365,7 @@ class LBParallelDOETestCase6(MPITestCase):
         problem.run()
 
         for data in problem.driver.recorders[0].iters:
+            data['unknowns'] = dict(data['unknowns'])
             self.assertEqual(data['unknowns']['indep_var.x']*2.0,
                              data['unknowns']['mult.y'])
 

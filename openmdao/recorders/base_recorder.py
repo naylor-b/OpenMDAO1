@@ -119,11 +119,11 @@ class BaseRecorder(object):
         to be recorded.
         '''
         if not vecwrapper:
-            return vecwrapper
+            return
 
         pathname = self._get_pathname(iteration_coordinate)
-        filt = self._filtered[pathname][key]
-        return {k: vecwrapper[k] for k in filt}
+        for k in self._filtered[pathname][key]:
+            yield k, vecwrapper[k]
 
     def record_metadata(self, group):
         """Writes the metadata of the given group

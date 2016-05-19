@@ -119,20 +119,20 @@ class HDF5Recorder(BaseRecorder):
 
             p_group = group.create_group("Parameters")
             pairings.append((p_group, self._filter_vector(params, 'p',
-                                                         iteration_coordinate)))
+                                                     iteration_coordinate)))
 
         if self.options['record_unknowns']:
             u_group = group.create_group("Unknowns")
             pairings.append((u_group, self._filter_vector(unknowns, 'u',
-                                                         iteration_coordinate)))
+                                                     iteration_coordinate)))
 
         if self.options['record_resids']:
             r_group = group.create_group("Residuals")
             pairings.append((r_group, self._filter_vector(resids, 'r',
-                                                         iteration_coordinate)))
+                                                     iteration_coordinate)))
 
         for grp, data in pairings:
-            for key, val in iteritems(data):
+            for key, val in data:
                 if isinstance(val, (np.ndarray, Number)):
                     grp.create_dataset(key, data=val)
                     # TODO: Compression/Checksum?

@@ -70,24 +70,21 @@ class InMemoryRecorder(BaseRecorder):
         data['msg'] = metadata['msg']
 
         if self.options['record_params']:
-            data['params'] = {p:v for p,v in
-                                 iteritems(self._filter_vector(params,'p',
-                                                        iteration_coordinate))}
+            data['params'] = list(self._filter_vector(params,'p',
+                                                        iteration_coordinate))
 
         if self.options['record_unknowns']:
-            data['unknowns'] = {u:v for u,v in
-                                  iteritems(self._filter_vector(unknowns,'u',
-                                                        iteration_coordinate))}
+            data['unknowns'] = list(self._filter_vector(unknowns,'u',
+                                                        iteration_coordinate))
 
         if self.options['record_resids']:
-            data['resids'] = {r:v for r,v in
-                                  iteritems(self._filter_vector(resids,'r',
-                                                         iteration_coordinate))}
+            data['resids'] = list(self._filter_vector(resids,'r',
+                                                         iteration_coordinate))
 
         self.iters.append(data)
 
     def record_metadata(self, group):
-        """Dump the metadata of the given group in a "pretty" form.
+        """Save the metadata of the given group.
 
         Args
         ----
@@ -98,7 +95,7 @@ class InMemoryRecorder(BaseRecorder):
         self.meta['params'] = {n:m.copy() for n,m in iteritems(group.params)}
 
     def record_derivatives(self, derivs, metadata):
-        """Writes the derivatives that were calculated for the driver.
+        """Saves the derivatives that were calculated for the driver.
 
         Args
         ----

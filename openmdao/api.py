@@ -34,6 +34,9 @@ from openmdao.drivers.predeterminedruns_driver import PredeterminedRunsDriver
 from openmdao.drivers.uniform_driver import UniformDriver
 from openmdao.drivers.fullfactorial_driver import FullFactorialDriver
 from openmdao.drivers.latinhypercube_driver import LatinHypercubeDriver
+from openmdao.drivers.case_driver import CaseDriver
+from openmdao.drivers.array_case_driver import ArrayCaseDriver 
+
 #recorders
 from openmdao.recorders.base_recorder import BaseRecorder
 from openmdao.recorders.dump_recorder import DumpRecorder

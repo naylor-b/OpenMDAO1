@@ -147,7 +147,7 @@ class RecordingManager(object):
 
         return params, unknowns, resids
 
-    def record_case(self, root, case):
+    def record_completed_case(self, root, case):
         """Record the variables in the given case."""
         if not self._recorders:
             return

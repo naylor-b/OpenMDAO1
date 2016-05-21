@@ -115,8 +115,8 @@ class BaseRecorder(object):
 
     def _filter_vector(self, vecwrapper, key, iteration_coordinate):
         '''
-        Returns a dict that is a subset of the given vecwrapper
-        to be recorded.
+        Returns an iterator of (name, value) for a subset of the variables
+        in vecwrapper.
         '''
         if not vecwrapper:
             return

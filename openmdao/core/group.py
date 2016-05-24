@@ -445,12 +445,10 @@ class Group(System):
 
         self._setup_data_transfer(my_params, None, alloc_derivs)
 
-        all_vois = set([None])
         if self._probdata.top_lin_gs:
             # create storage for the relevant vecwrappers,
             # keyed by variable_of_interest
             for vois in relevance.groups:
-                all_vois.update(vois)
                 for voi in vois:
                     if parent is None:
                         self._create_vecs(my_params, voi, impl)

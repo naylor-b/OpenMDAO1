@@ -571,8 +571,8 @@ class Component(System):
 
         # Unknowns are restored to the old values too. apply_nonlinear does
         # not change the output vector.
-        resids.vec[:] += unknowns.vec
-        unknowns.vec[:] -= resids.vec
+        resids.vec += unknowns.vec
+        unknowns.vec -= resids.vec
 
     def _sys_solve_nonlinear(self, params, unknowns, resids):
         """

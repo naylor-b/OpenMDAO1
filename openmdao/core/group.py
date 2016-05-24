@@ -1491,10 +1491,9 @@ class Group(System):
         """
         if MPI:
             ranks = {}
-            local_vars = [k for k, acc in iteritems(self.unknowns._dat)
+            local_vars = [k for k, acc in chain(iteritems(self.unknowns._dat),
+                                                iteritems(self.params._dat))
                                   if not acc.remote]
-            local_vars.extend(k for k, acc in iteritems(self.params._dat)
-                                       if not acc.remote)
             if trace:  # pragma: no cover
                 debug("allgathering local varnames: locals = ", local_vars)
             all_locals = self.comm.allgather(local_vars)
@@ -1512,7 +1511,7 @@ class Group(System):
         else:
             self._sysdata.all_locals = [n for n in chain(self.unknowns._dat,
                                                          self.params._dat)]
-            ranks = { n:0 for n in chain(self.unknowns._dat, self.params._dat) }
+            ranks = { n:0 for n in self._sysdata.all_locals }
 
 
         return ranks

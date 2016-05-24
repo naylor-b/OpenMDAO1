@@ -551,8 +551,8 @@ class System(object):
                         target_input[idx] -= step
 
                         # delta resid is delta unknown
-                        resultvec.vec[:] -= cache1
-                        resultvec.vec[:] *= (1.0/step)
+                        resultvec.vec -= cache1
+                        resultvec.vec *= (1.0/step)
                         # Note: vector division is slower than vector mult.
 
                     elif fdform == 'backward':
@@ -564,8 +564,8 @@ class System(object):
                         target_input[idx] += step
 
                         # delta resid is delta unknown
-                        resultvec.vec[:] -= cache1
-                        resultvec.vec[:] *= (-1.0/step)
+                        resultvec.vec -= cache1
+                        resultvec.vec *= (-1.0/step)
                         # Note: vector division is slower than vector mult.
 
                     elif fdform == 'central':
@@ -583,8 +583,8 @@ class System(object):
                         run_model(params, unknowns, resids)
 
                         # central difference formula
-                        resultvec.vec[:] -= cache2
-                        resultvec.vec[:] *= (-0.5/step)
+                        resultvec.vec -= cache2
+                        resultvec.vec *= (-0.5/step)
                         # Note: vector division is slower than vector mult.
 
                         target_input[idx] += step

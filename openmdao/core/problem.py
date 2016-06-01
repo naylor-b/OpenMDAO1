@@ -427,7 +427,8 @@ class Problem(object):
         self.driver.recorders.pathname = self.driver.pathname + ".recorders"
 
         # Give every system and solver an absolute pathname
-        self.root._init_sys_data(self.pathname, self._probdata)
+        self.root.name = self.pathname
+        self.root._init_sys_data('', self._probdata)
 
         # divide MPI communicators among subsystems
         self._setup_communicators()
@@ -667,7 +668,7 @@ class Problem(object):
         iterated_states = set()
         group_states = []
 
-        has_iter_solver = {}
+        has_iter_solver = {'': False}
         for group in self.root.subgroups(recurse=True, include_self=True):
             try:
                 has_iter_solver[group.pathname] = (group.ln_solver.options['maxiter'] > 1)

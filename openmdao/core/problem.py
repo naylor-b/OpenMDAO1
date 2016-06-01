@@ -427,8 +427,7 @@ class Problem(object):
         self.driver.recorders.pathname = self.driver.pathname + ".recorders"
 
         # Give every system and solver an absolute pathname
-        self.root.name = self.pathname
-        self.root._init_sys_data('', self._probdata)
+        self.root._init_sys_data(self.pathname, self._probdata)
 
         # divide MPI communicators among subsystems
         self._setup_communicators()

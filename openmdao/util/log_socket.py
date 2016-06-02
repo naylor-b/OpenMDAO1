@@ -83,7 +83,7 @@ def main():
     logging.basicConfig(
         format='%(relativeCreated)5d %(name)-8s %(levelname)-8s %(message)s')
     tcpserver = LogRecordSocketReceiver()
-    print('About to start TCP server...')
+    print('Starting log server...')
     tcpserver.serve_until_stopped()
 
 if __name__ == '__main__':

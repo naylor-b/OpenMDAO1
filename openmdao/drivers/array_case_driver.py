@@ -12,7 +12,8 @@ from openmdao.drivers.predeterminedruns_driver import PredeterminedRunsDriver
 from openmdao.recorders.array_recorder import ArrayRecorder
 
 class ArrayCaseDriver(PredeterminedRunsDriver):
-    """OpenMDAO driver that runs a sequence of cases.
+    """OpenMDAO driver that runs a sequence of cases based on values in
+    an input 2D array.
 
     Args
     ----
@@ -41,7 +42,7 @@ class ArrayCaseDriver(PredeterminedRunsDriver):
 
     def _reset(self):
         dshape = self.desvar_array.shape
-        
+
         # make sure response_array is shaped correctly relative to value of desvar_array
         if self.response_array is None or self.response_array.shape != (dshape[0],
                                                                         len(self._respvars)):

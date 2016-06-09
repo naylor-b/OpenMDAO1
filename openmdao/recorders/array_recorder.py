@@ -12,7 +12,7 @@ class ArrayRecorder(BaseRecorder):
     """ Recorder that saves cases as rows in a numpy array.
     """
 
-    def __init__(self):
+    def __init__(self, arr=None):
         super(ArrayRecorder, self).__init__()
 
         self.options['record_unknowns'] = True
@@ -22,7 +22,7 @@ class ArrayRecorder(BaseRecorder):
         self.options['record_derivs'] = False
 
         self._parallel = False
-        self.arr = None
+        self.arr = arr
 
     def startup(self, group):
         super(ArrayRecorder, self).startup(group)

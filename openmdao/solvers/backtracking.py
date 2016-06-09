@@ -1,5 +1,7 @@
 """ Line search using backtracking."""
 
+import numpy as np
+
 from openmdao.core.system import AnalysisError
 from openmdao.solvers.solver_base import LineSearch
 from openmdao.util.record_util import update_local_meta, create_local_meta
@@ -11,7 +13,7 @@ class BackTracking(LineSearch):
     Options
     -------
     options['atol'] :  float(1e-10)
-        Absolute convergence tolerancee for line search.
+        Absolute convergence tolerance for line search.
     options['err_on_maxiter'] : bool(False)
         If True, raise an AnalysisError if not converged at maxiter.
     options['iprint'] :  int(0)
@@ -83,6 +85,10 @@ class BackTracking(LineSearch):
         result = system.dumat[None]
         local_meta = create_local_meta(metadata, system.pathname)
 
+        # Allow different alphas for each value so we can keep moving when we
+        # hit a bound.
+        alpha = alpha*np.ones(len(unknowns.vec))
+
         # If our step will violate any upper or lower bounds, then reduce
         # alpha so that we only step to that boundary.
         alpha = unknowns.distance_along_vector_to_limit(alpha, result)
@@ -135,7 +141,7 @@ class BackTracking(LineSearch):
                                 fnorm, fnorm0, indent=1, solver='LS')
 
         if itercount >= maxiter and self.options['err_on_maxiter']:
-           raise AnalysisError("Solve in '%s': BackTracking failed to converge after %d "
-                               "iterations." % (system.pathname, maxiter))
+            raise AnalysisError("Solve in '%s': BackTracking failed to converge after %d "
+                                "iterations." % (system.pathname, maxiter))
 
         return fnorm

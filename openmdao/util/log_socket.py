@@ -4,14 +4,15 @@
 # in any desired test processes will send their log messages to this server for display
 # on the console where this server is running.
 
+import os
 import pickle
 import logging
 import logging.handlers
-import SocketServer
+from six.moves import socketserver
 import struct
 
 
-class LogRecordStreamHandler(SocketServer.StreamRequestHandler):
+class LogRecordStreamHandler(socketserver.StreamRequestHandler):
     """Handler for a streaming logging request.
 
     This basically logs the record using whatever logging policy is
@@ -53,7 +54,7 @@ class LogRecordStreamHandler(SocketServer.StreamRequestHandler):
         # cycles and network bandwidth!
         logger.handle(record)
 
-class LogRecordSocketReceiver(SocketServer.ThreadingTCPServer):
+class LogRecordSocketReceiver(socketserver.ThreadingTCPServer):
     """
     Simple TCP socket-based logging receiver suitable for testing.
     """
@@ -63,7 +64,7 @@ class LogRecordSocketReceiver(SocketServer.ThreadingTCPServer):
     def __init__(self, host='localhost',
                  port=logging.handlers.DEFAULT_TCP_LOGGING_PORT,
                  handler=LogRecordStreamHandler):
-        SocketServer.ThreadingTCPServer.__init__(self, (host, port), handler)
+        socketserver.ThreadingTCPServer.__init__(self, (host, port), handler)
         self.abort = 0
         self.timeout = 1
         self.logname = None
@@ -78,6 +79,33 @@ class LogRecordSocketReceiver(SocketServer.ThreadingTCPServer):
             if rd:
                 self.handle_request()
             abort = self.abort
+
+
+SOCK_LOGGER = None
+
+def enable_socket(level=logging.DEBUG,
+                  port=logging.handlers.DEFAULT_TCP_LOGGING_PORT):
+    global SOCK_LOGGER
+    if SOCK_LOGGER is None:
+        rootLogger = logging.getLogger('')
+        rootLogger.setLevel(level)
+        SOCK_LOGGER = logging.handlers.SocketHandler('localhost', port)
+        # don't bother with a formatter, since a socket handler sends
+        # the event as an unformatted pickle
+        rootLogger.addHandler(SOCK_LOGGER)
+
+def disable_socket():
+    """ Stop sending log msgs to the log server. """
+    global SOCK_LOGGER
+    logging.getLogger().removeHandler(SOCK_LOGGER)
+    SOCK_LOGGER = None
+
+env_socket = os.environ.get('OPENMDAO_LOG_SOCKET')
+if env_socket:
+    port = int(env_socket)
+    if port == 0:
+        port = logging.handlers.DEFAULT_TCP_LOGGING_PORT
+    enable_socket(port=port)
 
 def main():
     logging.basicConfig(

@@ -7,6 +7,7 @@ from __future__ import print_function
 import sys
 import os
 import traceback
+import logging
 from six.moves import zip
 from six import next, PY3
 
@@ -30,35 +31,43 @@ def worker(problem, response_vars, case_queue, response_queue, worker_id):
     # set env var so comps/recorders know they're running in a worker proc
     os.environ['OPENMDAO_WORKER_ID'] = str(worker_id)
 
-    # on windows all of our args are pickled, which causes us to lose the connections between our
-    # numpy views and their parent arrays, so force the problem to setup() again.
-    if sys.platform == 'win32':
-        problem.setup(check=False)
+    try:
+        # on windows all of our args are pickled, which causes us to lose the connections between our
+        # numpy views and their parent arrays, so force the problem to setup() again.
+        if sys.platform == 'win32':
+            problem.setup(check=False)
 
-    driver = problem.driver
-    root = driver.root
+        driver = problem.driver
+        root = driver.root
 
-    for case in iter(case_queue.get, 'STOP'):
-        metadata = driver._prep_case(case[1], case[0])
-        terminate = 0
-        exc = ''
-        try:
-            terminate, exc = driver._try_case(root, metadata)
-            complete_case = (metadata,
-                             [_get_root_var(root, n) for n in response_vars])
-        except:
-            # we generally shouldn't get here, but just in case,
-            # handle it so that the main process doesn't hang at the
-            # end when it tries to join all of the concurrent processes.
-            if exc is '':
-                exc = traceback.format_exc()
-            metadata['success'] = 0
-            metadata['terminate'] = 1
-            metadata['msg'] = exc
-            complete_case = (metadata, [])
+        for case_id, case in iter(case_queue.get, 'STOP'):
+            #logging.info("worker %d, case id %d, case %s" % (worker_id, case_id, case))
+            metadata = driver._prep_case(case, case_id)
 
-        response_queue.put(complete_case)
+            terminate = 0
+            exc = ''
+            try:
+                terminate, exc = driver._try_case(root, metadata)
 
+                casevals = [_get_root_var(root, n) for n in response_vars]
+
+                complete_case = (metadata, casevals)
+            except:
+                # we generally shouldn't get here, but just in case,
+                # handle it so that the main process doesn't hang at the
+                # end when it tries to join all of the concurrent processes.
+                if exc is '':
+                    exc = traceback.format_exc()
+                metadata['success'] = 0
+                metadata['terminate'] = 1
+                metadata['msg'] = exc
+                complete_case = (metadata, [])
+
+            metadata['id'] = case_id
+            response_queue.put(complete_case)
+    except:
+        logging.error(traceback.format_exc())
+        raise
 
 class PredeterminedRunsDriver(Driver):
     """
@@ -354,7 +363,6 @@ class PredeterminedRunsDriver(Driver):
         numuvars = len(uvars)
 
         runiter = self._build_runlist()
-        iter_count = 0
 
         # Create queues
         if sys.platform == 'win32':
@@ -377,6 +385,7 @@ class PredeterminedRunsDriver(Driver):
         for proc in procs:
             proc.start()
 
+        iter_count = 0
         numruns = 0
         empty = {}
         try:
@@ -392,6 +401,7 @@ class PredeterminedRunsDriver(Driver):
             try:
                 while numruns:
                     meta, values = done_queue.get()
+                    #logging.info("RECEIVED: %d, %s" % (meta['id'], values[2]))
                     complete_case = self._build_case(meta, uvars, pvars,
                                                      numuvars, values)
                     numruns -= 1
@@ -412,6 +422,7 @@ class PredeterminedRunsDriver(Driver):
 
         for i in range(numruns):
             meta, values = done_queue.get()
+            #logging.info("RECEIVED: %d, %s" % (meta['id'], values[0]))
             complete_case = self._build_case(meta, uvars, pvars,
                                              numuvars, values)
             if complete_case is None:

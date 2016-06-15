@@ -48,13 +48,13 @@ class LBParallelDOETestCase6(unittest.TestCase):
         root.add('indep_var', IndepVarComp('x', val=1.0))
         root.add('const', IndepVarComp('c', val=2.0))
 
-        root.add('mult', ExecComp4Test("y=c*x", fail_rank=1,
+        root.add('mult', ExecComp4Test("y=c*x", fail_rank=(0,1,2,3,4),
                  fails=[3], fail_hard=True))
 
         root.connect('indep_var.x', 'mult.x')
         root.connect('const.c', 'mult.c')
 
-        num_levels = 25
+        num_levels = 50
         problem.driver = FullFactorialDriver(num_levels=num_levels,
                                        num_par_doe=5,
                                        load_balance=True)
@@ -78,7 +78,7 @@ class LBParallelDOETestCase6(unittest.TestCase):
         # will actually run before we terminate, so just check to see if
         # we at least have less than the full set we'd have if nothing
         # went wrong.
-        self.assertTrue(num_cases < num_levels,
+        self.assertTrue(num_cases < num_levels and num_cases >= 3,
                 "Cases run (%d) should be less than total cases (%d)" %
                 (num_cases, num_levels))
 

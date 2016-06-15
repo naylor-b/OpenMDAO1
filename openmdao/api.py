@@ -35,7 +35,7 @@ from openmdao.drivers.uniform_driver import UniformDriver
 from openmdao.drivers.fullfactorial_driver import FullFactorialDriver
 from openmdao.drivers.latinhypercube_driver import LatinHypercubeDriver
 from openmdao.drivers.case_driver import CaseDriver
-from openmdao.drivers.array_case_driver import ArrayCaseDriver 
+from openmdao.drivers.array_case_driver import ArrayCaseDriver
 
 #recorders
 from openmdao.recorders.base_recorder import BaseRecorder
@@ -69,3 +69,5 @@ from openmdao.units.units import get_conversion_tuple, convert_units
 from openmdao.util.options import OptionsDictionary
 from openmdao.util.file_util import DirContext
 from openmdao.util import profile
+from openmdao.util.log import enable_console, disable_console, \
+                              enable_socket, disable_socket

@@ -21,6 +21,7 @@ from openmdao.util.file_util import DirContext
 from openmdao.util.options import OptionsDictionary, DeprecatedOptionsDictionary
 from openmdao.util.string_util import name_relative_to
 from openmdao.util.type_util import real_types
+from openmdao.util.log import logging
 
 trace = os.environ.get('OPENMDAO_TRACE')
 if trace:  # pragma: no cover

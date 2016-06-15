@@ -220,7 +220,7 @@ class LBParallelDOETestCase(MPITestCase):
 
 
         root.add('mult', ExecComp4Test("y=c*x", fail_rank=fail_rank,
-                 fails=[3], fail_hard=True))
+                 fails=[1], fail_hard=True))
 
         root.connect('indep_var.x', 'mult.x')
         root.connect('const.c', 'mult.c')

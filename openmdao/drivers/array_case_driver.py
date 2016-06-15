@@ -71,6 +71,9 @@ class ArrayCaseDriver(PredeterminedRunsDriver):
         self._resp_recorder.options['includes'] = list(self._respvars)
         self.add_recorder(self._resp_recorder)
 
+        self._check_desvar_array()
+        self._reset()
+        
         super(ArrayCaseDriver, self)._setup()
 
     def add_response(self, name):

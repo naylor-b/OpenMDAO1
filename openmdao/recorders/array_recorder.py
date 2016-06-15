@@ -1,4 +1,6 @@
 import sys
+import os
+import logging
 
 from itertools import chain
 
@@ -52,7 +54,12 @@ class ArrayRecorder(BaseRecorder):
         if self.arr is None:
             raise RuntimeError("storage array was not set")
 
-        row = self.arr[self.iter_count]
+        # using case id here as index will keep the rows of the
+        # response array in line with rows of the desvar_array
+        if 'id' in metadata:
+            row = self.arr[metadata['id']]
+        else:
+            row = self.arr[self.iter_count]
 
         success = metadata['success']
         nan = float('nan')

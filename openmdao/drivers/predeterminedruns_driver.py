@@ -32,35 +32,41 @@ def worker(problem, response_vars, case_queue, response_queue, worker_id):
     os.environ['OPENMDAO_WORKER_ID'] = str(worker_id)
 
     try:
-        # on windows all of our args are pickled, which causes us to lose the connections between our
-        # numpy views and their parent arrays, so force the problem to setup() again.
+        # on windows all of our args are pickled, which causes us to lose the
+        # connections between our numpy views and their parent arrays, so force
+        # the problem to setup() again.
         if sys.platform == 'win32':
             problem.setup(check=False)
 
         driver = problem.driver
         root = driver.root
 
+        terminate = 0
         for case_id, case in iter(case_queue.get, 'STOP'):
             #logging.info("worker %d, case id %d, case %s" % (worker_id, case_id, case))
+
+            if terminate:
+                continue
+
             metadata = driver._prep_case(case, case_id)
 
-            terminate = 0
-            exc = ''
             try:
                 terminate, exc = driver._try_case(root, metadata)
-
-                casevals = [_get_root_var(root, n) for n in response_vars]
-
-                complete_case = (metadata, casevals)
+                if terminate:
+                    complete_case = (metadata, [])
+                else:
+                    complete_case = (metadata,
+                             [_get_root_var(root, n) for n in response_vars])
             except:
                 # we generally shouldn't get here, but just in case,
                 # handle it so that the main process doesn't hang at the
                 # end when it tries to join all of the concurrent processes.
-                if exc is '':
-                    exc = traceback.format_exc()
+                if metadata.get('msg'):
+                    metadata['msg'] += "\n\n%s" % traceback.format_exc()
+                else:
+                    metadata['msg'] = traceback.format_exc()
                 metadata['success'] = 0
                 metadata['terminate'] = 1
-                metadata['msg'] = exc
                 complete_case = (metadata, [])
 
             metadata['id'] = case_id
@@ -386,7 +392,7 @@ class PredeterminedRunsDriver(Driver):
             proc.start()
 
         iter_count = 0
-        numruns = 0
+        num_active = 0
         empty = {}
         try:
             for proc in procs:
@@ -394,25 +400,26 @@ class PredeterminedRunsDriver(Driver):
                 case = list(next(runiter))
                 task_queue.put((iter_count, case))
                 iter_count += 1
-                numruns += 1
+                num_active += 1
         except StopIteration:
             pass
         else:
             try:
-                while numruns:
+                while num_active > 0:
                     meta, values = done_queue.get()
                     #logging.info("RECEIVED: %d, %s" % (meta['id'], values[2]))
                     complete_case = self._build_case(meta, uvars, pvars,
                                                      numuvars, values)
-                    numruns -= 1
+                    num_active -= 1
                     if complete_case is None:
+                        # there was a fatal error, don't run more cases
                         break
 
                     self.recorders.record_completed_case(root, complete_case)
                     case = list(next(runiter))
                     task_queue.put((iter_count, case))
                     iter_count += 1
-                    numruns += 1
+                    num_active += 1
             except StopIteration:
                 pass
 
@@ -420,12 +427,13 @@ class PredeterminedRunsDriver(Driver):
         for proc in procs:
             task_queue.put('STOP')
 
-        for i in range(numruns):
+        for i in range(num_active):
             meta, values = done_queue.get()
             #logging.info("RECEIVED: %d, %s" % (meta['id'], values[0]))
             complete_case = self._build_case(meta, uvars, pvars,
                                              numuvars, values)
             if complete_case is None:
+                # had a fatal error, don't record
                 continue
 
             self.recorders.record_completed_case(root, complete_case)

@@ -59,7 +59,7 @@ class ParallelDOETestCase(MPITestCase):
         else:
             self.assertEqual(num_cases, num_levels)
 
-    def test_doe_fail_critical(self):
+    def test_doe_fail_hard(self):
         problem = Problem(impl=impl)
         root = problem.root = Group()
         root.add('indep_var', IndepVarComp('x', val=1.0))

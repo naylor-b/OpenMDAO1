@@ -40,9 +40,6 @@ class PDRTestCase(MPITestCase):
         ncases = 30
         driver.desvar_array = numpy.arange(ncases*3, dtype=float).reshape(ncases, 3)
 
-        print(driver.desvar_array)
-        print('----')
-
         driver.add_desvar('indep_var.a')
         driver.add_desvar('indep_var.b')
         driver.add_desvar('indep_var.c')
@@ -55,8 +52,6 @@ class PDRTestCase(MPITestCase):
 
         if self.comm.rank == 0:
             arr = driver.response_array
-
-            print(arr)
 
             self.assertEqual(arr.shape, (ncases, 6))
             for i in range(ncases):

@@ -1,5 +1,5 @@
 """
-OpenMDAO driver that runs a user-specified list of cases.
+OpenMDAO driver that runs a set of cases from a pickle file.
 """
 from six.moves import cPickle as pickle
 

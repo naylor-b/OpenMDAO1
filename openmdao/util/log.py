@@ -7,7 +7,7 @@ from openmdao.util.log_socket import enable_socket, disable_socket
 # Optional handler which writes messages to sys.stderr
 CONSOLE = None
 
-def enable_console(level=logging.WARNING):
+def enable_console(level=logging.WARNING):  # pragma: no cover
     """ Configure logging to receive log messages at the console. """
     global CONSOLE
     if CONSOLE is None:
@@ -20,12 +20,12 @@ def enable_console(level=logging.WARNING):
     CONSOLE.setLevel(level)
     logging.getLogger().addHandler(CONSOLE)
 
-def disable_console():
+def disable_console():  # pragma: no cover
     """ Stop receiving log messages at the console. """
     global CONSOLE
     logging.getLogger().removeHandler(CONSOLE)
     CONSOLE = None
 
 env_console = os.environ.get('OPENMDAO_LOG_CONSOLE')
-if env_console and int(env_console):
+if env_console and int(env_console):  # pragma: no cover
     enable_console()

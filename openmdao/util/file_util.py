@@ -134,34 +134,6 @@ def find_files(start, match=None, exclude=None,
         return iters[0]
 
 
-def find_up(name, path=None):
-    """Search upward from the starting path (or the current directory)
-    until the given file or directory is found. The given name is
-    assumed to be a basename, not a path.  Returns the absolute path
-    of the file or directory if found, or None otherwise.
-
-    Args
-    ----
-    name : str
-        Base name of the file or directory being searched for.
-
-    path : str, optional
-        Starting directory.  If not supplied, current directory is used.
-    """
-    if not path:
-        path = os.getcwd()
-    if not exists(path):
-        return None
-    while path:
-        if exists(join(path, name)):
-            return abspath(join(path, name))
-        else:
-            pth = path
-            path = dirname(path)
-            if path == pth:
-                return None
-    return None
-
 def _file_gen(dname, fmatch=bool, dmatch=None):
     """A generator returning files under the given directory, with optional
     file and directory filtering.
@@ -204,7 +176,7 @@ class DirContext(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         os.chdir(self.start)
 
-def add_file_log_handler(fname, level=logging.DEBUG, logger=None):
+def add_file_log_handler(fname, level=logging.DEBUG, logger=None): # pragma: no cover
     if logger is None:
         logger = logging.getLogger()
     hdlr = logging.FileHandler(fname)

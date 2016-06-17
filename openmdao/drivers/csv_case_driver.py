@@ -4,27 +4,16 @@ OpenMDAO driver that runs a list of cases pulled from a CSV file.
 import csv
 import numpy
 
-from openmdao.drivers.case_driver import CaseDriver
+from six import next
 
+from openmdao.drivers.predeterminedruns_driver import PredeterminedRunsDriver
+from openmdao.recorders.csv_recorder import serialize
+
+# TODO: this (and our current CSV recorder) can't handle anything but
+#       1 D arrays.  In order to handle higher dimensions we need to
+#       store shape information in the string that gets written to the file.
 def _str2a(s):
-    s = s.strip()
-    for dim, ch in enumerate(s):
-        if ch != '[':
-            break
-
-    if dim == 1:
-        return numpy.array(eval(','.join(s.split()).replace("[,","[")))
-    elif dim == 2:
-        rows = s.split('\n')
-        for i in range(len(rows)):
-            rows[i] = ','.join(rows[i].split()).replace("[,","[")
-        return numpy.array(eval(','.join(rows)))
-    elif dim == 0:  # numpy scalar
-        return numpy.array(eval(s))
-    else:
-        raise TypeError("Can't convert numpy array of %d dimensions to str" %
-                        dim)
-    return s
+    return numpy.array([float(v) for v in s.strip().split(',')])
 
 _str2valdict = {
     int : int,
@@ -32,19 +21,23 @@ _str2valdict = {
     str : str,
     list : eval,
     numpy.ndarray : _str2a,
+    numpy.float64 : numpy.float64,
 }
 
 def _toval(typ, s):
     return _str2valdict[typ](s)
 
 
-class CSVCaseDriver(CaseDriver):
+class CSVCaseDriver(PredeterminedRunsDriver):
     """OpenMDAO driver that runs a list of cases pulled from a CSV file.
 
     Args
     ----
     fname : str
         Name of CSV file containing cases.
+
+    dialect : str ('excel')
+        Tells the CSV reader what dialect of CSV to use.
 
     num_par_doe : int, optional
         The number of cases to run concurrently.  Defaults to 1.
@@ -57,8 +50,8 @@ class CSVCaseDriver(CaseDriver):
 
     def __init__(self, fname, dialect='excel', num_par_doe=1,
                  load_balance=False, **fmtparams):
-        super(CaseDriver, self).__init__(num_par_doe=num_par_doe,
-                                         load_balance=load_balance)
+        super(CSVCaseDriver, self).__init__(num_par_doe=num_par_doe,
+                                            load_balance=load_balance)
         self.fname = fname
         self.dialect = dialect
         self.fmtparams = fmtparams
@@ -91,10 +84,12 @@ class CSVCaseDriver(CaseDriver):
                 yield case
 
 
-def save_cases_as_csv(driver, csv_file):
+def save_cases_as_csv(driver, csv_file, dialect='excel', **fmtparams):
     """
-    Take the cases from any PredeterminedRunsDriver and save them to a csv
-    file for later use with a CSVCaseDriver.
+    Take the cases from a PredeterminedRunsDriver and save them to a csv
+    file for later use with a CSVCaseDriver.  Note that all cases
+    coming from the PredeterminedRunsDriver must have the same set of
+    design variables.
 
     Args
     ----
@@ -104,12 +99,24 @@ def save_cases_as_csv(driver, csv_file):
 
     csv_file : str
         The name of the file to save the csv to.
+
+    fmtparams : dict
+        Keyword formatting args to pass to csv.writer.
     """
     with open(csv_file, "wb") as f:
-        writer = csv.writer(f, dialect=self.dialect, **self.fmtparams)
+        writer = csv.writer(f, dialect=dialect, **fmtparams)
 
-        # write the header
-        writer.writerow(self.fields)
+        it = driver._build_runlist()
 
-        for case in driver._build_runlist():
-            writer.writerow(v for _,v in case)
+        try:
+            case = list(next(it))
+
+            # write the header
+            writer.writerow([n for n,_ in case])
+
+            while True:
+                writer.writerow([serialize(v) for _, v in case])
+                case = next(it)
+
+        except StopIteration:
+            pass

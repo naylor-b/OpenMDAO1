@@ -33,7 +33,6 @@ from openmdao.solvers.ln_gauss_seidel import LinearGaussSeidel
 
 from openmdao.units.units import get_conversion_tuple
 from openmdao.util.string_util import get_common_ancestor, nearest_child, name_relative_to
-from openmdao.util.graph import plain_bfs
 from openmdao.util.options import OptionsDictionary
 
 force_check = os.environ.get('OPENMDAO_FORCE_CHECK_SETUP')
@@ -607,10 +606,10 @@ class Problem(object):
                 if self.comm.rank == 0:
                     order, broken_edges = s.list_auto_order()
                 if MPI:
-                    if trace:
+                    if trace: # pragma: no cover
                         debug("problem setup order bcast")
                     order, broken_edges = self.comm.bcast((order, broken_edges), root=0)
-                    if trace:
+                    if trace: # pragma: no cover
                         debug("problem setup order bcast DONE")
                 s.set_order(order)
 
@@ -1092,9 +1091,9 @@ class Problem(object):
             # not finished updating.  This can happen with FileRef vars and
             # potentially other pass_by_obj variables.
             if MPI:
-                if trace: debug("waiting on problem run() comm.barrier")
+                if trace: debug("waiting on problem run() comm.barrier") # pragma: no cover
                 self.root.comm.barrier()
-                if trace: debug("problem run() comm.barrier DONE")
+                if trace: debug("problem run() comm.barrier DONE") # pragma: no cover
 
     def run_once(self):
         """ Execute run_once in the driver, executing the model at the
@@ -1116,9 +1115,9 @@ class Problem(object):
             # not finished updating.  This can happen with FileRef vars and
             # potentially other pass_by_obj variables.
             if MPI:
-                if trace: debug("waiting on problem run() comm.barrier")
+                if trace: debug("waiting on problem run() comm.barrier") # pragma: no cover
                 root.comm.barrier()
-                if trace: debug("problem run() comm.barrier DONE")
+                if trace: debug("problem run() comm.barrier DONE") # pragma: no cover
 
     def _mode(self, mode, indep_list, unknown_list):
         """ Determine the mode based on precedence. The mode in `mode` is
@@ -1647,11 +1646,11 @@ class Problem(object):
                                 dxval = None
                             if nproc > 1:
                                 # TODO: make this use Bcast for efficiency
-                                if trace:
+                                if trace: # pragma: no cover
                                     debug("calc_gradient_ln_solver dxval bcast. dxval=%s, root=%s, param=%s, item=%s" %
                                             (dxval, owned[item], param, item))
                                 dxval = comm.bcast(dxval, root=owned[item])
-                                if trace:
+                                if trace: # pragma: no cover
                                     debug("dxval bcast DONE")
                         else:  # irrelevant variable.  just give'em zeros
                             if item in qoi_indices:
@@ -2190,33 +2189,6 @@ class Problem(object):
                     self._setup_errors.append(msg)
 
         return mode
-
-    def _json_system_tree(self):
-        """ Returns a json representation of the system hierarchy for the
-        model in root.
-
-        Returns
-        -------
-        json string
-        """
-
-        def _tree_dict(system):
-            dct = OrderedDict()
-            for s in system.subsystems(recurse=True):
-                if isinstance(s, Group):
-                    dct[s.name] = _tree_dict(s)
-                else:
-                    dct[s.name] = OrderedDict()
-                    for vname, meta in iteritems(s.unknowns):
-                        dct[s.name][vname] = m = meta.copy()
-                        for mname in m:
-                            if isinstance(m[mname], np.ndarray):
-                                m[mname] = m[mname].tolist()
-            return dct
-
-        tree = OrderedDict()
-        tree['root'] = _tree_dict(self.root)
-        return json.dumps(tree)
 
     def _setup_communicators(self):
         if self.comm is None:

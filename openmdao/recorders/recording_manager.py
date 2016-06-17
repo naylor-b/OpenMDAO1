@@ -50,10 +50,10 @@ class RecordingManager(object):
         `local_vars` from the `root` System.
         """
 
-        if trace:
+        if trace: # pragma: no cover
             debug("gathering vars for recording in %s" % root.pathname)
         all_vars = root.comm.gather(local_vars, root=0)
-        if trace:
+        if trace: # pragma: no cover
             debug("DONE gathering rec vars for %s" % root.pathname)
 
         if root.comm.rank == 0:
@@ -176,7 +176,6 @@ class RecordingManager(object):
         if not self._recorders:
             return
 
-        metadata['timestamp'] = time.time()
         params = root.params
         unknowns = root.unknowns
         resids = root.resids
@@ -186,10 +185,12 @@ class RecordingManager(object):
         if MPI:
             if dummy and self._casecomm is not None:
                 case = (None, None, None, None)
-                if trace: debug("DUMMY gathering cases")
+                if trace: debug("DUMMY gathering cases") # pragma: no cover
                 cases = self._casecomm.gather(case, root=0)
-                if trace: debug("DUMMY done gathering cases:")
+                if trace: debug("DUMMY done gathering cases:") # pragma: no cover
                 return
+
+            metadata['timestamp'] = time.time()
 
             pnames = self._vars_to_record['pnames']
             unames = self._vars_to_record['unames']
@@ -209,11 +210,13 @@ class RecordingManager(object):
                     # our parent driver is running a parallel DOE, so we need to
                     # gather all of the cases to this rank and loop over them
                     case = (params, unknowns, resids, metadata)
-                    if trace: debug("gathering cases")
+                    if trace: debug("gathering cases") # pragma: no cover
                     cases = self._casecomm.gather(case, root=0)
-                    if trace: debug("done gathering cases")
+                    if trace: debug("done gathering cases") # pragma: no cover
                     if cases is None:
                         cases = []
+        else: # not MPI
+            metadata['timestamp'] = time.time()
 
         if cases is None:
             cases = [(params, unknowns, resids, metadata)]

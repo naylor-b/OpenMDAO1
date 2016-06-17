@@ -29,8 +29,7 @@ namecheck_rgx = re.compile(
     '([_a-zA-Z][_a-zA-Z0-9]*)+(\:[_a-zA-Z][_a-zA-Z0-9]*)*')
 
 trace = os.environ.get('OPENMDAO_TRACE')
-if trace:
-    from openmdao.core.mpi_wrap import debug
+from openmdao.core.mpi_wrap import debug
 
 empty_arr = np.zeros(0)
 
@@ -366,7 +365,7 @@ class Component(System):
                     sizes.append(len(meta['src_indices']))
                     names.append(name)
             if sizes:
-                if trace:   # pragma: no cover
+                if trace:  # pragma: no cover
                     debug("allgathering src index sizes:")
                 allsizes = np.zeros((self.comm.size, len(sizes)), dtype=int)
                 self.comm.Allgather(np.array(sizes, dtype=int), allsizes)

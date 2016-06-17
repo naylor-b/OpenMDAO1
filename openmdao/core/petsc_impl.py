@@ -174,7 +174,7 @@ class PetscSrcVecWrapper(SrcVecWrapper):
         self.petsc_vec = PETSc.Vec().createWithArray(self.vec, comm=self.comm)
         if alloc_complex:
             self.imag_petsc_vec = PETSc.Vec().createWithArray(self.imag_vec, comm=self.comm)
-        if trace: debug("petsc_vec creation DONE")
+        if trace: debug("petsc_vec creation DONE") # pragma: no cover
 
     def _get_flattened_sizes(self):
         """
@@ -224,7 +224,7 @@ class PetscSrcVecWrapper(SrcVecWrapper):
         if self.alloc_complex:
             view.imag_petsc_vec = PETSc.Vec().createWithArray(view.imag_vec,
                                                               comm=comm)
-        if trace: debug("petsc_vec creation DONE")
+        if trace: debug("petsc_vec creation DONE") # pragma: no cover
         return view
 
 
@@ -287,7 +287,7 @@ class PetscTgtVecWrapper(TgtVecWrapper):
         if alloc_complex:
             self.imag_petsc_vec = PETSc.Vec().createWithArray(self.imag_vec,
                                                               comm=self.comm)
-        if trace: debug("petsc_vec creation DONE")
+        if trace: debug("petsc_vec creation DONE") # pragma: no cover
 
     def _get_flattened_sizes(self):
         """
@@ -363,14 +363,14 @@ class PetscDataTransfer(object):
         pvec = tgt_vec.petsc_vec
         name = src_vec._sysdata.pathname
 
-        if trace:
+        if trace: # pragma: no cover
             debug("'%s': creating index sets for '%s' DataTransfer: %s %s" %
                   (name, src_vec._sysdata.pathname, src_idxs, tgt_idxs))
 
         src_idx_set = PETSc.IS().createGeneral(src_idxs, comm=comm)
-        if trace: debug("src_idx_set DONE")
+        if trace: debug("src_idx_set DONE") # pragma: no cover
         tgt_idx_set = PETSc.IS().createGeneral(tgt_idxs, comm=comm)
-        if trace: debug("tgt_idx_set DONE")
+        if trace: debug("tgt_idx_set DONE") # pragma: no cover
 
         try:
             if trace:  # pragma: no cover
@@ -384,7 +384,7 @@ class PetscDataTransfer(object):
                        src_idx_set.indices, arrow, tgt_idx_set.indices))
             self.scatter = PETSc.Scatter().create(uvec, src_idx_set,
                                                   pvec, tgt_idx_set)
-            if trace: debug("scatter creation DONE")
+            if trace: debug("scatter creation DONE") # pragma: no cover
         except Exception as err:
             raise RuntimeError("ERROR in %s (src_idxs=%s, tgt_idxs=%s, usize=%d, psize=%d): %s" %
                                (name, src_idxs, tgt_idxs,
@@ -456,15 +456,15 @@ class PetscDataTransfer(object):
                         val = srcvec[src]
                         for i, localvars in enumerate(self.sysdata.all_locals):
                             if i != iproc and src not in localvars and tgt in localvars:
-                                if trace: debug("sending %s" % val)
+                                if trace: debug("sending %s" % val) # pragma: no cover
                                 comm.send(val, dest=i, tag=itag)
-                                if trace: debug("DONE sending %s" % val)
+                                if trace: debug("DONE sending %s" % val) # pragma: no cover
 
                 # ensure that all src values have been sent before we receive
                 # any in order to avoid possible race conditions
-                if trace: debug("waiting on comm.barrier")
+                if trace: debug("waiting on comm.barrier") # pragma: no cover
                 comm.barrier()
-                if trace: debug("comm.barrier DONE")
+                if trace: debug("comm.barrier DONE") # pragma: no cover
 
                 for itag, (tgt, src) in enumerate(self.byobj_conns):
                     # if we don't have the value locally, pull it across using MPI
@@ -475,10 +475,10 @@ class PetscDataTransfer(object):
                             else:
                                 tgtvec[tgt] = srcvec[src]
                         else:
-                            if trace: debug("receiving to %s" % tgtvec[tgt])
+                            if trace: debug("receiving to %s" % tgtvec[tgt]) # pragma: no cover
                             val = comm.recv(source=self.sysdata.owning_ranks[src],
                                             tag=itag)
-                            if trace: debug("received %s" % val)
+                            if trace: debug("received %s" % val) # pragma: no cover
                             if isinstance(tgtvec[tgt], FileRef):
                                 tgtvec[tgt]._assign_to(val)
                             else:

@@ -1,8 +1,10 @@
 """ Tests for the OpenmDAO vecwrappers."""
 
 import unittest
+import pickle
 import numpy as np
 from six import iteritems
+from six.moves import zip
 from collections import OrderedDict
 
 from openmdao.core.vec_wrapper import SrcVecWrapper, TgtVecWrapper
@@ -178,6 +180,27 @@ class TestVecWrapper(unittest.TestCase):
 
         unorm = u.norm()
         self.assertAlmostEqual(unorm, np.linalg.norm(np.array([2.0, 3.0, -4.0])))
+
+    def test_pickle(self):
+        unknowns_dict = OrderedDict()
+
+        unknowns_dict['y1'] = { 'shape': (2,1), 'size': 2, 'val' : np.array([2.0, 3.0]) }
+        unknowns_dict['y2'] = { 'shape': 1, 'size': 1, 'val' : -4.0 }
+
+        sd = _SysData('')
+        for u, meta in unknowns_dict.items():
+            meta['pathname'] = u
+            meta['top_promoted_name'] = u
+            sd.to_prom_name[u] = u
+
+        u = SrcVecWrapper(sd, pbd)
+        u.setup(unknowns_dict, store_byobjs=True)
+
+        up = pickle.dumps(u)
+        u2 = pickle.loads(up)
+
+        self.assertTrue(np.all(u['y1']==u2['y1']))
+        self.assertEqual(u['y2'], u2['y2'])
 
     def test_bad_get_unknown(self):
         unknowns_dict = OrderedDict()

@@ -424,6 +424,16 @@ class TestGroup(unittest.TestCase):
         prob.setup(check=False)
         save = StringIO()
         prob.root.dump(out_stream=save)
+        prob.root.dump(out_stream=save, verbose=True, sizes=True)
+
+        # don't want to write a test that does a string compare of a dump, so
+        # for now, just verify that calling dump doesn't raise an exception.
+
+    def test_dump_dist_idxs(self):
+        prob = Problem(root=ExampleGroup())
+        prob.setup(check=False)
+        save = StringIO()
+        prob.root._dump_dist_idxs(stream=save, recurse=True)
 
         # don't want to write a test that does a string compare of a dump, so
         # for now, just verify that calling dump doesn't raise an exception.

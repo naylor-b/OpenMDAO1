@@ -24,15 +24,15 @@ class PickleCaseDriver(CaseDriver):
     """
 
     def __init__(self, fname, num_par_doe=1, load_balance=False):
-        super(CaseDriver, self).__init__(num_par_doe=num_par_doe,
-                                         load_balance=load_balance)
+        super(PickleCaseDriver, self).__init__(num_par_doe=num_par_doe,
+                                               load_balance=load_balance)
         self.fname = fname
 
     def _build_runlist(self):
         """Yield cases from our sequence of cases."""
 
         with open(self.fname, "rb") as f:
-            cases = pickle.load(f)
+            self.cases = pickle.load(f)
 
         for case in self.cases:
             yield case

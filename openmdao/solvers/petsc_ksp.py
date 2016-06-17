@@ -133,10 +133,12 @@ class PetscKSP(LinearSolver):
             lsize = np.sum(sizes[system.comm.rank, :])
             size = np.sum(sizes)
 
-            if trace: debug("creating petsc matrix of size (%d,%d)" % (lsize, size))
+            if trace: # pragma: no cover
+                debug("creating petsc matrix of size (%d,%d)" % (lsize, size))
             jac_mat = PETSc.Mat().createPython([(lsize, size), (lsize, size)],
                                                comm=system.comm)
-            if trace: debug("petsc matrix creation DONE for %s" % voi)
+            if trace:  # pragma: no cover
+                debug("petsc matrix creation DONE for %s" % voi)
             jac_mat.setPythonContext(self)
             jac_mat.setUp()
 
@@ -144,7 +146,8 @@ class PetscKSP(LinearSolver):
                 debug("creating KSP object for system", system.pathname)
 
             ksp = self.ksp[voi] = PETSc.KSP().create(comm=system.comm)
-            if trace: debug("KSP creation DONE")
+            if trace: # pragma: no cover
+                debug("KSP creation DONE")
 
             ksp.setOperators(jac_mat)
             ksp.setType('fgmres')
@@ -211,7 +214,7 @@ class PetscKSP(LinearSolver):
                 debug("creating rhs_buf petsc vec for voi", voi)
             self.rhs_buf_petsc = PETSc.Vec().createWithArray(rhs,
                                                              comm=system.comm)
-            if trace: debug("rhs_buf creation DONE")
+            if trace: debug("rhs_buf creation DONE") # pragma: no cover
 
             # Petsc can only handle one right-hand-side at a time for now
             self.voi = voi

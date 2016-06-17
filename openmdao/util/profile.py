@@ -26,14 +26,14 @@ from openmdao.solvers.solver_base import SolverBase
 from openmdao.recorders.recording_manager import RecordingManager
 from openmdao.devtools.d3graph import webview
 
-def get_method_class(meth):
+def get_method_class(meth): # pragma: no cover
     """Return the class that actually defined the given method."""
     for cls in inspect.getmro(meth.__self__.__class__):
         if meth.__name__ in cls.__dict__:
             return cls
 
 
-class _ProfData(Structure):
+class _ProfData(Structure): # pragma: no cover
     _fields_ = [ ('t',c_float), ('tstamp',c_float), ('id',c_uint) ]
 
 _profile_methods = None
@@ -46,7 +46,7 @@ _profile_total = 0.0
 _profile_struct = _ProfData()
 _profile_funcs_dict = OrderedDict()
 
-def _obj_iter(top):
+def _obj_iter(top): # pragma: no cover
     """Iterator over objects to be checked for functions to wrap for profiling.
     The top object must be a Problem or a System or an exception will be raised.
     """
@@ -75,7 +75,7 @@ def _obj_iter(top):
                 yield s.nl_solver.recorders
 
 def setup(top, prefix='prof_raw', methods=None, by_class=False,
-          obj_iter=_obj_iter):
+          obj_iter=_obj_iter): # pragma: no cover
     """
     Instruments certain important openmdao methods for profiling.
 
@@ -170,7 +170,7 @@ def setup(top, prefix='prof_raw', methods=None, by_class=False,
                     setattr(obj, meth,
                             _profile_dec()(match).__get__(obj, obj.__class__))
 
-def start():
+def start(): # pragma: no cover
     """Turn on profiling.
     """
     global _profile_start
@@ -180,7 +180,7 @@ def start():
 
     _profile_start = time.time()
 
-def stop():
+def stop(): # pragma: no cover
     """Turn off profiling.
     """
     global _profile_total, _profile_start
@@ -190,7 +190,7 @@ def stop():
     _profile_total += (time.time() - _profile_start)
     _profile_start = None
 
-def _iter_raw_prof_file(rawname, fdict=None):
+def _iter_raw_prof_file(rawname, fdict=None): # pragma: no cover
     """Returns an iterator of (elapsed_time, timestamp, funcpath)
     from a raw profile data file.
     """
@@ -213,7 +213,7 @@ def _iter_raw_prof_file(rawname, fdict=None):
             path = fdict[str(_profile_struct.id)]
             yield _profile_struct.t, _profile_struct.tstamp, path
 
-def _finalize_profile():
+def _finalize_profile(): # pragma: no cover
     """called at exit to write out the file mapping function call paths
     to identifiers.
     """
@@ -229,7 +229,7 @@ def _finalize_profile():
         # the runtime is invisible to our profile.
         f.write("%s %s\n" % (_profile_total, "@total"))
 
-class _profile_dec(object):
+class _profile_dec(object): # pragma: no cover
     """ Use as a decorator on functions that should be profiled.
     The data collected will include time elapsed, number of calls, ...
     """
@@ -293,7 +293,7 @@ class _profile_dec(object):
 
         return wrapper
 
-def _update_counts(dct, name, elapsed):
+def _update_counts(dct, name, elapsed): # pragma: no cover
     try:
         d = dct[name]
     except KeyError:
@@ -306,7 +306,7 @@ def _update_counts(dct, name, elapsed):
     d['count'] += 1
     d['time'] += elapsed
 
-def _get_dict(path, parts, funcs, totals):
+def _get_dict(path, parts, funcs, totals): # pragma: no cover
     name = parts[-1]
     fdict = funcs[path]
     tdict = totals[name]
@@ -320,7 +320,7 @@ def _get_dict(path, parts, funcs, totals):
         'tot_count': tdict['count'],
     }
 
-def process_profile(flist):
+def process_profile(flist): # pragma: no cover
     """Take the generated raw profile data, potentially from multiple files,
     and combine it to get hierarchy structure and total execution counts and
     timing data.
@@ -401,7 +401,7 @@ def process_profile(flist):
 
     return tree, totals
 
-def prof_dump(fname, include_tstamp=True):
+def prof_dump(fname, include_tstamp=True): # pragma: no cover
     """Print the contents of the given raw profile data file to stdout.
 
     Args
@@ -421,7 +421,7 @@ def prof_dump(fname, include_tstamp=True):
         for t, _, funcpath in _iter_raw_prof_file(fname):
             print(funcpath, t)
 
-def prof_totals():
+def prof_totals(): # pragma: no cover
     """Called from the command line to create a file containing total elapsed
     times and number of calls for all profiled functions.
 
@@ -457,7 +457,7 @@ def prof_totals():
         if out_stream is not sys.stdout:
             out_stream.close()
 
-def prof_view():
+def prof_view(): # pragma: no cover
     """Called from a command line to generate an html viewer for profile data."""
 
     parser = argparse.ArgumentParser()
@@ -493,5 +493,5 @@ def prof_view():
     if options.show:
         webview(outfile)
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     prof_dump(sys.argv[1])

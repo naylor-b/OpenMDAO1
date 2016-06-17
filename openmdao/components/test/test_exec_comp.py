@@ -1,5 +1,6 @@
 import unittest
 import math
+import pickle
 
 import numpy as np
 
@@ -234,6 +235,17 @@ class TestExecComp(unittest.TestCase):
         assert_rel_error(self, data['comp'][('foo:y','x')]['rel error'][0], 0.0, 1e-5)
         assert_rel_error(self, data['comp'][('foo:y','x')]['rel error'][1], 0.0, 1e-5)
         assert_rel_error(self, data['comp'][('foo:y','x')]['rel error'][2], 0.0, 1e-5)
+
+    def test_pickle(self):
+        prob = Problem(root=Group())
+        C1 = prob.root.add('C1', ExecComp('y=x+1.', x=2.0))
+        prob.setup(check=False)
+
+        c1p = pickle.dumps(C1)
+        c2 = pickle.loads(c1p)
+
+        self.assertEqual(C1.name, c2.name)
+        self.assertEqual(len(C1._codes), len(c2._codes))
 
 if __name__ == "__main__":
     unittest.main()

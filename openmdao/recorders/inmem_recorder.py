@@ -6,6 +6,7 @@ and using it for real problems could use up large amounts of memory.
 
 import sys
 
+from copy import deepcopy
 from six import string_types, iteritems
 
 from openmdao.core.mpi_wrap import MPI
@@ -69,17 +70,19 @@ class InMemoryRecorder(BaseRecorder):
         data['success'] = metadata['success']
         data['msg'] = metadata['msg']
 
+        # we need to copy the values here because if they're arrays, we'll
+        # get a ref to something that can be changed by later runs
         if self.options['record_params']:
-            data['params'] = list(self._filter_vector(params,'p',
-                                                        iteration_coordinate))
+            data['params'] = deepcopy(list(self._filter_vector(params,'p',
+                                                        iteration_coordinate)))
 
         if self.options['record_unknowns']:
-            data['unknowns'] = list(self._filter_vector(unknowns,'u',
-                                                        iteration_coordinate))
+            data['unknowns'] = deepcopy(list(self._filter_vector(unknowns,'u',
+                                                        iteration_coordinate)))
 
         if self.options['record_resids']:
-            data['resids'] = list(self._filter_vector(resids,'r',
-                                                         iteration_coordinate))
+            data['resids'] = deepcopy(list(self._filter_vector(resids,'r',
+                                                         iteration_coordinate)))
 
         self.iters.append(data)
 

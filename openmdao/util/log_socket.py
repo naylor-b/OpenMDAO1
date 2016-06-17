@@ -1,8 +1,10 @@
 # this is from https://docs.python.org/2/howto/logging-cookbook.html
 
-# Run this file to start a log server.  Setting the environment var OPENMDAO_SOCKET_LOGGING=1
-# in any desired test processes will send their log messages to this server for display
-# on the console where this server is running.
+# Run this file to start a log server.  Setting the environment var
+# OPENMDAO_LOG_SOCKET=<port number>, where <port number> of 0 means to use
+# DEFAULT_TCP_LOGGING_PORT, in any desired test processes will send their log
+# messages to this server for display on the console where this server is
+# running.
 
 import os
 import pickle
@@ -12,7 +14,7 @@ from six.moves import socketserver
 import struct
 
 
-class LogRecordStreamHandler(socketserver.StreamRequestHandler):
+class LogRecordStreamHandler(socketserver.StreamRequestHandler): # pragma: no cover
     """Handler for a streaming logging request.
 
     This basically logs the record using whatever logging policy is
@@ -54,7 +56,7 @@ class LogRecordStreamHandler(socketserver.StreamRequestHandler):
         # cycles and network bandwidth!
         logger.handle(record)
 
-class LogRecordSocketReceiver(socketserver.ThreadingTCPServer):
+class LogRecordSocketReceiver(socketserver.ThreadingTCPServer): # pragma: no cover
     """
     Simple TCP socket-based logging receiver suitable for testing.
     """
@@ -84,7 +86,7 @@ class LogRecordSocketReceiver(socketserver.ThreadingTCPServer):
 SOCK_LOGGER = None
 
 def enable_socket(level=logging.DEBUG,
-                  port=logging.handlers.DEFAULT_TCP_LOGGING_PORT):
+                  port=logging.handlers.DEFAULT_TCP_LOGGING_PORT): # pragma: no cover
     global SOCK_LOGGER
     if SOCK_LOGGER is None:
         rootLogger = logging.getLogger('')
@@ -94,25 +96,23 @@ def enable_socket(level=logging.DEBUG,
         # the event as an unformatted pickle
         rootLogger.addHandler(SOCK_LOGGER)
 
-def disable_socket():
+def disable_socket(): # pragma: no cover
     """ Stop sending log msgs to the log server. """
     global SOCK_LOGGER
     logging.getLogger().removeHandler(SOCK_LOGGER)
     SOCK_LOGGER = None
 
+# pragma: no cover
 env_socket = os.environ.get('OPENMDAO_LOG_SOCKET')
-if env_socket:
+if env_socket: # pragma: no cover
     port = int(env_socket)
     if port == 0:
         port = logging.handlers.DEFAULT_TCP_LOGGING_PORT
     enable_socket(port=port)
 
-def main():
+if __name__ == '__main__':
     logging.basicConfig(
         format='%(relativeCreated)5d %(name)-8s %(levelname)-8s %(message)s')
     tcpserver = LogRecordSocketReceiver()
     print('Starting log server...')
     tcpserver.serve_until_stopped()
-
-if __name__ == '__main__':
-    main()

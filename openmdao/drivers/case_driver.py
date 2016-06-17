@@ -10,7 +10,7 @@ class CaseDriver(PredeterminedRunsDriver):
 
     Args
     ----
-    cases : iter of cases
+    cases : sequence of cases
         A sequence of cases, where each case is a sequence of (name, value) tuples.
 
     num_par_doe : int, optional
@@ -22,7 +22,7 @@ class CaseDriver(PredeterminedRunsDriver):
 
     """
 
-    def __init__(self, cases, num_par_doe=1, load_balance=False):
+    def __init__(self, cases=(), num_par_doe=1, load_balance=False):
         super(CaseDriver, self).__init__(num_par_doe=num_par_doe,
                                          load_balance=load_balance)
         self.cases = cases

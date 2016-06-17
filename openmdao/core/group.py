@@ -1097,8 +1097,7 @@ class Group(System):
 
         return graph, broken_edges
 
-    def dump(self, nest=0, out_stream=sys.stdout, verbose=False, dvecs=False,
-             sizes=False):
+    def dump(self, nest=0, out_stream=sys.stdout, verbose=False, sizes=False):
         """
         Writes a formated dump of the `System` tree to file.
 
@@ -1114,18 +1113,11 @@ class Group(System):
             If True, output additional info beyond
             just the tree structure. Default is False.
 
-        dvecs : bool, optional
-            If True, show contents of du and dp vectors instead of
-            u and p (the default).
-
         sizes : bool, optional
             If True, include vector sizes and comm sizes. Default is False.
         """
         klass = self.__class__.__name__
-        if dvecs:
-            ulabel, plabel, uvecname, pvecname = 'du', 'dp', 'dunknowns', 'dparams'
-        else:
-            ulabel, plabel, uvecname, pvecname = 'u', 'p', 'unknowns', 'params'
+        ulabel, plabel, uvecname, pvecname = 'u', 'p', 'unknowns', 'params'
 
         uvec = getattr(self, uvecname)
         pvec = getattr(self, pvecname)
@@ -1144,7 +1136,7 @@ class Group(System):
                                          commsz))
         out_stream.write("\n")
 
-        if verbose:  # pragma: no cover
+        if verbose:
             vec_conns = dict(self._data_xfer[('', 'fwd', None)].vec_conns)
             byobj_conns = dict(self._data_xfer[('', 'fwd', None)].byobj_conns)
 
@@ -1199,19 +1191,17 @@ class Group(System):
                                                      repr(uvec[v]),
                                                      nwid=nwid))
 
-            if not dvecs:
-                for dest, src in iteritems(byobj_conns):
-                    out_stream.write(" "*(nest+8))
-                    connstr = '%s -> %s:' % (src, dest)
-                    template = "{0:<{nwid}} (by_obj)  ({1})\n"
-                    out_stream.write(template.format(connstr,
-                                                     repr(uvec[src]),
-                                                     nwid=nwid))
+            for dest, src in iteritems(byobj_conns):
+                out_stream.write(" "*(nest+8))
+                connstr = '%s -> %s:' % (src, dest)
+                template = "{0:<{nwid}} (by_obj)  ({1})\n"
+                out_stream.write(template.format(connstr,
+                                                 repr(uvec[src]),
+                                                 nwid=nwid))
 
         nest += 3
         for sub in self.subsystems():
-            sub.dump(nest, out_stream=out_stream, verbose=verbose, dvecs=dvecs,
-                     sizes=sizes)
+            sub.dump(nest, out_stream=out_stream, verbose=verbose, sizes=sizes)
 
         out_stream.flush()
 
@@ -1565,7 +1555,7 @@ class Group(System):
 
         return umap
 
-    def _dump_dist_idxs(self, stream=sys.stdout, recurse=True):  # pragma: no cover
+    def _dump_dist_idxs(self, stream=sys.stdout, recurse=True):
         """For debugging.  prints out the distributed idxs along with the
         variables they correspond to for the u and p vectors, for example:
 

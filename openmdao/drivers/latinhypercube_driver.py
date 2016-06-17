@@ -108,7 +108,7 @@ class LatinHypercubeDriver(PredeterminedRunsDriver):
 
         job_list = None
         if comm.rank == 0:
-            if trace:
+            if trace: # pragma: no cover
                 debug('Parallel DOE using %d procs' % self._num_par_doe)
             run_list = [list(case) for case in self._build_runlist()] # need to run iterator
 
@@ -118,9 +118,9 @@ class LatinHypercubeDriver(PredeterminedRunsDriver):
 
             job_list = [jobs[i] for i in doe_ids]
 
-        if trace: debug("scattering job_list: %s" % job_list)
+        if trace: debug("scattering job_list: %s" % job_list) # pragma: no cover
         run_list = comm.scatter(job_list, root=0)
-        if trace: debug('Number of DOE jobs: %s (scatter DONE)' % len(run_list))
+        if trace: debug('Number of DOE jobs: %s (scatter DONE)' % len(run_list)) # pragma: no cover
 
         for case in run_list:
             yield case

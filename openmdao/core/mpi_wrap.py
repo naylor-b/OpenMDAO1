@@ -12,7 +12,7 @@ from six import PY3
 
 trace = os.environ.get('OPENMDAO_TRACE')
 
-def _redirect_streams(to_fd):
+def _redirect_streams(to_fd): # pragma: no cover
     """
     Redirect stdout/stderr to the given file descriptor.
     Based on: http://eli.thegreenplace.net/2015/redirecting-all-kinds-of-stdout-in-python/.
@@ -37,7 +37,7 @@ def _redirect_streams(to_fd):
         sys.stdout = os.fdopen(original_stdout_fd, 'wb', 0) # 0 makes them unbuffered
         sys.stderr = os.fdopen(original_stderr_fd, 'wb', 0)
 
-def use_proc_files():
+def use_proc_files(): # pragma: no cover
     """Calling this will cause stdout/stderr from each MPI process to be written
     to a separate file in the current directory named <rank>.out.
     """
@@ -85,7 +85,7 @@ class FakeComm(object):
         self.size = 1
 
 @contextmanager
-def MultiProcFailCheck(comm):
+def MultiProcFailCheck(comm): # pragma: no cover
     """ Wrap this around code that you want to globally fail if it fails
     on any MPI process in comm.  If not running under MPI, don't
     handle any exceptions.
@@ -110,17 +110,17 @@ def any_proc_is_true(comm, expr):
 
     any_true = numpy.array(0, dtype=int)
 
-    if trace:
+    if trace: # pragma: no cover
         debug("Allreduce for any_proc_is_true")
     # some mpi versions don't support Allreduce with boolean types
     # and logical operators, so just use ints and MPI.SUM instead.
     comm.Allreduce(numpy.array(1 if expr else 0, dtype=int),
                    any_true, op=MPI.SUM)
-    if trace:
-        debug("Allreduce DONE")
+    if trace: # pragma: no cover
+        debug("Allreduce DONE (%s)" % (any_true > 0))
 
     return any_true > 0
 
 
-if os.environ.get('USE_PROC_FILES'):
+if os.environ.get('USE_PROC_FILES'): # pragma: no cover
     use_proc_files()

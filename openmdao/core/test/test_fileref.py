@@ -147,6 +147,63 @@ class TestFileRef(unittest.TestCase):
 
         return p, src, middle, sink
 
+    def test_str(self):
+        fname = "foobar.out"
+        cdir = os.getcwd()
+        absname = os.path.join(cdir, fname)
+        fr = FileRef(fname, cdir)
+        self.assertEqual(str(fr), "FileRef(foobar.out): absolute: %s" % absname)
+
+    def test_write(self):
+        fname = "foobar.out"
+        cdir = os.getcwd()
+        absname = os.path.join(cdir, fname)
+        fr = FileRef(fname, cdir)
+        fr.write("foobar data")
+        with open(absname, "r") as f:
+            contents = f.read()
+
+        self.assertEqual(contents, "foobar data")
+
+    def test_read(self):
+        fname = "foobar.out"
+        cdir = os.getcwd()
+        absname = os.path.join(cdir, fname)
+
+        with open(absname, "w") as f:
+            f.write("foobar read data")
+
+        fr = FileRef(fname, cdir)
+        data = fr.read()
+
+        self.assertEqual(data, "foobar read data")
+
+    def test_abspath(self):
+        fname = "foobar.out"
+        cdir = os.getcwd()
+        absname = os.path.join(cdir, fname)
+
+        fr = FileRef(absname)
+
+        self.assertEqual(fr._abspath(), absname)
+        self.assertEqual(fr._dirname(), cdir)
+
+    def test_validate(self):
+        fname = "foobar.out"
+        cdir = os.getcwd()
+        absname = os.path.join(cdir, fname)
+
+        fr = FileRef(fname, cdir)
+
+        try:
+            fr.validate("notAFileRef")
+        except Exception as err:
+            self.assertEqual(str(err),
+                            "Source for FileRef 'foobar.out' is not a FileRef.")
+        else:
+            self.fail("Exception expected")
+
+
     def test_same_dir(self):
         p, src, middle, sink = self._build_model()
 

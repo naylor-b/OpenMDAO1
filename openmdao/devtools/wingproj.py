@@ -10,9 +10,9 @@ from six.moves.configparser import ConfigParser
 from six import text_type
 from optparse import OptionParser
 
-from openmdao.util.file_util import find_files, find_up
+from openmdao.util.file_util import find_files
 
-def _modify_wpr_file(template, outfile, version):
+def _modify_wpr_file(template, outfile, version): # pragma: no cover
     config = ConfigParser()
     config.read(template)
     if sys.platform == 'darwin':
@@ -25,8 +25,35 @@ def _modify_wpr_file(template, outfile, version):
         fp.write('#!wing\n#!version=%s\n' % version)
         config.write(fp)
 
+def find_up(name, path=None): # pragma: no cover
+    """Search upward from the starting path (or the current directory)
+    until the given file or directory is found. The given name is
+    assumed to be a basename, not a path.  Returns the absolute path
+    of the file or directory if found, or None otherwise.
 
-def _find_wing():
+    Args
+    ----
+    name : str
+        Base name of the file or directory being searched for.
+
+    path : str, optional
+        Starting directory.  If not supplied, current directory is used.
+    """
+    if not path:
+        path = os.getcwd()
+    if not exists(path):
+        return None
+    while path:
+        if exists(join(path, name)):
+            return abspath(join(path, name))
+        else:
+            pth = path
+            path = dirname(path)
+            if path == pth:
+                return None
+    return None
+
+def _find_wing(): # pragma: no cover
     if sys.platform == 'win32':
         wname = 'wing.exe'
         tdir = r'C:\Program Files (x86)'
@@ -66,7 +93,7 @@ def _find_wing():
     raise OSError("%s was not found in PATH or in any of the common places." %
                   wname)
 
-def run_wing():
+def run_wing(): # pragma: no cover
     """Runs the Wing IDE using our template project file."""
     parser = OptionParser()
     parser.add_option("-w", "--wingpath", action="store", type="string",

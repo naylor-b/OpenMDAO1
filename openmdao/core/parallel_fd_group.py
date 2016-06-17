@@ -98,7 +98,7 @@ class ParallelFDGroup(Group):
 
             # create a sub-communicator for each color and
             # get the one assigned to our color/process
-            if trace:
+            if trace: # pragma: no cover
                 debug('%s: splitting comm, fd_id=%s' % (self.pathname,
                                                         self._par_fd_id))
             comm = comm.Split(self._par_fd_id)

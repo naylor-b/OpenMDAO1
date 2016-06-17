@@ -1,7 +1,7 @@
 """
 OpenMDAO driver that runs a user-specified list of cases.
 """
-import cPickle as pickle
+from six.moves import cPickle as pickle
 
 from openmdao.drivers.case_driver import CaseDriver
 

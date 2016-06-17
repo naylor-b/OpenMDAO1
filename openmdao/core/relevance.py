@@ -54,12 +54,6 @@ class Relevance(object):
         else:
             self.groups = output_groups
 
-    def __getitem__(self, name):
-        try:
-            return self.relevant[name]
-        except KeyError:
-            return ()
-
     def is_relevant(self, var_of_interest, varname):
         """ Returns True if a variable is relevant to a particular variable
         of interest.

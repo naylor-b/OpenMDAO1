@@ -84,7 +84,7 @@ install:
 - pip install -e .
 
 script:
-- testflo . -n 1 --coverage --coverpkg openmdao
+- testflo . -n 1 --coverage --coverpkg openmdao --cover-omit="*/docs/*" --cover-omit="*/test/*" --cover-omit="*/devtools/*"
 
 after_success:
   coveralls

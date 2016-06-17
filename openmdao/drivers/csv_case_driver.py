@@ -1,6 +1,7 @@
 """
 OpenMDAO driver that runs a list of cases pulled from a CSV file.
 """
+import sys
 import csv
 import numpy
 
@@ -59,7 +60,12 @@ class CSVCaseDriver(PredeterminedRunsDriver):
     def _build_runlist(self):
         """Yield cases from our CSV file."""
 
-        with open(self.fname, "rb") as f:
+        if sys.version_info >= (3, 0, 0):
+            mode = "r"
+        else:
+            mode = "rb"
+
+        with open(self.fname, mode) as f:
             reader = csv.reader(f, dialect=self.dialect, **self.fmtparams)
 
             self.fields = None
@@ -103,7 +109,14 @@ def save_cases_as_csv(driver, csv_file, dialect='excel', **fmtparams):
     fmtparams : dict
         Keyword formatting args to pass to csv.writer.
     """
-    with open(csv_file, "wb") as f:
+    if sys.version_info >= (3, 0, 0):
+        args = [csv_file, "w",]
+        kwargs = {'newline': ''}
+    else:
+        args = [csv_file, "wb"]
+        kwargs = {}
+
+    with open(*args, **kwargs) as f:
         writer = csv.writer(f, dialect=dialect, **fmtparams)
 
         it = driver._build_runlist()

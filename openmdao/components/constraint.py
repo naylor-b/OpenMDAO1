@@ -5,7 +5,7 @@ import warnings
 from openmdao.components.exec_comp import ExecComp
 
 
-class ConstraintComp(ExecComp):
+class ConstraintComp(ExecComp): # pragma: no cover
     """
 
     ConstraintComp is deprecated. Please see the basic tutorial for more information.
@@ -66,7 +66,7 @@ class ConstraintComp(ExecComp):
         super(ConstraintComp, self).__init__("%s = %s" % (out, newexpr))
 
 
-def _combined_expr(expr):
+def _combined_expr(expr): # pragma: no cover
     """Given a constraint object, take the lhs, operator, and
     rhs and combine them into a single expression by moving rhs
     terms over to the lhs.  For example,
@@ -95,7 +95,7 @@ def _combined_expr(expr):
     return '%s-(%s)' % (first, second)
 
 
-def _parse_constraint(expr_string):
+def _parse_constraint(expr_string): # pragma: no cover
     """ Parses the constraint expression string and returns the lhs string,
     the rhs string, and comparator
     """

@@ -120,7 +120,7 @@ class ExecComp(Component):
         self._exprs = exprs[:]
 
         outs = set()
-        self._allvars = allvars = set()
+        allvars = set()
 
         # find all of the variables and which ones are outputs
         for expr in exprs:

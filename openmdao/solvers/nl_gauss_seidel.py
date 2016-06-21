@@ -91,7 +91,7 @@ class NLGaussSeidel(NonLinearSolver):
         normval = resids.norm()
         basenorm = normval if normval > atol else 1.0
 
-        if self.options['iprint'] > 0:
+        if iprint > 0:
             self.print_norm(self.print_name, system.pathname, 0, normval, basenorm)
 
         while self.iter_count < maxiter and \
@@ -110,7 +110,7 @@ class NLGaussSeidel(NonLinearSolver):
             system.apply_nonlinear(params, unknowns, resids)
             normval = resids.norm()
 
-            if self.options['iprint'] > 0:
+            if iprint > 0:
                 self.print_norm(self.print_name, system.pathname, self.iter_count, normval,
                                 basenorm)
 
@@ -120,7 +120,7 @@ class NLGaussSeidel(NonLinearSolver):
         else:
             fail = False
 
-        if self.options['iprint'] > 0:
+        if iprint > 0:
             if not fail:
                 msg = 'converged'
 

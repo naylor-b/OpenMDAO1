@@ -98,8 +98,6 @@ class System(object):
         self.unknowns = _PlaceholderVecWrapper('unknowns')
         self.resids = _PlaceholderVecWrapper('resids')
         self.params = _PlaceholderVecWrapper('params')
-        self.dunknowns = _PlaceholderVecWrapper('dunknowns')
-        self.dresids = _PlaceholderVecWrapper('dresids')
 
         opt = self.deriv_options = OptionsDictionary()
         opt._deprecations['force_fd'] = 'type'
@@ -375,16 +373,6 @@ class System(object):
         if (self.create_dirs and self.is_active() and
                      not os.path.exists(self._sysdata.absdir)):
             os.makedirs(self._sysdata.absdir)
-
-    def _set_vars_as_remote(self):
-        """
-        Set 'remote' attribute in metadata of all variables for this subsystem.
-        """
-        for meta in itervalues(self._params_dict):
-            meta['remote'] = True
-
-        for meta in itervalues(self._unknowns_dict):
-            meta['remote'] = True
 
     def fd_jacobian(self, params, unknowns, resids, total_derivs=False,
                     fd_params=None, fd_unknowns=None, fd_states=None, pass_unknowns=(),
@@ -1449,9 +1437,3 @@ class _DummyContext(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
-
-
-def _iter_J_nested(J):
-    for output, subdict in iteritems(J):
-        for param, value in iteritems(subdict):
-            yield (output, param), value

@@ -510,7 +510,6 @@ class Group(System):
         the top level Group.
         """
         comm = self.comm
-        sys_pathname = self.pathname
         params_dict = self._params_dict
         unknowns_dict = self._unknowns_dict
 

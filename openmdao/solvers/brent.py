@@ -75,8 +75,6 @@ class Brent(NonLinearSolver):
         # we renamed max_iter to maxiter to match all the other solvers
         opt._add_deprecation('max_iter', 'maxiter')
 
-        self.xstar = None
-
         self.print_name = 'BRENT'
         self.basenorm = 0.0
 
@@ -179,7 +177,7 @@ class Brent(NonLinearSolver):
 
         failed = False
         try:
-            xstar = brentq(self._eval, **kwargs)
+            brentq(self._eval, **kwargs)
         except RuntimeError as err:
             msg = str(err)
             if 'different signs' in msg:

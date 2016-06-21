@@ -172,7 +172,6 @@ class DirectSolver(MultLinearSolver):
                 self.setup(system)
             self.mode = mode
 
-            sys_name = system.name + '.'
             partials = self.jacobian
             u_vec = system.unknowns
             icache = self.icache
@@ -190,7 +189,6 @@ class DirectSolver(MultLinearSolver):
                          "'apply_linear' is used on a component (%s)." % sub.pathname
                     raise RuntimeError(msg)
 
-                sub_u = sub.unknowns
                 sub_name = sub.pathname
 
                 for key in jac:

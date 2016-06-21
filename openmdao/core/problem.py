@@ -2191,33 +2191,6 @@ class Problem(object):
 
         return mode
 
-    def _json_system_tree(self):
-        """ Returns a json representation of the system hierarchy for the
-        model in root.
-
-        Returns
-        -------
-        json string
-        """
-
-        def _tree_dict(system):
-            dct = OrderedDict()
-            for s in system.subsystems(recurse=True):
-                if isinstance(s, Group):
-                    dct[s.name] = _tree_dict(s)
-                else:
-                    dct[s.name] = OrderedDict()
-                    for vname, meta in iteritems(s.unknowns):
-                        dct[s.name][vname] = m = meta.copy()
-                        for mname in m:
-                            if isinstance(m[mname], np.ndarray):
-                                m[mname] = m[mname].tolist()
-            return dct
-
-        tree = OrderedDict()
-        tree['root'] = _tree_dict(self.root)
-        return json.dumps(tree)
-
     def _setup_communicators(self):
         if self.comm is None:
             self.comm = self._impl.world_comm()
@@ -2615,9 +2588,3 @@ def _needs_iteration(comp):
                 return  False
         return True
     return False
-
-def _get_gmres_name():
-    if MPI:
-        return 'PetscKSP'
-    else:
-        return 'ScipyGMRES'

@@ -380,7 +380,6 @@ class PredeterminedRunsDriver(Driver):
             done_queue = multiprocessing.Queue()
 
         procs = []
-        terminating = False
 
         # Start worker processes
         for i in range(self._num_par_doe):

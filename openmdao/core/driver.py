@@ -55,6 +55,7 @@ class Driver(object):
 
         self._voi_sets = []
         self._vars_to_record = None
+        self.record_name = 'Driver'
 
         # We take root during setup
         self.root = None
@@ -750,7 +751,7 @@ class Driver(object):
 
         # Metadata Setup
         self.iter_count += 1
-        metadata = self.metadata = create_local_meta(None, 'Driver')
+        metadata = self.metadata = create_local_meta(None, self.record_name)
         system.ln_solver.local_meta = metadata
         update_local_meta(metadata, (self.iter_count,))
 

@@ -2,6 +2,8 @@
 
 import unittest
 
+import numpy as np
+
 from openmdao.api import IndepVarComp, Group, Problem, ExecComp
 from openmdao.drivers.amiego_driver import AMIEGO_driver
 from openmdao.test.branin import BranninInteger
@@ -25,6 +27,8 @@ class TestAMIEGOdriver(unittest.TestCase):
         prob.driver.add_desvar('xC', lower=0.0, upper=15.0)
 
         prob.driver.add_objective('f')
+
+        prob.driver.sampling = {'xI' : np.array([[0.0], [.76], [1.0]])}
 
         prob.setup(check=False)
         prob.run()

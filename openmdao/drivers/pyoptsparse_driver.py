@@ -128,9 +128,10 @@ class pyOptSparseDriver(Driver):
                                ' multiple objectives.'.format(self.options['optimizer']))
 
         self.supports['active_set'] = self.options['optimizer'] == 'SNOPT'
+        self.record_name = self.options['optimizer']
 
         super(pyOptSparseDriver, self)._setup()
-        
+
     def run(self, problem):
         """pyOpt execution. Note that pyOpt controls the execution, and the
         individual optimizers (i.e., SNOPT) control the iteration.
@@ -145,7 +146,7 @@ class pyOptSparseDriver(Driver):
         rel = problem.root._probdata.relevance
 
         # Metadata Setup
-        self.metadata = create_local_meta(None, self.options['optimizer'])
+        self.metadata = create_local_meta(None, self.record_name)
         self.iter_count = 0
         update_local_meta(self.metadata, (self.iter_count,))
 

@@ -438,7 +438,7 @@ class PredeterminedRunsDriver(Driver):
     def _prep_case(self, case, iter_count):
         """Create metadata for the case and set design variables.
         """
-        metadata = create_local_meta(None, 'Driver')
+        metadata = create_local_meta(None, self.record_name)
         update_local_meta(metadata, (iter_count,))
         for dv_name, dv_val in case:
             self.set_desvar(dv_name, dv_val)

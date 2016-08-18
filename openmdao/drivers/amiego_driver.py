@@ -57,7 +57,7 @@ class AMIEGO_driver(Driver):
         opt.add_option('ei_tol_rel', 0.001, lower=0.0,
                        desc='Relative tolerance on the expected improvement.')
         opt.add_option('ei_tol_abs', 0.001, lower=0.0,
-                       desc='Relative tolerance on the expected improvement.')
+                       desc='Absolute tolerance on the expected improvement.')
 
         # The default continuous optimizer.
         self.cont_opt = ScipyOptimizer()

@@ -97,7 +97,9 @@ class AMIEGO_driver(Driver):
     def _setup(self):
         """  Initialize whatever we need."""
         super(AMIEGO_driver, self)._setup()
-        self.cont_opt._setup()
+        cont_opt = self.cont_opt
+        cont_opt._setup()
+        cont_opt.record_name = self.record_name + cont_opt.record_name
 
         # Identify and size our design variables.
         self.i_size = 0
@@ -116,12 +118,12 @@ class AMIEGO_driver(Driver):
 
         # Continuous Optimization only gets continuous desvars
         for name in self.c_dvs:
-            self.cont_opt._desvars[name] = self._desvars[name]
+            cont_opt._desvars[name] = self._desvars[name]
 
         # It should be perfectly okay to 'share' obj and con with the
         # continuous sub-optimizer.
-        self.cont_opt._cons = self._cons
-        self.cont_opt._objs = self._objs
+        cont_opt._cons = self._cons
+        cont_opt._objs = self._objs
 
     def set_root(self, pathname, root):
         """ Sets the root Group of this driver.
@@ -152,10 +154,6 @@ class AMIEGO_driver(Driver):
         self.metadata = create_local_meta(None, self.record_name)
         self.iter_count = 0
         update_local_meta(self.metadata, (self.iter_count, ))
-
-        subname = self.record_name + cont_opt.record_name
-        cont_opt.metadata = create_local_meta(None, subname)
-        update_local_meta(cont_opt.metadata, (self.iter_count, ))
 
         #----------------------------------------------------------------------
         # Step 1: Generate a set of initial integer points

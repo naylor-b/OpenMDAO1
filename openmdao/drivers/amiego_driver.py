@@ -7,7 +7,7 @@ manner and finds a near-global solution to the above MINLP/MDNLP problem.
 
 Developed by Satadru Roy
 Purdue University, West Lafayette, IN
-Copyright, July 2016
+July 2016
 Implemented in OpenMDAO, Aug 2016, Kenneth T. Moore
 """
 

@@ -82,8 +82,6 @@ class AMIEGO_driver(Driver):
         # has to provide what Kriging provides.
         self.surrogate = KrigingSurrogate
 
-        self.obj_metamodel = None
-        self.con_metamodel = {}
         self.c_dvs = []
         self.i_dvs = []
         self.i_size = 0
@@ -137,8 +135,7 @@ class AMIEGO_driver(Driver):
         self.cont_opt.set_root(pathname, root)
 
     def run(self, problem):
-        """pyOpt execution. Note that pyOpt controls the execution, and the
-        individual optimizers (i.e., SNOPT) control the iteration.
+        """Execute the AMIEGO driver.
 
         Args
         ----

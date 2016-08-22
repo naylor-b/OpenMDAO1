@@ -22,15 +22,17 @@ class TestBranchAndBounddriver(unittest.TestCase):
         root.add('comp', BranninInteger(), promotes=['*'])
 
         prob.driver = Branch_and_Bound()
+        prob.driver.options['use_surrogate'] = True
 
         prob.driver.add_desvar('xI', lower=-5, upper=10)
         prob.driver.add_objective('f')
 
-        prob.driver.sampling = {'xI' : np.linspace(0.0, 1.0, num=25)}
+        npt = 25
+        prob.driver.sampling = {'xI' : np.linspace(0.0, 1.0, num=npt).reshape(npt, 1)}
 
         prob.setup(check=False)
         prob.run()
-        
+
         # Find an integer solution close to the floating-point mininum at (pi, 2.275)
         prob['xC'] = 2.275
 

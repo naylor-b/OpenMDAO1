@@ -2,12 +2,13 @@
 
 from __future__ import print_function
 
+from unittest import TestCase
 import numpy
 
 from openmdao.api import ParallelGroup, Group, Problem, IndepVarComp, \
     ExecComp, LinearGaussSeidel
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
+
 from openmdao.test.util import assert_rel_error
 from openmdao.util.array_util import evenly_distrib_idxs
 
@@ -51,7 +52,7 @@ class DistribExecComp(ExecComp):
         return (2, 2)
 
 
-class MPITests1(MPITestCase):
+class MPITests1(TestCase):
 
     N_PROCS = 1
 
@@ -83,7 +84,7 @@ class MPITests1(MPITestCase):
                 self.fail("Exception expected")
 
 
-class MPITests2(MPITestCase):
+class MPITests2(TestCase):
 
     N_PROCS = 2
 

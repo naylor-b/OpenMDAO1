@@ -4,10 +4,11 @@ from __future__ import print_function, division
 import sys
 import numpy as np
 
+from unittest import TestCase
+
 from openmdao.api import Group, Component, IndepVarComp, ParallelGroup, \
                          Problem
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
@@ -190,7 +191,7 @@ def flat_earth(num_seg=3, seg_ncn=3):
     return prob, phase0
 
 
-class MPIPointerBug1(MPITestCase):
+class MPIPointerBug1(TestCase):
 
     N_PROCS = 2
 

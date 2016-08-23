@@ -7,7 +7,6 @@ import numpy as np
 
 from openmdao.api import Problem, Group, IndepVarComp, Component, ParallelGroup, \
                          Newton
-from openmdao.test.mpi_util import MPITestCase
 
 try:
     from mpi4py import MPI
@@ -140,7 +139,7 @@ class SimpleImplicitComp2(Component):
 
         return J
 
-class TestNewtonBacktrackingMPI(MPITestCase):
+class TestNewtonBacktrackingMPI(unittest.TestCase):
 
     N_PROCS = 2
 

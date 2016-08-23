@@ -1,11 +1,13 @@
 from __future__ import print_function
 
+from unittest import TestCase
+
 import numpy as np
 
 from openmdao.api import IndepVarComp, Group, Problem, Component
 from openmdao.core.mpi_wrap import MPI
 from openmdao.drivers.latinhypercube_driver import LatinHypercubeDriver
-from openmdao.test.mpi_util import MPITestCase
+
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
@@ -40,7 +42,7 @@ class DistribCompSimple(Component):
         return (2, 2)
 
 
-class LHParDOETestCase(MPITestCase):
+class LHParDOETestCase(TestCase):
     N_PROCS = 4
 
     def test_lh_par_doe(self):

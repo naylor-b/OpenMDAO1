@@ -15,7 +15,6 @@ from openmdao.test.sellar import *
 from openmdao.test.util import assert_rel_error
 
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
@@ -224,7 +223,7 @@ class BruteForceSellarProblem(Problem):
         # prob.driver.recorders.append(SqliteRecorder("sellar_bf%i.db" % n))
 
 
-class TestSellar(MPITestCase):
+class TestSellar(unittest.TestCase):
     N_PROCS=4
 
     # nrange = [100, 200, 500, 1000, 2500, 5000]

@@ -2,6 +2,8 @@
 import errno
 import os
 
+from unittest import TestCase
+
 from shutil import rmtree
 from tempfile import mkdtemp
 import time
@@ -17,7 +19,7 @@ from openmdao.core.mpi_wrap import MPI
 from openmdao.components.indep_var_comp import IndepVarComp
 from openmdao.recorders.sqlite_recorder import SqliteRecorder
 from openmdao.recorders.test.test_sqlite import _assertMetadataRecorded, _assertIterationDataRecorded
-from openmdao.test.mpi_util import MPITestCase
+
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
@@ -61,7 +63,7 @@ def run(problem):
     return t0, t1
 
 
-class TestSqliteRecorder(MPITestCase):
+class TestSqliteRecorder(TestCase):
     filename = ""
     dir = ""
     N_PROCS = 2

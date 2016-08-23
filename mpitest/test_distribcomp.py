@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+from unittest import TestCase
+
 import time
 
 import numpy as np
@@ -7,7 +9,7 @@ import numpy as np
 from openmdao.api import Problem, Component, Group
 from openmdao.core.mpi_wrap import MPI
 from openmdao.util.array_util import evenly_distrib_idxs
-from openmdao.test.mpi_util import MPITestCase
+
 import six
 
 if MPI:
@@ -269,7 +271,7 @@ class NonDistribGatherComp(Component):
         unknowns['outvec'] = params['invec']
 
 
-class MPITests(MPITestCase):
+class MPITests(TestCase):
 
     N_PROCS = 2
 

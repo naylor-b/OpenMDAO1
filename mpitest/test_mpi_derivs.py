@@ -12,7 +12,6 @@ from openmdao.test.simple_comps import SimpleCompDerivMatVec, FanOut, FanIn, \
 from openmdao.test.util import assert_rel_error
 
 from openmdao.core.mpi_wrap import MPI, MultiProcFailCheck, debug
-from openmdao.test.mpi_util import MPITestCase
 
 try:
     from mpi4py import MPI
@@ -22,7 +21,7 @@ except ImportError:
     impl = None
 
 
-class TestPetscKSP(MPITestCase):
+class TestPetscKSP(unittest.TestCase):
 
     N_PROCS = 2
 
@@ -173,7 +172,7 @@ class TestPetscKSP(MPITestCase):
         assert_rel_error(self, J['comp7.y1']['p.x'][0][0], -40.75, 1e-6)
 
 
-class TestUnderPar(MPITestCase):
+class TestUnderPar(unittest.TestCase):
 
     N_PROCS = 2
 
@@ -227,7 +226,7 @@ class TestUnderPar(MPITestCase):
         assert_rel_error(self, J[unknown_list[0]][param][0][0], 6.0, 1e-6)
         assert_rel_error(self, J[unknown_list[1]][param][0][0], 45.0, 1e-6)
 
-class TestLinGSPar3(MPITestCase):
+class TestLinGSPar3(unittest.TestCase):
 
     N_PROCS = 3
 

@@ -8,7 +8,6 @@ import numpy as np
 from openmdao.api import ExecComp, IndepVarComp, Group, NLGaussSeidel, \
                          Component, ParallelGroup, ScipyGMRES
 from openmdao.api import Problem, ScipyOptimizer
-from openmdao.test.mpi_util import MPITestCase
 from openmdao.test.util import assert_rel_error, ConcurrentTestCaseMixin, \
                                set_pyoptsparse_opt
 
@@ -161,7 +160,7 @@ class SellarDerivativesSuperGroup(Group):
 
 
 
-class MPITests2(MPITestCase, ConcurrentTestCaseMixin):
+class MPITests2(unittest.TestCase, ConcurrentTestCaseMixin):
 
     N_PROCS = 4
 

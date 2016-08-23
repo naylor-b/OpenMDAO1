@@ -30,27 +30,9 @@ from openmdao.core.mpi_wrap import under_mpirun, FakeComm
 try:
     from mpi4py import MPI
 except ImportError:
-    class MPITestCase(TestCase):
-        def __init__(self, methodName='runTest'):
-            super(MPITestCase, self).__init__(methodName=methodName)
-            self.comm = FakeComm()
-
     mpirun_tests = unittest.main
 
 else:
-    class MPITestCase(TestCase):
-        """A base class for all TestCases that are
-        intended to run under mpirun.
-        """
-
-        # A class attribute 'N_PROCS' must be defined
-        # for each MPITestCase class in order to
-        # know how big to make the MPI communicator.
-        # N_PROCS = 4
-        def __init__(self, methodName='runTest'):
-            super(MPITestCase, self).__init__(methodName=methodName)
-            self.comm = MPI.COMM_WORLD
-
     class TestResult(object):
         """Contains the path to the test function/method, status
         of the test (if finished), error and stdout messages (if any),
@@ -165,13 +147,14 @@ else:
                 tcase, _, method = test.partition('.')
                 if method:
                     parent = getattr(mod, tcase)(methodName=method)
-                    if hasattr(parent, 'N_PROCS') and not under_mpirun():
-                        retcode = run_in_sub(getattr(mod, tcase), test, options)
-                        continue
+                    if hasattr(parent, 'N_PROCS'):
+                        if under_mpirun():
+                            parent.comm = MPI.COMM_WORLD
+                        else:
+                            retcode = run_in_sub(getattr(mod, tcase), test, options)
+                            continue
                 else:
                     raise NotImplementedError("module test functions not supported yet")
-                    #parent = mod
-                    #method = tcase
 
                 tspec = "%s:%s" % (mod.__file__, test)
                 if MPI.COMM_WORLD.rank == 0:
@@ -222,5 +205,5 @@ def run_in_sub(testcase, testspec, options):
     cmd = "%s -n %d %s %s %s %s" % \
                (mpirun_exe, testcase.N_PROCS, sys.executable,
                 mod.__file__, testspec, ' '.join(options))
-    
+
     return subprocess.call(cmd, shell=True)

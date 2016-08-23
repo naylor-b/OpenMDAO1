@@ -14,7 +14,6 @@ from openmdao.api import Component, Problem, Group, IndepVarComp, ExecComp, \
                          SqliteRecorder, NLGaussSeidel, ScipyGMRES
 
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
 from openmdao.test.sellar import SellarNoDerivatives, SellarDis1withDerivatives, SellarDis2withDerivatives
 
 if MPI:
@@ -106,7 +105,7 @@ class SellarDerivatives(Group):
         self.nl_solver = NLGaussSeidel()
         self.ln_solver = ScipyGMRES()
 
-class TestSubProblemMPI(MPITestCase):
+class TestSubProblemMPI(unittest.TestCase):
     N_PROCS = 4
 
     def test_opt_over_doe_uq(self):

@@ -9,7 +9,6 @@ from openmdao.api import Group, ParallelGroup, Problem, IndepVarComp, \
     Component, ParallelFDGroup
 from openmdao.test.exec_comp_for_test import ExecComp4Test
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
 from openmdao.test.util import assert_rel_error
 
 if MPI:
@@ -119,7 +118,7 @@ class SerialSimpleFDTestCase(TestCase):
         assert_rel_error(self, J['C1.y']['P1.x'], np.eye(size)*mult, 1e-6)
 
 
-class ParallelSimpleFDTestCase2(MPITestCase):
+class ParallelSimpleFDTestCase2(TestCase):
 
     N_PROCS = 2
 
@@ -135,7 +134,7 @@ class ParallelSimpleFDTestCase2(MPITestCase):
         assert_rel_error(self, J['C1.y']['P1.x'], np.eye(size)*mult, 1e-6)
 
 
-class ParallelFDTestCase5(MPITestCase):
+class ParallelFDTestCase5(TestCase):
 
     N_PROCS = 5
 
@@ -170,7 +169,7 @@ class SerialDiamondFDTestCase(TestCase):
             self.assertEquals(str(err), "'': num_par_fds must be >= 1 but value is 0.")
 
 
-class ParallelDiamondFDTestCase(MPITestCase):
+class ParallelDiamondFDTestCase(TestCase):
 
     N_PROCS = 4
 

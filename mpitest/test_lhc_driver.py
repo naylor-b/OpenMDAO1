@@ -9,7 +9,7 @@ import numpy as np
 
 from openmdao.api import IndepVarComp, Group, Problem
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
+
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
@@ -24,7 +24,7 @@ from openmdao.drivers.latinhypercube_driver import LatinHypercubeDriver, Optimiz
 from openmdao.drivers.latinhypercube_driver import _is_latin_hypercube, _rand_latin_hypercube, _mmlhs, _LHC_Individual
 
 
-class TestLatinHypercubeDriver(MPITestCase):
+class TestLatinHypercubeDriver(unittest.TestCase):
 
     N_PROCS = 4
 

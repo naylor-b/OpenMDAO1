@@ -4,10 +4,11 @@ import os
 import unittest
 import numpy as np
 
+from unittest import TestCase
+
 from openmdao.api import IndepVarComp, ExecComp, LinearGaussSeidel, Component, \
     ParallelGroup, Problem, Group
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
 from openmdao.test.util import assert_rel_error, ConcurrentTestCaseMixin, \
                                set_pyoptsparse_opt
 from openmdao.test.simple_comps import SimpleArrayComp
@@ -64,7 +65,7 @@ class MP_Point(Group):
         self.connect('p.x', 'c.x')
 
 
-class TestMPIOpt(MPITestCase, ConcurrentTestCaseMixin):
+class TestMPIOpt(TestCase, ConcurrentTestCaseMixin):
 
     N_PROCS = 2
 
@@ -177,7 +178,7 @@ class TestMPIOpt(MPITestCase, ConcurrentTestCaseMixin):
             assert_rel_error(self, model['par.s2.p.x'], 3.0, 1.e-6)
 
 
-class ParallelMPIOptAsym(MPITestCase, ConcurrentTestCaseMixin):
+class ParallelMPIOptAsym(TestCase, ConcurrentTestCaseMixin):
     """The model here has one constraint down inside a Group under a ParallelGroup,
     and one constraint at the top level.
     """
@@ -268,7 +269,7 @@ class ParallelMPIOptAsym(MPITestCase, ConcurrentTestCaseMixin):
         assert_rel_error(self, prob['total.obj'], 50.0, 1e-6)
 
 
-class ParallelMPIOptPromoted(MPITestCase, ConcurrentTestCaseMixin):
+class ParallelMPIOptPromoted(TestCase, ConcurrentTestCaseMixin):
     N_PROCS = 2
 
     def setUp(self):
@@ -378,7 +379,7 @@ class ParallelMPIOptPromoted(MPITestCase, ConcurrentTestCaseMixin):
         assert_rel_error(self, prob['total.obj'], 50.0, 1e-6)
 
 
-class ParallelMPIOpt(MPITestCase, ConcurrentTestCaseMixin):
+class ParallelMPIOpt(TestCase, ConcurrentTestCaseMixin):
     N_PROCS = 2
 
     def setUp(self):

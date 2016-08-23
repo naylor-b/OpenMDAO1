@@ -4,10 +4,11 @@ import os
 import unittest
 import numpy as np
 
+from unittest import TestCase
+
 from openmdao.api import Problem, Group, NonLinearSolver, IndepVarComp, Component, ParallelGroup
 from openmdao.solvers.backtracking import BackTracking
 from openmdao.solvers.newton import Newton
-from openmdao.test.mpi_util import MPITestCase
 from openmdao.core.mpi_wrap import MPI
 from openmdao.test.util import assert_rel_error
 
@@ -19,7 +20,7 @@ else:
     from openmdao.solvers.scipy_gmres import ScipyGMRES as lin_solver
 
 
-class TestParallelBounds(MPITestCase):
+class TestParallelBounds(TestCase):
 
     N_PROCS = 2
 

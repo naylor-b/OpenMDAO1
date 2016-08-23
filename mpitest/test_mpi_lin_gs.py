@@ -2,9 +2,11 @@
 
 from __future__ import print_function
 
+from unittest import TestCase
+
 from openmdao.api import Problem, LinearGaussSeidel
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
+
 from openmdao.test.simple_comps import FanOutGrouped, FanInGrouped
 from openmdao.test.util import assert_rel_error
 
@@ -14,7 +16,7 @@ else:
     from openmdao.core.basic_impl import BasicImpl as impl
 
 
-class MPITests1(MPITestCase):
+class MPITests1(TestCase):
 
     N_PROCS = 2
 

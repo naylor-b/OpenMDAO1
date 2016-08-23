@@ -2,11 +2,13 @@ import sys
 import numpy
 import time
 
+from unittest import TestCase
+
 from openmdao.api import Problem, IndepVarComp, Group, ParallelGroup, \
                          Component
 from openmdao.test.exec_comp_for_test import ExecComp4Test
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
+
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
 else:
@@ -38,7 +40,7 @@ class NDiamondPar(Group):
             self.connect("src.x", "par.C%d.x"%i)
             self.connect("par.C%d.y"%i, "sink.x%d"%i)
 
-class Test4Par1Proc(MPITestCase):
+class Test4Par1Proc(TestCase):
     """Testing when we have less processors than we need for fully parallel
     execution.
     """
@@ -56,7 +58,7 @@ class Test4Par1Proc(MPITestCase):
         expected = 4.0*num_pars
         self.assertEqual(p['sink.sum'], expected)
 
-class Test4Par2Proc(MPITestCase):
+class Test4Par2Proc(TestCase):
     """Testing when we have less processors than we need for fully parallel
     execution.
     """
@@ -86,7 +88,7 @@ class Test4Par2Proc(MPITestCase):
                  "between 3 and 12.")
 
 
-class Test4Par3Proc(MPITestCase):
+class Test4Par3Proc(TestCase):
     """Testing when we have less processors than we need for fully parallel
     execution.
     """
@@ -104,7 +106,7 @@ class Test4Par3Proc(MPITestCase):
         expected = 4.0*num_pars
         self.assertEqual(p['sink.sum'], expected)
 
-class Test4Par4Proc(MPITestCase):
+class Test4Par4Proc(TestCase):
     """Testing when we have less processors than we need for fully parallel
     execution.
     """

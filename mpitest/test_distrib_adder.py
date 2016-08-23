@@ -1,10 +1,12 @@
+
+from unittest import TestCase
+
 import numpy as np
 
 from openmdao.api import Component, Problem, Group, IndepVarComp
 
 from openmdao.core.mpi_wrap import MPI
 from openmdao.util.array_util import evenly_distrib_idxs
-from openmdao.test.mpi_util import MPITestCase
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
@@ -88,7 +90,7 @@ class Summer(Component):
 
 
 
-class DistributedAdderTest(MPITestCase):
+class DistributedAdderTest(TestCase):
 
     N_PROCS = 10
 

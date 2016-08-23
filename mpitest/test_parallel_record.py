@@ -2,6 +2,8 @@
 import errno
 import os
 
+from unittest import TestCase
+
 from shutil import rmtree
 from tempfile import mkdtemp
 
@@ -9,7 +11,7 @@ from openmdao.core.problem import Problem
 from openmdao.core.mpi_wrap import MPI
 from openmdao.recorders.dump_recorder import DumpRecorder
 from openmdao.test.simple_comps import FanInGrouped
-from openmdao.test.mpi_util import MPITestCase
+
 from six import iteritems
 
 if MPI:
@@ -18,7 +20,7 @@ else:
     from openmdao.api import BasicImpl as impl
 
 
-class TestDumpRecorder(MPITestCase):
+class TestDumpRecorder(TestCase):
 
     N_PROCS = 2
 

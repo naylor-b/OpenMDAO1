@@ -2,12 +2,14 @@
 
 from __future__ import print_function
 
+from unittest import TestCase
+
 import numpy as np
 
 from openmdao.api import Group, ParallelGroup, Problem, IndepVarComp, \
     LinearGaussSeidel
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
+
 from openmdao.test.simple_comps import FanOutGrouped, FanInGrouped, FanOut3Grouped
 from openmdao.test.exec_comp_for_test import ExecComp4Test
 from openmdao.test.util import assert_rel_error
@@ -18,7 +20,7 @@ else:
     from openmdao.core.basic_impl import BasicImpl as impl
 
 
-class MatMatTestCase(MPITestCase):
+class MatMatTestCase(TestCase):
 
     N_PROCS = 2
 
@@ -276,7 +278,7 @@ class MatMatTestCase(MPITestCase):
         assert_rel_error(self, J['c3.y']['p.x'][0][0], 15.0, 1e-6)
 
 
-class ParDeriv3TestCase(MPITestCase):
+class ParDeriv3TestCase(TestCase):
 
     N_PROCS = 3
 
@@ -319,7 +321,7 @@ class ParDeriv3TestCase(MPITestCase):
         assert_rel_error(self, J['c4.y']['p.x'][0][0], 33.0, 1e-6)
 
 
-class MatMatIndicesTestCase(MPITestCase):
+class MatMatIndicesTestCase(TestCase):
 
     N_PROCS = 2
 
@@ -378,7 +380,7 @@ class MatMatIndicesTestCase(MPITestCase):
         assert_rel_error(self, J['c5.y']['p.x'][0], np.array([20., 25.]), 1e-6)
         assert_rel_error(self, J['c4.y']['p.x'][0], np.array([8., 0.]), 1e-6)
 
-class IndicesTestCase2(MPITestCase):
+class IndicesTestCase2(TestCase):
 
     N_PROCS = 2
 

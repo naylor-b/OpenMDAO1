@@ -3,9 +3,10 @@ from tempfile import mkdtemp
 from shutil import rmtree
 import errno
 
+from unittest import TestCase
+
 from openmdao.api import Problem, Group, ParallelGroup, Component, FileRef
 from openmdao.core.mpi_wrap import MPI
-from openmdao.test.mpi_util import MPITestCase
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
@@ -43,7 +44,7 @@ class FileSink(Component):
     def solve_nonlinear(self, params, unknowns, resids):
         pass
 
-class FileRefTestCase(MPITestCase):
+class FileRefTestCase(TestCase):
     N_PROCS=4
 
     def setUp(self):

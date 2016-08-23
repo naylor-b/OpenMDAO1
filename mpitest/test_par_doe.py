@@ -13,7 +13,6 @@ from openmdao.api import IndepVarComp, Component, Group, Problem, \
                          FullFactorialDriver, AnalysisError
 from openmdao.test.exec_comp_for_test import ExecComp4Test
 from openmdao.core.mpi_wrap import MPI, debug, MultiProcFailCheck
-from openmdao.test.mpi_util import MPITestCase
 
 if MPI: # pragma: no cover
     # if you called this script with 'mpirun', then use the petsc data passing
@@ -22,7 +21,7 @@ else:
     # if you didn't use `mpirun`, then use the numpy data passing
     from openmdao.api import BasicImpl as impl
 
-class ParallelDOETestCase(MPITestCase):
+class ParallelDOETestCase(unittest.TestCase):
 
     N_PROCS = 4
 
@@ -185,7 +184,7 @@ class ParallelDOETestCase(MPITestCase):
             self.assertEqual(nfails, 2)
 
 
-class LBParallelDOETestCase(MPITestCase):
+class LBParallelDOETestCase(unittest.TestCase):
 
     N_PROCS = 5
 
@@ -355,7 +354,7 @@ class LBParallelDOETestCase(MPITestCase):
         else:
             self.assertEqual(nfails, 0)
 
-class LBParallelDOETestCase6(MPITestCase):
+class LBParallelDOETestCase6(unittest.TestCase):
 
     N_PROCS = 6
 

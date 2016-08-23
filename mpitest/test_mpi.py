@@ -1,10 +1,12 @@
 import time
 
+from unittest import TestCase
+
 import numpy as np
 
 from openmdao.api import Problem, Group, ParallelGroup, Component, IndepVarComp
 from openmdao.core.mpi_wrap import MPI, FakeComm
-from openmdao.test.mpi_util import MPITestCase
+
 
 if MPI:
     from openmdao.core.petsc_impl import PetscImpl as impl
@@ -54,7 +56,7 @@ class PBOComp(Component):
             unknowns['c'][i] = params['a'][i] + params['b'][i]
             unknowns['d'][i] = params['a'][i] - params['b'][i]
 
-class PBOTestCase(MPITestCase):
+class PBOTestCase(TestCase):
     N_PROCS=1
 
     def test_simple(self):
@@ -82,7 +84,7 @@ class PBOTestCase(MPITestCase):
         self.assertEqual(prob['C2.d'], [2.,2.,2.,2.,2.])
         self.assertEqual(prob.root.unknowns.vec.size, 0)
 
-class PBOTestCase2(MPITestCase):
+class PBOTestCase2(TestCase):
     N_PROCS=2
 
     def test_fan_in(self):
@@ -114,7 +116,7 @@ class PBOTestCase2(MPITestCase):
         self.assertEqual(prob['C3.d'], [-2.,-2.,-2.,-2.,-2.])
         self.assertEqual(prob.root.unknowns.vec.size, 0)
 
-class MPITests1(MPITestCase):
+class MPITests1(TestCase):
 
     N_PROCS = 1
 
@@ -167,7 +169,7 @@ class MPITests1(MPITestCase):
         self.assertTrue(prob['C2.out_list']==[1.5, 1.5])
 
 
-class MPITests2(MPITestCase):
+class MPITests2(TestCase):
 
     N_PROCS = 2
 

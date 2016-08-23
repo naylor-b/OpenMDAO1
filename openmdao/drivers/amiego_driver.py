@@ -21,6 +21,7 @@ import numpy as np
 
 from openmdao.core.driver import Driver
 from openmdao.core.vec_wrapper import _ByObjWrapper
+from openmdao.drivers.branch_and_bound import Branch_and_Bound
 from openmdao.drivers.scipy_optimizer import ScipyOptimizer
 from openmdao.surrogate_models.kriging import KrigingSurrogate
 from openmdao.util.record_util import create_local_meta, update_local_meta
@@ -67,6 +68,9 @@ class AMIEGO_driver(Driver):
 
         # Options
         opt = self.options
+        opt.add_option('disp', True,
+                       desc='Set to False to prevent printing of iteration '
+                       'messages.')
         opt.add_option('ei_tol_rel', 0.001, lower=0.0,
                        desc='Relative tolerance on the expected improvement.')
         opt.add_option('ei_tol_abs', 0.001, lower=0.0,
@@ -77,6 +81,9 @@ class AMIEGO_driver(Driver):
         # The default continuous optimizer. User can slot a different one
         self.cont_opt = ScipyOptimizer()
         self.cont_opt.options['optimizer'] = 'SLSQP'
+
+        # The default MINLP optimizer
+        self.minlp = Branch_and_Bound()
 
         # Default surrogate. User can slot a modified one, but it essentially
         # has to provide what Kriging provides.
@@ -97,7 +104,12 @@ class AMIEGO_driver(Driver):
         super(AMIEGO_driver, self)._setup()
         cont_opt = self.cont_opt
         cont_opt._setup()
-        cont_opt.record_name = self.record_name + cont_opt.record_name
+        cont_opt.record_name = self.record_name + ':' + cont_opt.record_name
+
+        minlp = self.minlp
+        minlp._setup()
+        minlp.record_name = self.record_name + ':' +  minlp.record_name
+        minlp.standalone = False
 
         # Identify and size our design variables.
         self.i_size = 0
@@ -114,14 +126,29 @@ class AMIEGO_driver(Driver):
             else:
                 self.c_dvs.append(name)
 
+        # Lower and Upper bounds for integer desvars
+        self.xI_lb = np.empty((self.i_size, ))
+        self.xI_ub = np.empty((self.i_size, ))
+        dv_dict = self._desvars
+        for var in self.i_dvs:
+            i, j = self.idx_cache[var]
+            self.xI_lb[i:j] = dv_dict[var]['lower']
+            self.xI_ub[i:j] = dv_dict[var]['upper']
+
         # Continuous Optimization only gets continuous desvars
         for name in self.c_dvs:
             cont_opt._desvars[name] = self._desvars[name]
 
+        # MINLP Optimization only gets discrete desvars
+        for name in self.i_dvs:
+            minlp._desvars[name] = self._desvars[name]
+
         # It should be perfectly okay to 'share' obj and con with the
-        # continuous sub-optimizer.
+        # sub-optimizers.
         cont_opt._cons = self._cons
         cont_opt._objs = self._objs
+        minlp._cons = self._cons
+        minlp._objs = self._objs
 
     def set_root(self, pathname, root):
         """ Sets the root Group of this driver.
@@ -133,6 +160,7 @@ class AMIEGO_driver(Driver):
         """
         super(AMIEGO_driver, self).set_root(pathname, root)
         self.cont_opt.set_root(pathname, root)
+        self.minlp.set_root(pathname, root)
 
     def run(self, problem):
         """Execute the AMIEGO driver.
@@ -146,6 +174,9 @@ class AMIEGO_driver(Driver):
         ei_tol_rel = self.options['ei_tol_rel']
         ei_tol_abs = self.options['ei_tol_abs']
         cont_opt = self.cont_opt
+        minlp = self.minlp
+        xI_lb = self.xI_lb
+        xI_ub = self.xI_ub
 
         # Metadata Setup
         self.metadata = create_local_meta(None, self.record_name)
@@ -182,10 +213,12 @@ class AMIEGO_driver(Driver):
         term = 0.0
         terminate = False
         tot_newpt_added = 0
+        tot_pt_prev = 0
         best_obj = 1.0e99
+        ec2 = 0
 
         # AMIEGO main loop
-        while ei_max>term and terminate==False and tot_newpt_added<max_pt_lim:
+        while not terminate:
             self.iter_count += 1
 
             #------------------------------------------------------------------
@@ -232,28 +265,75 @@ class AMIEGO_driver(Driver):
             # integer infill point.
             #------------------------------------------------------------------
 
+            tot_newpt_added = c_end - c_start
+            if tot_newpt_added != tot_pt_prev:
+
+                minlp.obj_surrogate = obj_surrogate
+                minlp.xI_lb = xI_lb
+                minlp.xI_ub = xI_ub
+
+                minlp.run(problem)
+
+                eflag_MINLPBB = minlp.eflag_MINLPBB
+
+                if eflag_MINLPBB >= 1:
+
+                    desvars = minlp.get_desvars()
+                    x0I = np.empty((self.i_size, ))
+                    for var in self.i_dvs:
+                        i, j = self.idx_cache[var]
+                        val = desvars[var]
+                        if isinstance(val, _ByObjWrapper):
+                            x0I[i:j] = val.val
+                        else:
+                            x0I[i:j] = val
+
+                    x0I_hat = (x0I - xI_lb)/(xI_ub - xI_lb)
+
+                    current_objs = minlp.get_objectives()
+                    obj_name = list(current_objs.keys())[0]
+                    ei_max = -current_objs[obj_name].copy()
+                    tot_pt_prev = tot_newpt_added
+
+                    # Prevent the correlation matrix being close singular. No
+                    # point allowed within the pescribed hypersphere of any
+                    # existing point
+                    rad = 0.5
+                    cc = 0
+                    for ii in range(len(x_i)):
+                        dist = np.sum((x_i[ii] - x0I)**2)**0.5
+                        if dist <= rad:
+                            print("Point already exists!")
+                            ec2 = 1
+                            break
+                    x_i.append(x0I)
+
+                else:
+                    ec2 = 1
+            else:
+                ec2 = 1
 
             #------------------------------------------------------------------
             # Step 5: Check for termination
             #------------------------------------------------------------------
 
-            # JUST ONE FOR NOW
-            terminate = True
-
             c_start = c_end
             c_end += 1
 
+            # 1e-6 is the switchover from rel to abs.
             if np.abs(best_obj)<= 1e-6:
                 term = ei_tol_abs
             else:
                 term = np.min(np.array([np.abs(ei_tol_rel*best_obj), ei_tol_abs]))
 
-        if ei_max <= term:
-            print("No Further improvement expected! Terminating algorithm.")
-        elif terminate:
-            print("No new point found that improves the surrogate. Terminating algorithm.")
-        elif Tot_newpt_added >= max_pt_lim:
-            print("Maximum allowed sampling limit reached! Terminating algorithm.")
+            if ei_max <= term or ec2 == 1 or tot_newpt_added >= max_pt_lim:
+                terminate = True
+                if ei_max <= term:
+                    print("No Further improvement expected! Terminating algorithm.")
+                elif ec2 == 1:
+                    print("No new point found that improves the surrogate. Terminating algorithm.")
+                elif Tot_newpt_added >= max_pt_lim:
+                    print("Maximum allowed sampling limit reached! Terminating algorithm.")
 
         # Pull optimal parameters back into framework and re-run, so that
         # framework is left in the right final state

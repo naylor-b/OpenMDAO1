@@ -17,28 +17,30 @@ class TestBranchAndBounddriver(unittest.TestCase):
         prob = Problem()
         root = prob.root = Group()
 
-        root.add('p1', IndepVarComp('xC', 0.0), promotes=['*'])
         root.add('p2', IndepVarComp('xI', 0), promotes=['*'])
         root.add('comp', BranninInteger(), promotes=['*'])
 
         prob.driver = Branch_and_Bound()
         prob.driver.options['use_surrogate'] = True
+        prob.driver.options['disp'] = False
 
         prob.driver.add_desvar('xI', lower=-5, upper=10)
         prob.driver.add_objective('f')
 
-        npt = 25
+        npt = 15
         prob.driver.sampling = {'xI' : np.linspace(0.0, 1.0, num=npt).reshape(npt, 1)}
 
         prob.setup(check=False)
+
+        # Find an integer solution at a point where we know the minimum is in
+        # the middle
+        prob['xC'] = 13.0
+
         prob.run()
 
-        # Find an integer solution close to the floating-point mininum at (pi, 2.275)
-        prob['xC'] = 2.275
-
         # Optimal solution
-        assert_rel_error(self, prob['xI'], 3, 1e-5)
-        #assert_rel_error(self, prob['f'], 2.38801229, 1e-5)
+        assert_rel_error(self, prob['xI'], -3, 1e-5)
+        assert_rel_error(self, prob['f'], 1.62329296, 1e-5)
 
 if __name__ == "__main__":
     unittest.main()

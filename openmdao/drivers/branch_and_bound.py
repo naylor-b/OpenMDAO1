@@ -183,6 +183,7 @@ class Branch_and_Bound(Driver):
 
             self.obj_surrogate = obj_surrogate = self.surrogate()
             obj_surrogate.train(x_i, obj)
+            obj_surrogate.y = obj
 
         # Calculate intermediate statistics. This stuff used to be stored in
         # the Modelinfo object, but more convenient to store it in the
@@ -205,7 +206,7 @@ class Branch_and_Bound(Driver):
             obj_surrogate.c_r = obj_surrogate.alpha
 
             # Thsi is also done in Ameigo. TODO: just do it once.
-            obj_surrogate.y_best = np.min(obj_surrogate.Y)
+            obj_surrogate.y_best = np.min(obj_surrogate.y)
 
             #obj_surrogate.X = surrogate.X
             #obj_surrogate.ynorm = surrogate.Y
@@ -221,7 +222,6 @@ class Branch_and_Bound(Driver):
         num_des = len(self.xI_lb)
         self.eflag_MINLPBB = False
         node_num = 0
-        self.iter_count = 0
 
         # Initial B&B bounds are infinite.
         LBD = -np.inf
@@ -272,14 +272,14 @@ class Branch_and_Bound(Driver):
 
                 # Using a gradient-based method here.
                 # TODO: Make it more pluggable.
-                xC_iter = 0.5*(xU_iter + xL_iter)
+                xC_iter = (0.5*(xU_iter + xL_iter)).reshape((1, 1))
                 bnds = [(xL_iter[ii], xU_iter[ii]) for ii in xrange(num_des)]
 
                 optResult = minimize(self.objective_callback, xC_iter,
                                      method='SLSQP', bounds=bnds,
                                      options={'ftol' : ftol})
 
-                xloc_iter = optResult.x.reshape(num_des,1)
+                xloc_iter = optResult.x.reshape(num_des, 1)
                 floc_iter = optResult.fun
 
                 if not optResult.success:
@@ -353,71 +353,74 @@ class Branch_and_Bound(Driver):
                         elif ii == 1:
                             lb[l_iter] = np.ceil(0.5*(xU_iter[l_iter] + xL_iter[l_iter]))
 
-                #--------------------------------------------------------------
-                # Step 4: Obtain an LBD of f in the newly created node
-                #--------------------------------------------------------------
-
-                S4_fail = False
-                x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, obj_surrogate)
-                sU, eflag_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat)
-
-                if eflag_sU:
-                    yL, eflag_yL = self.minimize_y(x_comL, x_comU, Ain_hat, bin_hat)
-
-                    if eflag_yL:
-                        NegEI = calc_conEI_norm([], obj_surrogate, SSqr=sU, y_hat=yL)
-
-                        #M = len(ModelInfo_g)
-                        #EV = np.zeros([M, 1])
-                        EV = 0
-                        #if M>0:
-                            ## Expected violation goes here
-                            #for mm in range(M):
-                                ## Constraints go here
-                                #print("Eval con")
+                    #--------------------------------------------------------------
+                    # Step 4: Obtain an LBD of f in the newly created node
+                    #--------------------------------------------------------------
+    
+                    S4_fail = False
+                    x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, obj_surrogate)
+                    sU, eflag_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat)
+    
+                    if eflag_sU:
+                        yL, eflag_yL = self.minimize_y(x_comL, x_comU, Ain_hat, bin_hat)
+    
+                        if eflag_yL:
+                            NegEI = calc_conEI_norm([], obj_surrogate, SSqr=sU, y_hat=yL)
+    
+                            #M = len(ModelInfo_g)
+                            #EV = np.zeros([M, 1])
+                            EV = 0
+                            #if M>0:
+                                ## Expected violation goes here
+                                #for mm in range(M):
+                                    ## Constraints go here
+                                    #print("Eval con")
+                        else:
+                            if disp:
+                                print("Cannot solve Min y_hat problem!")
+                            S4_fail = True
                     else:
-                        # print("Cannot solve Min y_hat problem!")
+                        if disp:
+                            print("Cannot solve Max S problem!")
                         S4_fail = True
-                else:
-                    # print("Cannot solve Max S problem!")
-                    S4_fail = True
-
-                # Convex approximation failed!
-                if S4_fail:
-                    if efloc_iter >= 1:
-                        LBD_NegConEI = LBD_prev
+    
+                    # Convex approximation failed!
+                    if S4_fail:
+                        if efloc_iter >= 1:
+                            LBD_NegConEI = LBD_prev
+                        else:
+                            LBD_NegConEI = np.inf
+                        dis_flag[ii] = 'F'
                     else:
-                        LBD_NegConEI = np.inf
-                    dis_flag[ii] = 'F'
-                else:
-                    LBD_NegConEI = (NegEI/(1.0 + np.sum(EV)))
+                        LBD_NegConEI = (NegEI/(1.0 + np.sum(EV)))
+    
+                    #--------------------------------------------------------------
+                    # Step 5: Store any new node inside the active set that has LBD
+                    # lower than the UBD.
+                    #--------------------------------------------------------------
+    
+                    print('LBD_NegConEI', LBD_NegConEI)
+                    if (LBD_NegConEI) < UBD:
+                        node_num += 1
+                        new_node = [node_num, lb, ub, LBD_NegConEI, floc_iter]
+                        active_set.extend([new_node])
+                        child_info[ii] = np.array([node_num, LBD_NegConEI, floc_iter])
+                    else:
+                        child_info[ii] = np.array([par_node, LBD_NegConEI, floc_iter])
 
-                #--------------------------------------------------------------
-                # Step 5: Store any new node inside the active set that has LBD
-                # lower than the UBD.
-                #--------------------------------------------------------------
-
-                if (LBD_NegConEI) < UBD:
-                    node_num += 1
-                    new_node = [node_num, lb, ub, LBD_NegConEI, floc_iter]
-                    active_set.extend([new_node])
-                    child_info[ii] = np.array([node_num, LBD_NegConEI, floc_iter])
-                else:
-                    child_info[ii] = np.array([par_node, LBD_NegConEI, floc_iter])
-
-            if disp:
-                if self.iter_count % 25 == 0:
-                    # Display output in a tabular format
-                    print("="*85)
-                    print("%19s%12s%14s%21s" % ("Global", "Parent", "Child1", "Child2"))
-                    template = "%s%8s%10s%8s%9s%11s%10s%11s%11s"
-                    print(template % ("Iter", "LBD", "UBD", "Node", "Node1", "LBD1",
-                                      "Node2", "LBD2", "Flocal"))
-                    print("="*85)
-                template = "%3d%10.2f%10.2f%6d%8d%1s%13.2f%8d%1s%13.2f%9.2f"
-                print(template % (self.iter_count, LBD, UBD, par_node, child_info[0, 0],
-                                  dis_flag[0], child_info[0, 1], child_info[1, 0],
-                                  dis_flag[1], child_info[1, 1], child_info[1, 2]))
+                if disp:
+                    if self.iter_count % 25 == 0:
+                        # Display output in a tabular format
+                        print("="*85)
+                        print("%19s%12s%14s%21s" % ("Global", "Parent", "Child1", "Child2"))
+                        template = "%s%8s%10s%8s%9s%11s%10s%11s%11s"
+                        print(template % ("Iter", "LBD", "UBD", "Node", "Node1", "LBD1",
+                                          "Node2", "LBD2", "Flocal"))
+                        print("="*85)
+                    template = "%3d%10.2f%10.2f%6d%8d%1s%13.2f%8d%1s%13.2f%9.2f"
+                    print(template % (self.iter_count, LBD, UBD, par_node, child_info[0, 0],
+                                      dis_flag[0], child_info[0, 1], child_info[1, 0],
+                                      dis_flag[1], child_info[1, 1], child_info[1, 2]))
 
             # Termination
             if len(active_set) >= 1:
@@ -531,7 +534,7 @@ class Branch_and_Bound(Driver):
 
             f = conNegEI + P
 
-        #print(f)
+        print(xI, f)
         return f
 
     def maximize_S(self, x_comL, x_comU, Ain_hat, bin_hat):

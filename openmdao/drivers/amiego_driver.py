@@ -173,6 +173,7 @@ class AMIEGO_driver(Driver):
         n_i = self.i_size
         ei_tol_rel = self.options['ei_tol_rel']
         ei_tol_abs = self.options['ei_tol_abs']
+        disp = self.options['disp']
         cont_opt = self.cont_opt
         minlp = self.minlp
         xI_lb = self.xI_lb
@@ -242,8 +243,9 @@ class AMIEGO_driver(Driver):
                 current_obj = current_objs[obj_name].copy()
                 obj.append(current_obj)
 
-                print(self.get_desvars())
-                print(obj[i_run])
+                if disp:
+                    print(self.get_desvars())
+                    print(obj[i_run])
 
                 # If best solution, save it
                 if current_obj < best_obj:
@@ -259,6 +261,8 @@ class AMIEGO_driver(Driver):
 
             obj_surrogate = self.surrogate()
             obj_surrogate.train(x_i, obj)
+            
+            obj_surrogate.y = obj
 
             #------------------------------------------------------------------
             # Step 4: Maximize the expected improvement function to obtain an
@@ -275,6 +279,9 @@ class AMIEGO_driver(Driver):
                 minlp.run(problem)
 
                 eflag_MINLPBB = minlp.eflag_MINLPBB
+
+                if disp:
+                    print("Eflag = ", eflag_MINLPBB)
 
                 if eflag_MINLPBB >= 1:
 
@@ -294,6 +301,10 @@ class AMIEGO_driver(Driver):
                     obj_name = list(current_objs.keys())[0]
                     ei_max = -current_objs[obj_name].copy()
                     tot_pt_prev = tot_newpt_added
+
+                    if disp:
+                        print("New xI = ", x0I)
+                        print("EI_min = ", -ei_max)
 
                     # Prevent the correlation matrix being close singular. No
                     # point allowed within the pescribed hypersphere of any

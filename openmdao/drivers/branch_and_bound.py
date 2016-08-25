@@ -96,6 +96,9 @@ class Branch_and_Bound(Driver):
         # Set to True if we have found a minimum.
         self.eflag_MINLPBB = False
 
+        self.xopt = None
+        self.fopt = None
+
         # When this is slotted into AMIEGO, this will be set to False.
         self.standalone = True
 
@@ -140,7 +143,7 @@ class Branch_and_Bound(Driver):
 
         # Metadata Setup
         self.metadata = create_local_meta(None, self.record_name)
-        self.iter_count = 0
+        self.iter_count = 1
         update_local_meta(self.metadata, (self.iter_count, ))
 
         # Use surrogates for speed.
@@ -261,7 +264,7 @@ class Branch_and_Bound(Driver):
 
                     # Update active set: Removes the current node
                     if len(active_set) >= 1:
-                        update_active_set(active_set, UBD)
+                        active_set = update_active_set(active_set, UBD)
 
             # Branch and Bound main iteration.
             else:
@@ -308,7 +311,7 @@ class Branch_and_Bound(Driver):
 
                         # Update active set
                         if len(active_set) >= 1:
-                            update_active_set(active_set, UBD)
+                            active_set = update_active_set(active_set, UBD)
 
                 #--------------------------------------------------------------
                 # Step 3: Partition the current rectangle as per the new
@@ -356,17 +359,17 @@ class Branch_and_Bound(Driver):
                     #--------------------------------------------------------------
                     # Step 4: Obtain an LBD of f in the newly created node
                     #--------------------------------------------------------------
-    
+
                     S4_fail = False
                     x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, obj_surrogate)
                     sU, eflag_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat)
-    
+
                     if eflag_sU:
                         yL, eflag_yL = self.minimize_y(x_comL, x_comU, Ain_hat, bin_hat)
-    
+
                         if eflag_yL:
                             NegEI = calc_conEI_norm([], obj_surrogate, SSqr=sU, y_hat=yL)
-    
+
                             #M = len(ModelInfo_g)
                             #EV = np.zeros([M, 1])
                             EV = 0
@@ -383,7 +386,7 @@ class Branch_and_Bound(Driver):
                         if disp:
                             print("Cannot solve Max S problem!")
                         S4_fail = True
-    
+
                     # Convex approximation failed!
                     if S4_fail:
                         if efloc_iter >= 1:
@@ -393,13 +396,12 @@ class Branch_and_Bound(Driver):
                         dis_flag[ii] = 'F'
                     else:
                         LBD_NegConEI = (NegEI/(1.0 + np.sum(EV)))
-    
+
                     #--------------------------------------------------------------
                     # Step 5: Store any new node inside the active set that has LBD
                     # lower than the UBD.
                     #--------------------------------------------------------------
-    
-                    print('LBD_NegConEI', LBD_NegConEI)
+
                     if (LBD_NegConEI) < UBD:
                         node_num += 1
                         new_node = [node_num, lb, ub, LBD_NegConEI, floc_iter]
@@ -409,7 +411,7 @@ class Branch_and_Bound(Driver):
                         child_info[ii] = np.array([par_node, LBD_NegConEI, floc_iter])
 
                 if disp:
-                    if self.iter_count % 25 == 0:
+                    if (self.iter_count-1) % 25 == 0:
                         # Display output in a tabular format
                         print("="*85)
                         print("%19s%12s%14s%21s" % ("Global", "Parent", "Child1", "Child2"))
@@ -467,6 +469,10 @@ class Branch_and_Bound(Driver):
 
             with system._dircontext:
                 system.solve_nonlinear(metadata=metadata)
+
+        else:
+            self.xopt = xopt
+            self.fopt = fopt
 
     def objective_callback(self, xI):
         """ Callback for main problem evaluation."""
@@ -534,7 +540,7 @@ class Branch_and_Bound(Driver):
 
             f = conNegEI + P
 
-        print(xI, f)
+        #print(xI, f)
         return f
 
     def maximize_S(self, x_comL, x_comU, Ain_hat, bin_hat):

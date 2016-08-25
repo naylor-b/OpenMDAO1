@@ -17,11 +17,13 @@ class TestAMIEGOdriver(unittest.TestCase):
         prob = Problem()
         root = prob.root = Group()
 
-        root.add('p1', IndepVarComp('xC', 0.0), promotes=['*'])
+        root.add('p1', IndepVarComp('xC', 7.5), promotes=['*'])
         root.add('p2', IndepVarComp('xI', 0), promotes=['*'])
         root.add('comp', BranninInteger(), promotes=['*'])
 
         prob.driver = AMIEGO_driver()
+        prob.driver.cont_opt.options['tol'] = 1e-12
+        root.deriv_options['type'] = 'fd'
 
         prob.driver.add_desvar('xI', lower=-5, upper=10)
         prob.driver.add_desvar('xC', lower=0.0, upper=15.0)

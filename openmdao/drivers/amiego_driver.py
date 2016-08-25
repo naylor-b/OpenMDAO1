@@ -92,7 +92,7 @@ class AMIEGO_driver(Driver):
         self.c_dvs = []
         self.i_dvs = []
         self.i_size = 0
-        self.idx_cache = {}
+        self.i_idx = {}
         self.record_name = 'AMIEGO'
 
         # Initial Sampling
@@ -121,7 +121,7 @@ class AMIEGO_driver(Driver):
                     self.i_size += len(np.asarray(val.val))
                 except TypeError:
                     self.i_size += 1
-                self.idx_cache[name] = (j, j+self.i_size)
+                self.i_idx[name] = (j, j+self.i_size)
                 j += self.i_size
             else:
                 self.c_dvs.append(name)
@@ -131,7 +131,7 @@ class AMIEGO_driver(Driver):
         self.xI_ub = np.empty((self.i_size, ))
         dv_dict = self._desvars
         for var in self.i_dvs:
-            i, j = self.idx_cache[var]
+            i, j = self.i_idx[var]
             self.xI_lb[i:j] = dv_dict[var]['lower']
             self.xI_ub[i:j] = dv_dict[var]['upper']
 
@@ -204,11 +204,18 @@ class AMIEGO_driver(Driver):
             for var in self.i_dvs:
                 lower = self._desvars[var]['lower']
                 upper = self._desvars[var]['upper']
-                i, j = self.idx_cache[var]
+                i, j = self.i_idx[var]
                 x_i_0 = self.sampling[var][i_train, :]
 
                 xx_i = np.round(lower + x_i_0 * (upper - lower))
             x_i.append(xx_i)
+
+        # Need to cache the continuous desvars so that we start each new
+        # optimziation back at the original initial condition.
+        xc_cache = {}
+        desvars = cont_opt.get_desvars()
+        for var, val in iteritems(desvars):
+            xc_cache[var] = val.copy()
 
         ei_max = 1.0
         term = 0.0
@@ -231,8 +238,12 @@ class AMIEGO_driver(Driver):
 
                 # Set Integer design variables
                 for var in self.i_dvs:
-                    i, j = self.idx_cache[var]
+                    i, j = self.i_idx[var]
                     self.set_desvar(var, x_i[i_run][i:j])
+
+                # Restore initial condition for continuous vars.
+                for var, val in iteritems(xc_cache):
+                    cont_opt.set_desvar(var, val)
 
                 # Optimize continuous variables
                 cont_opt.run(problem)
@@ -261,7 +272,7 @@ class AMIEGO_driver(Driver):
 
             obj_surrogate = self.surrogate()
             obj_surrogate.train(x_i, obj)
-            
+
             obj_surrogate.y = obj
 
             #------------------------------------------------------------------
@@ -269,42 +280,36 @@ class AMIEGO_driver(Driver):
             # integer infill point.
             #------------------------------------------------------------------
 
-            tot_newpt_added = c_end - c_start
+            tot_newpt_added += c_end - c_start
             if tot_newpt_added != tot_pt_prev:
 
                 minlp.obj_surrogate = obj_surrogate
                 minlp.xI_lb = xI_lb
                 minlp.xI_ub = xI_ub
 
+                if disp:
+                    print("======================MINLPBB-Start=====================================")
                 minlp.run(problem)
+                if disp:
+                    print("======================MINLPBB-End=======================================")
 
                 eflag_MINLPBB = minlp.eflag_MINLPBB
+                x0I = minlp.xopt
+                ei_min = minlp.fopt
 
                 if disp:
                     print("Eflag = ", eflag_MINLPBB)
 
                 if eflag_MINLPBB >= 1:
 
-                    desvars = minlp.get_desvars()
-                    x0I = np.empty((self.i_size, ))
-                    for var in self.i_dvs:
-                        i, j = self.idx_cache[var]
-                        val = desvars[var]
-                        if isinstance(val, _ByObjWrapper):
-                            x0I[i:j] = val.val
-                        else:
-                            x0I[i:j] = val
-
                     x0I_hat = (x0I - xI_lb)/(xI_ub - xI_lb)
 
-                    current_objs = minlp.get_objectives()
-                    obj_name = list(current_objs.keys())[0]
-                    ei_max = -current_objs[obj_name].copy()
+                    ei_max = -ei_min
                     tot_pt_prev = tot_newpt_added
 
                     if disp:
                         print("New xI = ", x0I)
-                        print("EI_min = ", -ei_max)
+                        print("EI_min = ", ei_min)
 
                     # Prevent the correlation matrix being close singular. No
                     # point allowed within the pescribed hypersphere of any

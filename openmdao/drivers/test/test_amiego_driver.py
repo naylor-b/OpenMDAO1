@@ -36,7 +36,8 @@ class TestAMIEGOdriver(unittest.TestCase):
         prob.run()
 
         # Optimal solution
-        assert_rel_error(self, prob['f'], 2.38801229, 1e-5)
+        assert_rel_error(self, prob['f'], 0.49398, 1e-5)
+        assert_rel_error(self, prob['xI'], -3.0, 1e-5)
 
 if __name__ == "__main__":
     unittest.main()

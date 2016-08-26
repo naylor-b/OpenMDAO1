@@ -120,7 +120,6 @@ class ScipyOptimizer(Driver):
 
         self.opt_settings['maxiter'] = self.options['maxiter']
         self.opt_settings['disp'] = self.options['disp']
-        self.opt_settings['ftol'] = self.options['tol']
 
         # Size Problem
         nparam = 0
@@ -208,6 +207,7 @@ class ScipyOptimizer(Driver):
                           #hessp=None,
                           bounds=bounds,
                           constraints=constraints,
+                          tol=self.options['tol'],
                           #callback=None,
                           options=self.opt_settings)
 

@@ -191,7 +191,7 @@ class AMIEGO_driver(Driver):
         #----------------------------------------------------------------------
 
         n_train = self.sampling[self.i_dvs[0]].shape[0]
-        max_pt_lim = self.options['max_infill_points']*n_train
+        max_pt_lim = self.options['max_infill_points']*n_i
 
         # Since we need to add a new point every iteration, make these lists
         # for speed.
@@ -234,6 +234,9 @@ class AMIEGO_driver(Driver):
             # variables
             #------------------------------------------------------------------
 
+            if disp:
+                print("======================ContinuousOptimization-Start=====================================")
+
             for i_run in range(c_start, c_end):
 
                 # Set Integer design variables
@@ -254,17 +257,25 @@ class AMIEGO_driver(Driver):
                 current_obj = current_objs[obj_name].copy()
                 obj.append(current_obj)
 
-                if disp:
-                    print(self.get_desvars())
-                    print(obj[i_run])
-
                 # If best solution, save it
                 if current_obj < best_obj:
                     best_obj = current_obj
 
                     # Save integer and continuous DV
-                    # NOTE: is deepcopying the dictionary slow?
-                    best_design = deepcopy(self.get_desvars())
+                    desvars = self.get_desvars()
+                    best_int_design = {}
+                    for name in self.i_dvs:
+                        val = desvars[name]
+                        if isinstance(val, _ByObjWrapper):
+                            val = val.val
+                        best_int_design[name] = val.copy()
+                        
+                    best_cont_design = {}
+                    for name in self.c_dvs:
+                        best_cont_design[name] = desvars[name].copy()
+
+            if disp:
+                print("======================ContinuousOptimization-End=======================================")
 
             #------------------------------------------------------------------
             # Step 3: Build the surrogate models
@@ -275,10 +286,17 @@ class AMIEGO_driver(Driver):
 
             obj_surrogate.y = obj
 
+
+            if disp:
+                print("\nSurrogate building of the objective is complete...")
+
             #------------------------------------------------------------------
             # Step 4: Maximize the expected improvement function to obtain an
             # integer infill point.
             #------------------------------------------------------------------
+
+            if disp:
+                print("EGOLF-Iter: %d" % self.iter_count)
 
             tot_newpt_added += c_end - c_start
             if tot_newpt_added != tot_pt_prev:
@@ -348,17 +366,29 @@ class AMIEGO_driver(Driver):
                     print("No Further improvement expected! Terminating algorithm.")
                 elif ec2 == 1:
                     print("No new point found that improves the surrogate. Terminating algorithm.")
-                elif Tot_newpt_added >= max_pt_lim:
+                elif tot_newpt_added >= max_pt_lim:
                     print("Maximum allowed sampling limit reached! Terminating algorithm.")
 
         # Pull optimal parameters back into framework and re-run, so that
         # framework is left in the right final state
-        for name, val in iteritems(best_design):
+        for name, val in iteritems(best_int_design):
             if isinstance(val, _ByObjWrapper):
                 self.set_desvar(name, val.val)
             else:
                 self.set_desvar(name, val)
+        for name, val in iteritems(best_cont_design):
+            self.set_desvar(name, val)
 
         with self.root._dircontext:
             self.root.solve_nonlinear(metadata=self.metadata)
+           
+        if disp:
+            print("\n===================Result Summary====================")
+            print("The best objective: %0.4f" % best_obj)
+            print("Total number of continuous minimization: %d" % len(x_i))
+            #print("Total number of objective function evaluation: %d" % Tot_FunCount)
+            print("Best Integer designs: ", best_int_design)
+            print("Corresponding continuous designs: ", best_cont_design)
+            print("=====================================================")
+            
 

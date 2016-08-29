@@ -105,11 +105,13 @@ class AMIEGO_driver(Driver):
         cont_opt = self.cont_opt
         cont_opt._setup()
         cont_opt.record_name = self.record_name + ':' + cont_opt.record_name
+        cont_opt.options['disp'] = self.options['disp']
 
         minlp = self.minlp
         minlp._setup()
         minlp.record_name = self.record_name + ':' +  minlp.record_name
         minlp.standalone = False
+        minlp.options['disp'] = self.options['disp']
 
         # Identify and size our design variables.
         self.i_size = 0
@@ -269,7 +271,7 @@ class AMIEGO_driver(Driver):
                         if isinstance(val, _ByObjWrapper):
                             val = val.val
                         best_int_design[name] = val.copy()
-                        
+
                     best_cont_design = {}
                     for name in self.c_dvs:
                         best_cont_design[name] = desvars[name].copy()
@@ -362,12 +364,13 @@ class AMIEGO_driver(Driver):
 
             if ei_max <= term or ec2 == 1 or tot_newpt_added >= max_pt_lim:
                 terminate = True
-                if ei_max <= term:
-                    print("No Further improvement expected! Terminating algorithm.")
-                elif ec2 == 1:
-                    print("No new point found that improves the surrogate. Terminating algorithm.")
-                elif tot_newpt_added >= max_pt_lim:
-                    print("Maximum allowed sampling limit reached! Terminating algorithm.")
+                if disp:
+                    if ei_max <= term:
+                        print("No Further improvement expected! Terminating algorithm.")
+                    elif ec2 == 1:
+                        print("No new point found that improves the surrogate. Terminating algorithm.")
+                    elif tot_newpt_added >= max_pt_lim:
+                        print("Maximum allowed sampling limit reached! Terminating algorithm.")
 
         # Pull optimal parameters back into framework and re-run, so that
         # framework is left in the right final state
@@ -381,7 +384,7 @@ class AMIEGO_driver(Driver):
 
         with self.root._dircontext:
             self.root.solve_nonlinear(metadata=self.metadata)
-           
+
         if disp:
             print("\n===================Result Summary====================")
             print("The best objective: %0.4f" % best_obj)
@@ -390,5 +393,5 @@ class AMIEGO_driver(Driver):
             print("Best Integer designs: ", best_int_design)
             print("Corresponding continuous designs: ", best_cont_design)
             print("=====================================================")
-            
+
 

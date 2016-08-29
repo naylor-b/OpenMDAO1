@@ -20,8 +20,8 @@ from openmdao.core.component import Component
 
 
 class Brannin(Component):
-    """ The Brannin test problem. This version contains a continuous and an
-    integer parameter. """
+    """ The Brannin test problem. This version is the standard version and
+    contains two continuous parameters. """
 
     def __init__(self):
         super(Brannin, self).__init__()

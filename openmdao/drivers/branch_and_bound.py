@@ -90,6 +90,7 @@ class Branch_and_Bound(Driver):
         self.size = 0
         self.idx_cache = {}
         self.obj_surrogate = None
+        self.con_surrogate = []
         self.record_name = 'B&B'
         self.con_cache = None
 
@@ -178,15 +179,22 @@ class Branch_and_Bound(Driver):
                 with system._dircontext:
                     system.solve_nonlinear(metadata=metadata)
 
-                # Get objectives and constraints (TODO)
+                # Get objectives and constraints
                 current_objs = self.get_objectives()
                 obj_name = list(current_objs.keys())[0]
                 current_obj = current_objs[obj_name].copy()
                 obj.append(current_obj)
+                current_cons = self.get_constraints()
 
             self.obj_surrogate = obj_surrogate = self.surrogate()
             obj_surrogate.train(x_i, obj)
             obj_surrogate.y = obj
+
+            for name, val in iteritems(current_cons):
+                con_surr = self.con_surrogate.append(self.surrogate())
+                con_surr.train(x_i, val)
+                con_surr.y = val
+                con_surr._name = name
 
         # Calculate intermediate statistics. This stuff used to be stored in
         # the Modelinfo object, but more convenient to store it in the
@@ -362,22 +370,36 @@ class Branch_and_Bound(Driver):
 
                     S4_fail = False
                     x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, obj_surrogate)
-                    sU, eflag_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat)
+                    sU, eflag_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat,
+                                                   obj_surrogate)
 
                     if eflag_sU:
-                        yL, eflag_yL = self.minimize_y(x_comL, x_comU, Ain_hat, bin_hat)
+                        yL, eflag_yL = self.minimize_y(x_comL, x_comU, Ain_hat, bin_hat,
+                                                       obj_surrogate)
 
                         if eflag_yL:
                             NegEI = calc_conEI_norm([], obj_surrogate, SSqr=sU, y_hat=yL)
 
-                            #M = len(ModelInfo_g)
-                            #EV = np.zeros([M, 1])
-                            EV = 0
-                            #if M>0:
-                                ## Expected violation goes here
-                                #for mm in range(M):
-                                    ## Constraints go here
-                                    #print("Eval con")
+                            M = len(self.con_surrogate)
+                            EV = np.zeros([M, 1])
+                            if M>0:
+                                # Expected violation goes here
+                                for mm in range(M):
+                                    x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, con_surrogate[mm])
+                                    sU_g, eflag_sU_g = maximize_S(x_comL, x_comU, Ain_hat,
+                                                                  bin_hat, con_surrogate[mm])
+                                    sL_g = -1.*sU_g
+                                    if eflag_sU_g >= 1:
+                                        yL_g, eflag_yL_g = minimize_y(x_comL, x_comU, Ain_hat,
+                                                                      bin_hat, con_surrogate[mm])
+                                        if eflag_yL_g >= 1:
+                                            EV[mm] = calc_conEV_norm([], con_surrogate[mm],
+                                                                     gSSqr=sL_g, g_hat=yL_g)
+                                        else:
+                                            S4_fail = 1.
+                                            break
+                                    else:
+                                        S4_fail = 1
                         else:
                             if disp:
                                 print("Cannot solve Min y_hat problem!")
@@ -523,13 +545,12 @@ class Branch_and_Bound(Driver):
 
             NegEI = calc_conEI_norm(xval, obj_surrogate)
 
-            #M=len(ModelInfo_g)
-            M = 0
-            EV = np.zeros([M,1])
-            #if M>0:
-                ## Expected violation evaluation goes here
-                #for mm in xrange(M):
-                    #print("Eval con")
+            con_surrogate = self.con_surrogate
+            M = len(con_surrogate)
+            EV = np.zeros([M, 1])
+            if M>0:
+                for mm in range(M):
+                    EV[mm] = calc_conEV_norm(xval, con_surrogate[mm])
 
             conNegEI = NegEI/(1.0+np.sum(EV))
             P = 0.0
@@ -543,14 +564,13 @@ class Branch_and_Bound(Driver):
         #print(xI, f)
         return f
 
-    def maximize_S(self, x_comL, x_comU, Ain_hat, bin_hat):
+    def maximize_S(self, x_comL, x_comU, Ain_hat, bin_hat, surogate):
         """This method finds an upper bound to the SigmaSqr Error, and scales
         up 'r' to provide a smooth design space for gradient-based approach.
         """
-        obj_surrogate = self.obj_surrogate
-        R_inv = obj_surrogate.R_inv
-        SigmaSqr = obj_surrogate.SigmaSqr
-        X = obj_surrogate.X
+        R_inv = surogate.R_inv
+        SigmaSqr = surogate.SigmaSqr
+        X = surogate.X
 
         n, k = X.shape
         one = np.ones([n, 1])
@@ -578,8 +598,8 @@ class Branch_and_Bound(Driver):
         eig_lb = np.zeros([n, 1])
         for ii in xrange(n):
             dia_ele = H_hat[ii, ii]
-            sum_rw = 0
-            sum_col=0
+            sum_rw = 0.0
+            sum_col = 0.0
             for jj in range(n):
                 if ii != jj:
                     sum_rw += np.abs(H_hat[ii,jj])
@@ -591,7 +611,7 @@ class Branch_and_Bound(Driver):
         alpha = np.max(np.array([0.0, -0.5*eig_min]))
 
         # Just storing it here to pull it out in the callback?
-        obj_surrogate._alpha = alpha
+        surogate._alpha = alpha
 
         # Maximize S
         x0 = 0.5*(xhat_comL + xhat_comU)
@@ -599,8 +619,8 @@ class Branch_and_Bound(Driver):
 
         #Note: Python defines constraints like g(x) >= 0
         cons = [{'type' : 'ineq',
-                 'fun' : lambda x : -np.dot(Ain_hat[ii],x) + bin_hat[ii],
-                 'jac' : lambda x : -Ain_hat[ii]} for ii in xrange(2*n)]
+                 'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
+                 'jac' : lambda x : -Ain_hat[ii, :]} for ii in xrange(2*n)]
 
         optResult = minimize(self.calc_SSqr_convex, x0,
                              args=(x_comL,x_comU,xhat_comL,xhat_comU),
@@ -613,6 +633,10 @@ class Branch_and_Bound(Driver):
             eflag_sU = False
         else:
             eflag_sU = True
+            for ii in range(2*n):
+                if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + 1.0e-6):
+                    eflag_sU = False
+                    break
 
         sU = - Neg_sU
         return sU, eflag_sU
@@ -645,14 +669,13 @@ class Branch_and_Bound(Driver):
         S2 = term1 + term2
         return S2[0,0]
 
-    def minimize_y(self, x_comL, x_comU, Ain_hat, bin_hat):
+    def minimize_y(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):
 
         # 1- Formulates y_hat as LP (weaker bound)
         # 2- Uses non-convex relaxation technique (stronger bound) [Future release]
         app = 1
 
-        obj_surrogate = self.obj_surrogate
-        X = obj_surrogate.X
+        X = surrogate.X
         n = np.shape(X)[0]
         k = np.shape(X)[1]
 
@@ -666,8 +689,8 @@ class Branch_and_Bound(Driver):
             bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in xrange(len(xhat_comL))]
 
             cons = [{'type' : 'ineq',
-                     'fun' : lambda x : -np.dot(Ain_hat[ii],x) + bin_hat[ii],
-                     'jac': lambda x:-Ain_hat[ii]} for ii in xrange(2*n)]
+                     'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
+                     'jac': lambda x: -Ain_hat[ii, :]} for ii in xrange(2*n)]
 
             optResult = minimize(self.calc_y_hat_convex, x0,
                                  args=(x_comL, x_comU), method='SLSQP',
@@ -680,6 +703,10 @@ class Branch_and_Bound(Driver):
                 eflag_yL = False
             else:
                 eflag_yL = True
+                for ii in range(2*n):
+                    if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + 1.0e-6):
+                        eflag_yL = False
+                        break
 
         return yL, eflag_yL
 
@@ -821,7 +848,7 @@ def lin_underestimator(lb, ub, surrogate):
 
     for i in xrange(n):
         #T1: Linearize under-estimator of ln[r_i] = a1[i,i]*r[i] + b1[i]
-        if ub_r[i] < 1e-323:
+        if ub_r[i] < 1.0e-323 or (ub_r[i] - lb_r[i]) < 1.0e-308:
             # a1[i,i] = 0.
             # b1[i] = -np.inf
             a1_hat[i,i] = 0.0 #a1[i,i]*(ub_r[i]-lb_r[i])
@@ -831,7 +858,7 @@ def lin_underestimator(lb, ub, surrogate):
             # b1[i] = np.log(ub_r[i])
             a1_hat[i,i] = 0.0 #a1[i,i]*(ub_r[i]-lb_r[i])
             b1_hat[i] = np.log(ub_r[i]) #a1[i,i]*lb_r[i] + b1[i]
-        elif lb_r[i] < 1e-323:
+        elif lb_r[i] < 1.0e-323:
             # a1[i,i] = np.inf
             # b1[i] = -np.inf
             a1_hat[i,i] = np.inf #a1[i,i]*(ub_r[i]-lb_r[i])
@@ -843,7 +870,7 @@ def lin_underestimator(lb, ub, surrogate):
             b1_hat[i] = a1[i,i]*lb_r[i] + b1[i]
 
         #T3: Linearize under-estimator of -ln[r_i] = a3[i,i]*r[i] + b3[i]
-        if ub_r[i] < 1e-323:
+        if ub_r[i] < 1.0e-323:
             a3_hat[i,i] = 0.0
             b3_hat[i] = np.inf
         else:
@@ -916,3 +943,38 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
         NegEI = -(ei1 + ei2)
 
     return NegEI
+
+
+def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
+    """This modules evaluates the expected improvement in the normalized
+    design sapce"""
+
+    g_min = 0.0
+    X = con_surrogate.X
+
+    if not gSSqr:
+        c_r = con_surrogate.c_r
+        thetas = con_surrogate.thetas
+        SigmaSqr = con_surrogate.SigmaSqr
+        R_inv = con_surrogate.R_inv
+        mu = con_surrogate.mu
+        p = con_surrogate.p
+        n = np.shape(X)[0]
+        one = np.ones([n,1])
+        r = np.ones([n,1])
+        for ii in xrange(n):
+            r[ii] = np.exp(-np.sum(thetas*(xval - X[ii])**p))
+
+        g_hat = mu + np.dot(r.T,c_r)
+        gSSqr = SigmaSqr*(1.0 - r.T.dot(np.dot(R_inv, r)) + \
+        ((1.0 - one.T.dot(np.dot(R_inv, r)))**2)/(one.T.dot(np.dot(R_inv, one))))
+
+    if gSSqr <= 0:
+        EV = 0.0
+    else:
+        # Calculate expected violation
+        ei1 = (g_hat-g_min)*(0.5+0.5*erf((1.0/np.sqrt(2.0))*((g_hat-g_min)/np.sqrt(np.abs(gSSqr)))))
+        ei2 = np.sqrt(np.abs(gSSqr))*(1.0/np.sqrt(2.0*np.pi))*np.exp(-0.5*((g_hat-g_min)**2/np.abs(gSSqr)))
+        EV = (ei1 + ei2)
+
+    return EV

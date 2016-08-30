@@ -112,15 +112,16 @@ class Branch_and_Bound(Driver):
         for name, val in iteritems(self.get_desvars()):
             self.dvs.append(name)
             try:
-                self.size += len(np.asarray(val.val))
+                size = len(np.asarray(val.val))
             except TypeError:
-                self.size += 1
-                self.idx_cache[name] = (j, j+self.size)
-                j += self.size
+                size = 1
+            self.idx_cache[name] = (j, j+size)
+            j += size
+        self.size = j
 
         # Lower and Upper bounds
-        self.xI_lb = np.empty((self.size, ))
-        self.xI_ub = np.empty((self.size, ))
+        self.xI_lb = np.empty((self.size))
+        self.xI_ub = np.empty((self.size))
         dv_dict = self._desvars
         for var in self.dvs:
             i, j = self.idx_cache[var]
@@ -159,16 +160,20 @@ class Branch_and_Bound(Driver):
             metadata = self.metadata
 
             for i_train in range(n_train):
+
+                xx_i = np.empty((self.size, ))
                 for var in self.dvs:
                     lower = self._desvars[var]['lower']
                     upper = self._desvars[var]['upper']
                     i, j = self.idx_cache[var]
                     x_i_0 = self.sampling[var][i_train, :]
 
-                    xx_i = np.round(lower + x_i_0 * (upper - lower))
+                    xx_i[i:j] = np.round(lower + x_i_0 * (upper - lower))
+                    
                 x_i.append(xx_i)
 
             # Run each case and extract obj/con
+            cons = {}
             for i_run in range(len(x_i)):
 
                 # Set design variables
@@ -185,6 +190,7 @@ class Branch_and_Bound(Driver):
                 current_obj = current_objs[obj_name].copy()
                 obj.append(current_obj)
                 current_cons = self.get_constraints()
+                cons.append(current_cons)
 
             self.obj_surrogate = obj_surrogate = self.surrogate()
             obj_surrogate.train(x_i, obj)
@@ -267,7 +273,7 @@ class Branch_and_Bound(Driver):
                 if floc_iter < UBD:
                     UBD = floc_iter
                     fopt = UBD
-                    xopt = xloc_iter.copy().reshape(1, num_des)
+                    xopt = xloc_iter.copy().reshape(num_des)
                     self.eflag_MINLPBB = True
 
                     # Update active set: Removes the current node
@@ -283,7 +289,7 @@ class Branch_and_Bound(Driver):
 
                 # Using a gradient-based method here.
                 # TODO: Make it more pluggable.
-                xC_iter = (0.5*(xU_iter + xL_iter)).reshape((1, 1))
+                xC_iter = (0.5*(xU_iter + xL_iter)).reshape((num_des, 1))
                 bnds = [(xL_iter[ii], xU_iter[ii]) for ii in xrange(num_des)]
 
                 optResult = minimize(self.objective_callback, xC_iter,
@@ -314,7 +320,7 @@ class Branch_and_Bound(Driver):
                     if floc_iter < UBD:
                         UBD = 1.0*floc_iter
                         fopt = 1.0*UBD
-                        xopt = xloc_iter.copy().reshape(1, num_des)
+                        xopt = xloc_iter.copy().reshape(num_des)
                         self.eflag_MINLPBB = True
 
                         # Update active set
@@ -633,10 +639,10 @@ class Branch_and_Bound(Driver):
             eflag_sU = False
         else:
             eflag_sU = True
-            for ii in range(2*n):
-                if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + 1.0e-6):
-                    eflag_sU = False
-                    break
+            #for ii in range(2*n):
+                #if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + 1.0e-6):
+                    #eflag_sU = False
+                    #break
 
         sU = - Neg_sU
         return sU, eflag_sU
@@ -703,10 +709,10 @@ class Branch_and_Bound(Driver):
                 eflag_yL = False
             else:
                 eflag_yL = True
-                for ii in range(2*n):
-                    if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + 1.0e-6):
-                        eflag_yL = False
-                        break
+                #for ii in range(2*n):
+                    #if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + 1.0e-6):
+                        #eflag_yL = False
+                        #break
 
         return yL, eflag_yL
 

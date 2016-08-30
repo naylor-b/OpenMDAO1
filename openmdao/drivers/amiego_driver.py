@@ -57,7 +57,7 @@ class AMIEGO_driver(Driver):
         super(AMIEGO_driver, self).__init__()
 
         # What we support
-        self.supports['inequality_constraints'] = False
+        self.supports['inequality_constraints'] = True
         self.supports['equality_constraints'] = False
         self.supports['multiple_objectives'] = False
         self.supports['two_sided_constraints'] = False
@@ -114,19 +114,19 @@ class AMIEGO_driver(Driver):
         minlp.options['disp'] = self.options['disp']
 
         # Identify and size our design variables.
-        self.i_size = 0
         j = 0
         for name, val in iteritems(self.get_desvars()):
             if isinstance(val, _ByObjWrapper):
                 self.i_dvs.append(name)
                 try:
-                    self.i_size += len(np.asarray(val.val))
+                    i_size = len(np.asarray(val.val))
                 except TypeError:
-                    self.i_size += 1
-                self.i_idx[name] = (j, j+self.i_size)
-                j += self.i_size
+                    i_size = 1
+                self.i_idx[name] = (j, j+i_size)
+                j += i_size
             else:
                 self.c_dvs.append(name)
+        self.i_size = j
 
         # Lower and Upper bounds for integer desvars
         self.xI_lb = np.empty((self.i_size, ))
@@ -199,17 +199,21 @@ class AMIEGO_driver(Driver):
         # for speed.
         x_i = []
         obj = []
+        cons = []
         c_start = 0
         c_end = n_train
 
         for i_train in range(n_train):
+
+            xx_i = np.empty((self.i_size, ))
             for var in self.i_dvs:
                 lower = self._desvars[var]['lower']
                 upper = self._desvars[var]['upper']
                 i, j = self.i_idx[var]
                 x_i_0 = self.sampling[var][i_train, :]
 
-                xx_i = np.round(lower + x_i_0 * (upper - lower))
+                xx_i[i:j] = np.round(lower + x_i_0 * (upper - lower))
+                
             x_i.append(xx_i)
 
         # Need to cache the continuous desvars so that we start each new
@@ -258,6 +262,8 @@ class AMIEGO_driver(Driver):
                 obj_name = list(current_objs.keys())[0]
                 current_obj = current_objs[obj_name].copy()
                 obj.append(current_obj)
+                current_cons = self.get_constraints()
+                cons.append(current_cons)
 
                 # If best solution, save it
                 if current_obj < best_obj:
@@ -288,6 +294,12 @@ class AMIEGO_driver(Driver):
 
             obj_surrogate.y = obj
 
+            con_surrogate = {}
+            for name, val in iteritems(cons):
+                con_surr = con_surrogate.append(self.surrogate())
+                con_surr.train(x_i, val)
+                con_surr.y = val
+                con_surr._name = name
 
             if disp:
                 print("\nSurrogate building of the objective is complete...")
@@ -304,6 +316,7 @@ class AMIEGO_driver(Driver):
             if tot_newpt_added != tot_pt_prev:
 
                 minlp.obj_surrogate = obj_surrogate
+                minlp.con_surrogate = con_surrogate
                 minlp.xI_lb = xI_lb
                 minlp.xI_ub = xI_ub
 

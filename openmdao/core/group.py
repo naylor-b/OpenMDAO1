@@ -1057,9 +1057,9 @@ class Group(System):
                         (o_start, o_end, i_start, i_end) = icache[key2]
 
                     if mode=='fwd':
-                        partials[o_start:o_end, i_start:i_end] = jac[o_var, i_var]
+                        partials[o_start:o_end, i_start:i_end] = jac[key]
                     else:
-                        partials[i_start:i_end, o_start:o_end] = jac[o_var, i_var].T
+                        partials[i_start:i_end, o_start:o_end] = jac[key].T
 
         return partials, icache
 

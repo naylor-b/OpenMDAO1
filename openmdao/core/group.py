@@ -62,10 +62,20 @@ class Group(System):
         in check_partial_derivatives"
     deriv_options['linearize'] : bool(False)
         Set to True if you want linearize to be called even though you are using FD.
+
+    Args
+    ----
+
+    num_multipoints: int(1)
+        If > 1, any components in this group will be set up as distributed
+        components, i.e., the full distributed size of their unknown and param
+        variables will be num_multipoints * local_size.
     """
 
-    def __init__(self):
+    def __init__(self, num_multipoints=1):
         super(Group, self).__init__()
+
+        self._num_multipoints = num_multipoints
 
         self._src = OrderedDict()
         self._data_xfer = OrderedDict()
@@ -297,6 +307,13 @@ class Group(System):
         to_prom_pname = self._sysdata.to_prom_pname = OrderedDict()
 
         for sub in itervalues(self._subsystems):
+            if sub._num_multipoints > 1:
+                raise RuntimeError("nested multipoint groups are not supported "
+                                   "(parent group '%s' has %d points and "
+                                   "subsystem '%s' has %d points)" %
+                                   (self.pathname, self._num_multipoints,
+                                    sub.name, sub._num_multipoints))
+            sub._num_multipoints = self._num_multipoints
             subparams, subunknowns = sub._setup_variables()
             for p, meta in iteritems(subparams):
                 prom = self._promoted_name(sub._sysdata.to_prom_pname[p], sub)

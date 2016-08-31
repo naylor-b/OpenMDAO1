@@ -185,6 +185,7 @@ class System(object):
         self._num_par_fds = 1 # this will be >1 for ParallelFDGroup
         self._par_fd_id = 0 # for ParallelFDGroup, this will be >= 0 and
                             # <= the number of parallel FDs
+        self._num_multipoints = 1 # used for distributed multipoint
 
 
         # This gets set to True when linearize is called. Solvers can set

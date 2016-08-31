@@ -265,9 +265,10 @@ class Component(System):
             version of this variable are present in this process.
 
         """
-        meta = self._init_params_dict.get(name)
-        if meta is None:
-            meta = self._init_unknowns_dict[name]
+        if name in self._init_params_dict:
+            meta = self._init_params_dict._dat[name].meta
+        else:
+            meta = self._init_unknowns_dict._dat[name].meta
 
         if src_indices is None:
             raise ValueError("You must provide src_indices for variable '%s'" %
@@ -316,7 +317,19 @@ class Component(System):
         should set the 'src_indices' metadata for any parameters or
         unknowns that require it.
         """
-        pass
+        if self._num_multipoints < 2:
+            return
+
+        comm = self.comm
+        rank = comm.rank
+
+        # FIXME: in order to support multipoint where the number of multipoints
+        # doesn't match the size of the communicator, we need to have the concept
+        # of a 'current multiproc ID' so we know which index into our params/unknowns
+        # to use.  I remember in MAUD or CMF, john had a similar index inside of
+        # his vector objects.  We want to bury it in there because we don't want
+        # the person writing the component to have to know anything about
+        # running under multipoint.
 
     def _get_fd_params(self):
         """
@@ -368,7 +381,7 @@ class Component(System):
         to_prom_uname = self._sysdata.to_prom_uname = OrderedDict()
         to_prom_pname = self._sysdata.to_prom_pname = OrderedDict()
 
-        if MPI and self.setup_distrib is not Component.setup_distrib and self.is_active():
+        if MPI and self.is_active():
             if hasattr(self, 'setup_distrib_idxs'):
                 warnings.simplefilter('always', DeprecationWarning)
                 warnings.warn("setup_distrib_idxs is deprecated, use setup_distrib instead.",
@@ -389,7 +402,10 @@ class Component(System):
             if sizes:
                 if trace:   # pragma: no cover
                     debug("allgathering src index sizes:")
-                allsizes = np.zeros((self.comm.size, len(sizes)), dtype=int)
+                allsizes = np.empty((self.comm.size, len(sizes)), dtype=int)
+
+                # TODO: look into using Allreduce for this since we just
+                #        need the sums
                 self.comm.Allgather(np.array(sizes, dtype=int), allsizes)
                 for i, name in enumerate(names):
                     self._init_unknowns_dict[name]['distrib_size'] = np.sum(allsizes[:, i])

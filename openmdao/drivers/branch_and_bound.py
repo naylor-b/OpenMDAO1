@@ -137,6 +137,7 @@ class Branch_and_Bound(Driver):
             Our parent `Problem`.
         """
         obj_surrogate = self.obj_surrogate
+        con_surrogate = self.con_surrogate
         atol = self.options['atol']
         active_tol = self.options['active_tol']
         ftol = self.options['ftol']
@@ -156,6 +157,10 @@ class Branch_and_Bound(Driver):
             n_train = self.sampling[self.dvs[0]].shape[0]
             x_i = []
             obj = []
+            cons = {}
+            for con in self.get_constraint_metadata():
+                cons[con] = []
+
             system = self.root
             metadata = self.metadata
 
@@ -169,7 +174,7 @@ class Branch_and_Bound(Driver):
                     x_i_0 = self.sampling[var][i_train, :]
 
                     xx_i[i:j] = np.round(lower + x_i_0 * (upper - lower))
-                    
+
                 x_i.append(xx_i)
 
             # Run each case and extract obj/con
@@ -189,18 +194,20 @@ class Branch_and_Bound(Driver):
                 obj_name = list(current_objs.keys())[0]
                 current_obj = current_objs[obj_name].copy()
                 obj.append(current_obj)
-                current_cons = self.get_constraints()
-                cons.append(current_cons)
+                for name, value in iteritems(self.get_constraints()):
+                    cons[name].append(value.copy())
 
             self.obj_surrogate = obj_surrogate = self.surrogate()
             obj_surrogate.train(x_i, obj)
             obj_surrogate.y = obj
 
-            for name, val in iteritems(current_cons):
-                con_surr = self.con_surrogate.append(self.surrogate())
+            self.con_surrogate = con_surrogate = []
+            for name, val in iteritems(cons):
+                con_surr = self.surrogate()
                 con_surr.train(x_i, val)
                 con_surr.y = val
                 con_surr._name = name
+                con_surrogate.append(con_surr)
 
         # Calculate intermediate statistics. This stuff used to be stored in
         # the Modelinfo object, but more convenient to store it in the
@@ -230,6 +237,16 @@ class Branch_and_Bound(Driver):
             #obj_surrogate.thetas = surrogate.thetas
             #obj_surrogate.X_std = obj_surrogate.X_std.reshape(num_xI,1)
             #obj_surrogate.X_mean = obj_surrogate.X_mean.reshape(num_xI,1)
+
+        for con_surr in con_surrogate:
+
+            con_surr.mu = np.mean(con_surr.Y)
+            con_surr.SigmaSqr = con_surr.sigma2/np.square(con_surr.Y_std)
+            con_surr.R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
+                                                                   con_surr.S_inv,
+                                                                   con_surr.U.T))
+            con_surr.p = 2
+            con_surr.c_r = con_surr.alpha
 
         #----------------------------------------------------------------------
         # Step 1: Initialize
@@ -392,20 +409,20 @@ class Branch_and_Bound(Driver):
                                 # Expected violation goes here
                                 for mm in range(M):
                                     x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, con_surrogate[mm])
-                                    sU_g, eflag_sU_g = maximize_S(x_comL, x_comU, Ain_hat,
-                                                                  bin_hat, con_surrogate[mm])
+                                    sU_g, eflag_sU_g = self.maximize_S(x_comL, x_comU, Ain_hat,
+                                                                       bin_hat, con_surrogate[mm])
                                     sL_g = -1.*sU_g
-                                    if eflag_sU_g >= 1:
-                                        yL_g, eflag_yL_g = minimize_y(x_comL, x_comU, Ain_hat,
-                                                                      bin_hat, con_surrogate[mm])
-                                        if eflag_yL_g >= 1:
+                                    if eflag_sU_g:
+                                        yL_g, eflag_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
+                                                                           bin_hat, con_surrogate[mm])
+                                        if eflag_yL_g:
                                             EV[mm] = calc_conEV_norm([], con_surrogate[mm],
                                                                      gSSqr=sL_g, g_hat=yL_g)
                                         else:
-                                            S4_fail = 1.
+                                            S4_fail = True
                                             break
                                     else:
-                                        S4_fail = 1
+                                        S4_fail = True
                         else:
                             if disp:
                                 print("Cannot solve Min y_hat problem!")
@@ -547,7 +564,7 @@ class Branch_and_Bound(Driver):
             ub = self.xI_ub
 
             # Normalized as per the convention in Kriging of openmdao
-            xval = (xI - obj_surrogate.X_mean)/obj_surrogate.X_std
+            xval = (xI - obj_surrogate.X_mean.reshape((k, 1)))/obj_surrogate.X_std.reshape(k, 1)
 
             NegEI = calc_conEI_norm(xval, obj_surrogate)
 
@@ -639,10 +656,10 @@ class Branch_and_Bound(Driver):
             eflag_sU = False
         else:
             eflag_sU = True
-            #for ii in range(2*n):
-                #if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + 1.0e-6):
-                    #eflag_sU = False
-                    #break
+            for ii in range(2*n):
+                if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + 1.0e-6):
+                    eflag_sU = False
+                    break
 
         sU = - Neg_sU
         return sU, eflag_sU
@@ -709,10 +726,10 @@ class Branch_and_Bound(Driver):
                 eflag_yL = False
             else:
                 eflag_yL = True
-                #for ii in range(2*n):
-                    #if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + 1.0e-6):
-                        #eflag_yL = False
-                        #break
+                for ii in range(2*n):
+                    if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + 1.0e-6):
+                        eflag_yL = False
+                        break
 
         return yL, eflag_yL
 

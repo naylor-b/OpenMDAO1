@@ -46,9 +46,9 @@ class TestAMIEGOdriver(unittest.TestCase):
         prob = Problem()
         root = prob.root = Group()
 
-        root.add('xc_a1', IndepVarComp('area1', 0.0005), promotes=['*'])
-        root.add('xc_a2', IndepVarComp('area2', 0.0005), promotes=['*'])
-        root.add('xc_a3', IndepVarComp('area3', 0.0005), promotes=['*'])
+        root.add('xc_a1', IndepVarComp('area1', 5.0), promotes=['*'])
+        root.add('xc_a2', IndepVarComp('area2', 5.0), promotes=['*'])
+        root.add('xc_a3', IndepVarComp('area3', 5.0), promotes=['*'])
         root.add('xi_m1', IndepVarComp('mat1', 1), promotes=['*'])
         root.add('xi_m2', IndepVarComp('mat2', 1), promotes=['*'])
         root.add('xi_m3', IndepVarComp('mat3', 1), promotes=['*'])
@@ -56,12 +56,12 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.driver = AMIEGO_driver()
         prob.driver.cont_opt.options['tol'] = 1e-12
-        #prob.driver.options['disp'] = False
+        prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
 
-        prob.driver.add_desvar('area1', lower=0.0005, upper=1.0)
-        prob.driver.add_desvar('area2', lower=0.0005, upper=1.0)
-        prob.driver.add_desvar('area3', lower=0.0005, upper=1.0)
+        prob.driver.add_desvar('area1', lower=0.0005, upper=10.0)
+        prob.driver.add_desvar('area2', lower=0.0005, upper=10.0)
+        prob.driver.add_desvar('area3', lower=0.0005, upper=10.0)
         prob.driver.add_desvar('mat1', lower=1, upper=4)
         prob.driver.add_desvar('mat2', lower=1, upper=4)
         prob.driver.add_desvar('mat3', lower=1, upper=4)
@@ -73,7 +73,7 @@ class TestAMIEGOdriver(unittest.TestCase):
                             [0.0, 0.75, 0.0],
                             [0.75, 0.0, 0.25],
                             [0.75, 1.0, 0.5],
-                            [0.25, 0.5, 1.0]]) 
+                            [0.25, 0.5, 1.0]])
         prob.driver.sampling = {'mat1' : samples[:, 0].reshape((npt, 1)),
                                 'mat2' : samples[:, 1].reshape((npt, 1)),
                                 'mat3' : samples[:, 2].reshape((npt, 1))}
@@ -81,7 +81,7 @@ class TestAMIEGOdriver(unittest.TestCase):
         prob.setup(check=False)
 
         prob.run()
-        
+
         print(prob['mat1'], prob['mat2'], prob['mat3'])
 
 

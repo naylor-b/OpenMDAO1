@@ -199,7 +199,9 @@ class AMIEGO_driver(Driver):
         # for speed.
         x_i = []
         obj = []
-        cons = []
+        cons = {}
+        for con in self.get_constraint_metadata():
+            cons[con] = []
         c_start = 0
         c_end = n_train
 
@@ -213,7 +215,7 @@ class AMIEGO_driver(Driver):
                 x_i_0 = self.sampling[var][i_train, :]
 
                 xx_i[i:j] = np.round(lower + x_i_0 * (upper - lower))
-                
+
             x_i.append(xx_i)
 
         # Need to cache the continuous desvars so that we start each new
@@ -262,8 +264,8 @@ class AMIEGO_driver(Driver):
                 obj_name = list(current_objs.keys())[0]
                 current_obj = current_objs[obj_name].copy()
                 obj.append(current_obj)
-                current_cons = self.get_constraints()
-                cons.append(current_cons)
+                for name, value in iteritems(self.get_constraints()):
+                    cons[name].append(value.copy())
 
                 # If best solution, save it
                 if current_obj < best_obj:
@@ -294,12 +296,15 @@ class AMIEGO_driver(Driver):
 
             obj_surrogate.y = obj
 
-            con_surrogate = {}
+            con_surrogate = []
             for name, val in iteritems(cons):
-                con_surr = con_surrogate.append(self.surrogate())
-                con_surr.train(x_i, val)
-                con_surr.y = val
-                con_surr._name = name
+                val = np.array(val)
+                for j in range(val.shape[1]):
+                    con_surr = self.surrogate()
+                    con_surr.train(x_i, val[:, j:j+1])
+                    con_surr.y = val[:, j:j+1]
+                    con_surr._name = name
+                    con_surrogate.append(con_surr)
 
             if disp:
                 print("\nSurrogate building of the objective is complete...")

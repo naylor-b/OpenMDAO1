@@ -48,9 +48,6 @@ class LatinHypercubeDriver(PredeterminedRunsDriver):
         """Build a runlist based on the Latin Hypercube method."""
         design_vars = self.get_desvar_metadata()
 
-        # Add up sizes
-        self.num_design_vars = sum(meta['size'] for meta in itervalues(design_vars))
-
         if self.seed is not None:
             seed(self.seed)
             np.random.seed(self.seed)
@@ -129,8 +126,10 @@ class LatinHypercubeDriver(PredeterminedRunsDriver):
         """Generates a Latin Hypercube based on the number of samples and the
         number of design variables.
         """
+        num_design_vars = sum(meta['size'] for meta in
+                                        itervalues(self.get_desvar_metadata()))
 
-        rand_lhc = _rand_latin_hypercube(self.num_samples, self.num_design_vars)
+        rand_lhc = _rand_latin_hypercube(self.num_samples, num_design_vars)
         return rand_lhc.astype(int)
 
     def _get_buckets(self, low, high):
@@ -159,7 +158,7 @@ class OptimizedLatinHypercubeDriver(LatinHypercubeDriver):
         """Generate an Optimized Latin Hypercube
         """
 
-        rand_lhc = _rand_latin_hypercube(self.num_samples, self.num_design_vars)
+        rand_lhc = super(OptimizedLatinHypercubeDriver, self)._get_lhc()
 
         # Optimize our LHC before returning it
         best_lhc = _LHC_Individual(rand_lhc, q=1, p=self.norm_method)

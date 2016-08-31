@@ -165,78 +165,80 @@ class OptimizedLatinHypercubeDriver(LatinHypercubeDriver):
         for q in self.qs:
             lhc_start = _LHC_Individual(rand_lhc, q, self.norm_method)
             lhc_opt = _mmlhs(lhc_start, self.population, self.generations)
-            if lhc_opt.mmphi() < best_lhc.mmphi():
+            if lhc_opt.phi < best_lhc.phi:
                 best_lhc = lhc_opt
 
         return best_lhc._get_doe().astype(int)
+
+def _perturb(doe, mutation_count):
+    """ Interchanges pairs of randomly chosen elements within randomly chosen
+    columns of a DOE a number of times. The result of this operation will also
+    be a Latin hypercube.
+    """
+
+    new_doe = doe.copy()
+    n, k = new_doe.shape
+    nm1 = n-1
+    km1 = k-1
+    for count in range(mutation_count):
+        col = randint(0, km1)
+
+        # Choosing two distinct random points
+        el1 = randint(0, nm1)
+        el2 = randint(0, nm1)
+        while el1 == el2:
+            el2 = randint(0, nm1)
+
+        new_doe[el1, col] = doe[el2, col]
+        new_doe[el2, col] = doe[el1, col]
+
+    return new_doe
+
+def mmphi(arr, q, p):
+    """Returns the Morris-Mitchell sampling criterion for this Latin
+    hypercube.
+    """
+
+    distdict = {}
+
+    # Calculate the norm between each pair of points in the DOE
+    n, m = arr.shape
+    for i in range(1, n):
+        nrm = np.linalg.norm(arr[i] - arr[:i], ord=p, axis=1)
+        for j in range(0, i):
+            nrmj = nrm[j]
+            if nrmj in distdict:
+                distdict[nrmj] += 1
+            else:
+                distdict[nrmj] = 1
+
+    size = len(distdict)
+
+    distinct_d = np.fromiter(distdict, dtype=float, count=size)
+
+    # Mutltiplicity array with a count of how many pairs of points
+    # have a given distance
+    J = np.fromiter(itervalues(distdict), dtype=int, count=size)
+
+    phi = sum(J * (distinct_d ** (-q))) ** (1.0 / q)
+
+    return phi
 
 
 class _LHC_Individual(object):
     def __init__(self, doe, q=2, p=1):
         self.q = q
         self.p = p
-        self.doe = doe
-        self.phi = None  # Morris-Mitchell sampling criterion
-
-    @property
-    def shape(self):
-        """Size of the LatinHypercube DOE (rows,cols)."""
-
-        return self.doe.shape
-
-    def mmphi(self):
-        """Returns the Morris-Mitchell sampling criterion for this Latin
-        hypercube.
-        """
-
-        if self.phi is None:
-            distdict = {}
-
-            # Calculate the norm between each pair of points in the DOE
-            arr = self.doe
-            n, m = arr.shape
-            for i in range(1, n):
-                nrm = np.linalg.norm(arr[i] - arr[:i], ord=self.p, axis=1)
-                for j in range(0, i):
-                    nrmj = nrm[j]
-                    if nrmj in distdict:
-                        distdict[nrmj] += 1
-                    else:
-                        distdict[nrmj] = 1
-
-            size = len(distdict)
-
-            distinct_d = np.fromiter(distdict, dtype=float, count=size)
-
-            # Mutltiplicity array with a count of how many pairs of points
-            # have a given distance
-            J = np.fromiter(itervalues(distdict), dtype=int, count=size)
-
-            self.phi = sum(J * (distinct_d ** (-self.q))) ** (1.0 / self.q)
-
-        return self.phi
+        self.doe = doe  # ndarray
+        self.shape = doe.shape
+        self.phi = mmphi(doe, q, p)  # Morris-Mitchell sampling criterion
 
     def perturb(self, mutation_count):
         """ Interchanges pairs of randomly chosen elements within randomly chosen
         columns of a DOE a number of times. The result of this operation will also
         be a Latin hypercube.
         """
-
-        new_doe = self.doe.copy()
-        n, k = self.doe.shape
-        for count in range(mutation_count):
-            col = randint(0, k - 1)
-
-            # Choosing two distinct random points
-            el1 = randint(0, n - 1)
-            el2 = randint(0, n - 1)
-            while el1 == el2:
-                el2 = randint(0, n - 1)
-
-            new_doe[el1, col] = self.doe[el2, col]
-            new_doe[el2, col] = self.doe[el1, col]
-
-        return _LHC_Individual(new_doe, self.q, self.p)
+        return _LHC_Individual(_perturb(self.doe, mutation_count), self.q, self.p)
 
     def __iter__(self):
         return self._get_rows()
@@ -261,8 +263,8 @@ class _LHC_Individual(object):
 def _rand_latin_hypercube(n, k):
     # Calculates a random Latin hypercube set of n points in k dimensions
     # within [0,n-1]^k hypercube.
-    arr = np.zeros((n, k))
-    row = list(range(0, n))
+    arr = np.empty((n, k))
+    row = np.arange(n)
     for i in range(k):
         shuffle(row)
         arr[:, i] = row
@@ -289,13 +291,15 @@ def _mmlhs(x_start, population, generations):
     """
 
     x_best = x_start
-    phi_best = x_start.mmphi()
+    phi_best = x_start.phi
     n = x_start.shape[1]
 
     level_off = np.floor(0.85 * generations)
+    nval = 1 + (0.5 * n - 1)
+
     for it in range(generations):
         if it < level_off and level_off > 1.:
-            mutations = int(round(1 + (0.5 * n - 1) * (level_off - it) / (level_off - 1)))
+            mutations = int(round(nval * (level_off - it) / (level_off - 1)))
         else:
             mutations = 1
 
@@ -304,7 +308,7 @@ def _mmlhs(x_start, population, generations):
 
         for offspring in range(population):
             x_try = x_best.perturb(mutations)
-            phi_try = x_try.mmphi()
+            phi_try = x_try.phi
 
             if phi_try < phi_improved:
                 x_improved = x_try

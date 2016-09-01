@@ -309,7 +309,7 @@ class Branch_and_Bound(Driver):
                 # Using a gradient-based method here.
                 # TODO: Make it more pluggable.
                 xC_iter = (0.5*(xU_iter + xL_iter)).reshape((num_des, 1))
-                bnds = [(xL_iter[ii], xU_iter[ii]) for ii in xrange(num_des)]
+                bnds = [(xL_iter[ii], xU_iter[ii]) for ii in range(num_des)]
 
                 optResult = minimize(self.objective_callback, xC_iter,
                                      method='SLSQP', bounds=bnds,
@@ -621,7 +621,7 @@ class Branch_and_Bound(Driver):
         # Use Gershgorin's circle theorem to find a lower bound of the
         # min eigen value of the hessian
         eig_lb = np.zeros([n, 1])
-        for ii in xrange(n):
+        for ii in range(n):
             dia_ele = H_hat[ii, ii]
             sum_rw = 0.0
             sum_col = 0.0
@@ -640,12 +640,12 @@ class Branch_and_Bound(Driver):
 
         # Maximize S
         x0 = 0.5*(xhat_comL + xhat_comU)
-        bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in xrange(len(xhat_comL))]
+        bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in range(len(xhat_comL))]
 
         #Note: Python defines constraints like g(x) >= 0
         cons = [{'type' : 'ineq',
                  'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
-                 'jac' : lambda x : -Ain_hat[ii, :]} for ii in xrange(2*n)]
+                 'jac' : lambda x : -Ain_hat[ii, :]} for ii in range(2*n)]
 
         optResult = minimize(self.calc_SSqr_convex, x0,
                              args=(x_comL,x_comU,xhat_comL,xhat_comU),
@@ -712,11 +712,11 @@ class Branch_and_Bound(Driver):
 
         if app == 1:
             x0 = 0.5*(xhat_comL + xhat_comU)
-            bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in xrange(len(xhat_comL))]
+            bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in range(len(xhat_comL))]
 
             cons = [{'type' : 'ineq',
                      'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
-                     'jac': lambda x: -Ain_hat[ii, :]} for ii in xrange(2*n)]
+                     'jac': lambda x: -Ain_hat[ii, :]} for ii in range(2*n)]
 
             optResult = minimize(self.calc_y_hat_convex, x0,
                                  args=(x_comL, x_comU), method='SLSQP',
@@ -772,11 +772,7 @@ def update_active_set(active_set, ubd):
     -------
     new active_set
     """
-    del_flag = []
-    for aaa in range(len(active_set)):
-        if active_set[aaa][3] >= ubd:
-            del_flag.extend([aaa])
-    return [ii for jj, ii in enumerate(active_set) if jj not in del_flag]
+    return [a for a in active_set if a[3] < ubd]
 
 
 def gen_coeff_bound(xI_lb, xI_ub, surrogate):
@@ -829,8 +825,8 @@ def interval_analysis(lb_x, ub_x, surrogate):
 
     eterm = 1
     if p % 2 == 0:
-        for i in xrange(n):
-            for h in xrange(k):
+        for i in range(n):
+            for h in range(k):
                 t1L[i,h] = lb_x[h] - X[i,h]
                 t1U[i,h] = ub_x[h] - X[i,h]
 
@@ -873,7 +869,7 @@ def lin_underestimator(lb, ub, surrogate):
     b1 = np.zeros([n, 1]); b3 = np.zeros([n, 1])
     b1_hat = np.zeros([n, 1]); b3_hat = np.zeros([n, 1])
 
-    for i in xrange(n):
+    for i in range(n):
         #T1: Linearize under-estimator of ln[r_i] = a1[i,i]*r[i] + b1[i]
         if ub_r[i] < 1.0e-323 or (ub_r[i] - lb_r[i]) < 1.0e-308:
             # a1[i,i] = 0.
@@ -911,7 +907,7 @@ def lin_underestimator(lb, ub, surrogate):
                 a3_hat[i,i] = a3[i,i]*(ub_r[i] - lb_r[i])
                 b3_hat[i] = a3[i,i]*lb_r[i] + b3[i]
 
-        for h in xrange(k):
+        for h in range(k):
             #T2: Linearize under-estimator of thetas_h*(x_h - X_h_i)^2 = a4[i,h]*x_h[h] + b4[i,h]
             x_m_h = (ub_x[h] + lb_x[h])/2.0
             a2[i,h] = p*thetas[h]*(x_m_h - X[i,h])**(p-1.0)
@@ -955,7 +951,7 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
         n = np.shape(X)[0]
         one = np.ones([n, 1])
         r = np.ones([n, 1])
-        for ii in xrange(n):
+        for ii in range(n):
             r[ii] = np.exp(-np.sum(thetas*(xval - X[ii])**p))
 
         y_hat = mu + np.dot(r.T,c_r)
@@ -989,7 +985,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
         n = np.shape(X)[0]
         one = np.ones([n,1])
         r = np.ones([n,1])
-        for ii in xrange(n):
+        for ii in range(n):
             r[ii] = np.exp(-np.sum(thetas*(xval - X[ii])**p))
 
         g_hat = mu + np.dot(r.T,c_r)

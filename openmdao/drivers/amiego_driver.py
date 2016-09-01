@@ -357,7 +357,8 @@ class AMIEGO_driver(Driver):
                     for ii in range(len(x_i)):
                         dist = np.sum((x_i[ii] - x0I)**2)**0.5
                         if dist <= rad:
-                            print("Point already exists!")
+                            if disp:
+                                print("Point already exists!")  
                             ec2 = 1
                             break
                     x_i.append(x0I)

@@ -317,10 +317,10 @@ class Branch_and_Bound(Driver):
                 floc_iter = optResult.fun
 
                 if not optResult.success:
-                    efloc_iter = 0
+                    efloc_iter = False
                     floc_iter = np.inf
                 else:
-                    efloc_iter = 1
+                    efloc_iter = True
 
                 # Round any close to integer value to integer solution.
                 for aa in range(len(xloc_iter)):
@@ -330,7 +330,7 @@ class Branch_and_Bound(Driver):
 
                 # Reduce the active set if an Integer solution was found.
                 if np.linalg.norm(xloc_iter - np.round(xloc_iter)) <= active_tol and \
-                   efloc_iter >= 1:
+                   efloc_iter:
                     int_flag = True
 
                     # Better integer solution found
@@ -355,7 +355,7 @@ class Branch_and_Bound(Driver):
                     lb = xL_iter.copy()
                     ub = xU_iter.copy()
 
-                    if efloc_iter >= 1:
+                    if efloc_iter:
                         #Case 1: Not an integer sol. Branch at variable farthest from the integer value
                         if int_flag is False:
                             l_iter = np.abs(np.round(xloc_iter) - xloc_iter).argmax()
@@ -434,7 +434,7 @@ class Branch_and_Bound(Driver):
 
                     # Convex approximation failed!
                     if S4_fail:
-                        if efloc_iter >= 1:
+                        if efloc_iter:
                             LBD_NegConEI = LBD_prev
                         else:
                             LBD_NegConEI = np.inf

@@ -82,7 +82,9 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.run()
 
-        print(prob['mat1'], prob['mat2'], prob['mat3'])
+        assert_rel_error(self, prob['mat1'], 2, 1e-5)
+        assert_rel_error(self, prob['mat2'], 2, 1e-5)
+        assert_rel_error(self, prob['mat3'], 4, 1e-5)
 
 
 if __name__ == "__main__":

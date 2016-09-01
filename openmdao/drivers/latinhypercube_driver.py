@@ -14,9 +14,12 @@ from numpy.linalg import norm
 
 from openmdao.drivers.predeterminedruns_driver import PredeterminedRunsDriver
 from openmdao.util.array_util import evenly_distrib_idxs
+from openmdao.util.freplace import func_replace
 
 trace = os.environ.get('OPENMDAO_TRACE')
 from openmdao.core.mpi_wrap import debug
+
+use_cython = not os.environ.get('OPENMDAO_NO_CYTHON')
 
 
 class LatinHypercubeDriver(PredeterminedRunsDriver):
@@ -172,66 +175,62 @@ class OptimizedLatinHypercubeDriver(LatinHypercubeDriver):
 
         return best_lhc.doe.astype(int)
 
-try:
-    from openmdao.speedups.latin_hypercube import _perturb
-    print "USING CYTHON!"
-except ImportError:
-    def _perturb(doe, mutation_count):
-        """ Interchanges pairs of randomly chosen elements within randomly chosen
-        columns of a DOE a number of times. The result of this operation will also
-        be a Latin hypercube.
-        """
+@func_replace("openmdao.util.speedups.latin_hypercube", "_perturb", use_cython)
+def _perturb(doe, mutation_count):
+    """ Interchanges pairs of randomly chosen elements within randomly chosen
+    columns of a DOE a number of times. The result of this operation will also
+    be a Latin hypercube.
+    """
 
-        new_doe = doe.copy()
-        n, k = new_doe.shape
-        nm1 = n-1
-        km1 = k-1
-        for count in range(mutation_count):
-            col = randint(0, km1)
+    new_doe = doe.copy()
+    n, k = new_doe.shape
+    nm1 = n-1
+    km1 = k-1
+    for count in range(mutation_count):
+        col = randint(0, km1)
 
-            # Choosing two distinct random points
-            el1 = randint(0, nm1)
+        # Choosing two distinct random points
+        el1 = randint(0, nm1)
+        el2 = randint(0, nm1)
+        while el1 == el2:
             el2 = randint(0, nm1)
-            while el1 == el2:
-                el2 = randint(0, nm1)
 
-            new_doe[el1, col] = doe[el2, col]
-            new_doe[el2, col] = doe[el1, col]
+        new_doe[el1, col] = doe[el2, col]
+        new_doe[el2, col] = doe[el1, col]
 
-        return new_doe
+    return new_doe
 
-try:
-    from openmdao.speedups.latin_hypercube import mmphi
-except ImportError:
-    def mmphi(arr, q, p):
-        """Returns the Morris-Mitchell sampling criterion for this Latin
-        hypercube.
-        """
 
-        distdict = {}
+@func_replace("openmdao.util.speedups.latin_hypercube", "mmphi", use_cython)
+def mmphi(arr, q, p):
+    """Returns the Morris-Mitchell sampling criterion for this Latin
+    hypercube.
+    """
 
-        # Calculate the norm between each pair of points in the DOE
-        n, m = arr.shape
-        for i in range(1, n):
-            nrm = norm(arr[i] - arr[:i], ord=p, axis=1)
-            for j in range(i):
-                nrmj = nrm[j]
-                if nrmj in distdict:
-                    distdict[nrmj] += 1
-                else:
-                    distdict[nrmj] = 1
+    distdict = {}
 
-        size = len(distdict)
+    # Calculate the norm between each pair of points in the DOE
+    n, m = arr.shape
+    for i in range(1, n):
+        nrm = norm(arr[i] - arr[:i], ord=p, axis=1)
+        for j in range(i):
+            nrmj = nrm[j]
+            if nrmj in distdict:
+                distdict[nrmj] += 1
+            else:
+                distdict[nrmj] = 1
 
-        distinct_d = np.fromiter(distdict, dtype=float, count=size)
+    size = len(distdict)
 
-        # Mutltiplicity array with a count of how many pairs of points
-        # have a given distance
-        J = np.fromiter(itervalues(distdict), dtype=int, count=size)
+    distinct_d = np.fromiter(distdict, dtype=float, count=size)
 
-        phi = np.sum(J * (distinct_d ** (-q))) ** (1.0 / q)
+    # Mutltiplicity array with a count of how many pairs of points
+    # have a given distance
+    J = np.fromiter(itervalues(distdict), dtype=int, count=size)
 
-        return phi
+    phi = np.sum(J * (distinct_d ** (-q))) ** (1.0 / q)
+
+    return phi
 
 
 class _LHC_Individual(object):

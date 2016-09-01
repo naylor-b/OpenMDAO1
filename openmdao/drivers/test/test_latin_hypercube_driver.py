@@ -10,8 +10,9 @@ from openmdao.api import IndepVarComp, Group, Problem, Component
 from openmdao.test.paraboloid import Paraboloid
 from openmdao.test.util import assert_rel_error
 
-from openmdao.drivers.latinhypercube_driver import LatinHypercubeDriver, OptimizedLatinHypercubeDriver
-from openmdao.drivers.latinhypercube_driver import _is_latin_hypercube, _rand_latin_hypercube, _mmlhs, _LHC_Individual
+from openmdao.drivers.latinhypercube_driver import LatinHypercubeDriver, \
+                        OptimizedLatinHypercubeDriver, _is_latin_hypercube, \
+                        _rand_latin_hypercube, _mmlhs, _LHC_Individual
 
 
 class TestLatinHypercubeDriver(unittest.TestCase):
@@ -39,15 +40,15 @@ class TestLatinHypercubeDriver(unittest.TestCase):
 
         test_lhc = _rand_latin_hypercube(n, k)
         best_lhc = _LHC_Individual(test_lhc, 1, p)
-        mmphi_initial = best_lhc.mmphi()
+        mmphi_initial = best_lhc.phi
         for q in (1, 2, 5, 10, 20, 50, 100):
             lhc_start = _LHC_Individual(test_lhc, q, p)
             lhc_opt = _mmlhs(lhc_start, population, generations)
-            if lhc_opt.mmphi() < best_lhc.mmphi():
+            if lhc_opt.phi < best_lhc.phi:
                 best_lhc = lhc_opt
 
         self.assertTrue(
-                best_lhc.mmphi() < mmphi_initial,
+                best_lhc.phi < mmphi_initial,
                 "'_mmlhs' didn't yield lower phi. Seed was {}".format(self.seedval))
 
     def test_mmlhs_latin(self):

@@ -10,6 +10,7 @@ from six import iteritems, itervalues
 from six.moves import range, zip
 
 import numpy as np
+from numpy.linalg import norm
 
 from openmdao.drivers.predeterminedruns_driver import PredeterminedRunsDriver
 from openmdao.util.array_util import evenly_distrib_idxs
@@ -144,7 +145,7 @@ class OptimizedLatinHypercubeDriver(LatinHypercubeDriver):
     """
 
     def __init__(self, num_samples=1, seed=None, population=20, generations=2,
-                norm_method=1, num_par_doe=1, load_balance=False):
+                norm_type=1, num_par_doe=1, load_balance=False):
         super(OptimizedLatinHypercubeDriver, self).__init__(num_par_doe=num_par_doe,
                                                             load_balance=load_balance)
         self.qs = [1, 2, 5, 10, 20, 50, 100]  # List of qs to try for Phi_q optimization
@@ -152,7 +153,7 @@ class OptimizedLatinHypercubeDriver(LatinHypercubeDriver):
         self.seed = seed
         self.population = population
         self.generations = generations
-        self.norm_method = norm_method
+        self.norm_type = norm_type
 
     def _get_lhc(self):
         """Generate an Optimized Latin Hypercube
@@ -161,71 +162,80 @@ class OptimizedLatinHypercubeDriver(LatinHypercubeDriver):
         rand_lhc = super(OptimizedLatinHypercubeDriver, self)._get_lhc()
 
         # Optimize our LHC before returning it
-        best_lhc = _LHC_Individual(rand_lhc, q=1, p=self.norm_method)
+        best_phi = 1.e99
         for q in self.qs:
-            lhc_start = _LHC_Individual(rand_lhc, q, self.norm_method)
+            lhc_start = _LHC_Individual(rand_lhc, q, self.norm_type)
             lhc_opt = _mmlhs(lhc_start, self.population, self.generations)
-            if lhc_opt.phi < best_lhc.phi:
+            if lhc_opt.phi < best_phi:
                 best_lhc = lhc_opt
+                best_phi = best_lhc.phi
 
-        return best_lhc._get_doe().astype(int)
+        return best_lhc.doe.astype(int)
 
-def _perturb(doe, mutation_count):
-    """ Interchanges pairs of randomly chosen elements within randomly chosen
-    columns of a DOE a number of times. The result of this operation will also
-    be a Latin hypercube.
-    """
+try:
+    from openmdao.speedups.latin_hypercube import _perturb
+    print "USING CYTHON!"
+except ImportError:
+    def _perturb(doe, mutation_count):
+        """ Interchanges pairs of randomly chosen elements within randomly chosen
+        columns of a DOE a number of times. The result of this operation will also
+        be a Latin hypercube.
+        """
 
-    new_doe = doe.copy()
-    n, k = new_doe.shape
-    nm1 = n-1
-    km1 = k-1
-    for count in range(mutation_count):
-        col = randint(0, km1)
+        new_doe = doe.copy()
+        n, k = new_doe.shape
+        nm1 = n-1
+        km1 = k-1
+        for count in range(mutation_count):
+            col = randint(0, km1)
 
-        # Choosing two distinct random points
-        el1 = randint(0, nm1)
-        el2 = randint(0, nm1)
-        while el1 == el2:
+            # Choosing two distinct random points
+            el1 = randint(0, nm1)
             el2 = randint(0, nm1)
+            while el1 == el2:
+                el2 = randint(0, nm1)
 
-        new_doe[el1, col] = doe[el2, col]
-        new_doe[el2, col] = doe[el1, col]
+            new_doe[el1, col] = doe[el2, col]
+            new_doe[el2, col] = doe[el1, col]
 
-    return new_doe
+        return new_doe
 
-def mmphi(arr, q, p):
-    """Returns the Morris-Mitchell sampling criterion for this Latin
-    hypercube.
-    """
+try:
+    from openmdao.speedups.latin_hypercube import mmphi
+except ImportError:
+    def mmphi(arr, q, p):
+        """Returns the Morris-Mitchell sampling criterion for this Latin
+        hypercube.
+        """
 
-    distdict = {}
+        distdict = {}
 
-    # Calculate the norm between each pair of points in the DOE
-    n, m = arr.shape
-    for i in range(1, n):
-        nrm = np.linalg.norm(arr[i] - arr[:i], ord=p, axis=1)
-        for j in range(0, i):
-            nrmj = nrm[j]
-            if nrmj in distdict:
-                distdict[nrmj] += 1
-            else:
-                distdict[nrmj] = 1
+        # Calculate the norm between each pair of points in the DOE
+        n, m = arr.shape
+        for i in range(1, n):
+            nrm = norm(arr[i] - arr[:i], ord=p, axis=1)
+            for j in range(i):
+                nrmj = nrm[j]
+                if nrmj in distdict:
+                    distdict[nrmj] += 1
+                else:
+                    distdict[nrmj] = 1
 
-    size = len(distdict)
+        size = len(distdict)
 
-    distinct_d = np.fromiter(distdict, dtype=float, count=size)
+        distinct_d = np.fromiter(distdict, dtype=float, count=size)
 
-    # Mutltiplicity array with a count of how many pairs of points
-    # have a given distance
-    J = np.fromiter(itervalues(distdict), dtype=int, count=size)
+        # Mutltiplicity array with a count of how many pairs of points
+        # have a given distance
+        J = np.fromiter(itervalues(distdict), dtype=int, count=size)
 
-    phi = sum(J * (distinct_d ** (-q))) ** (1.0 / q)
+        phi = np.sum(J * (distinct_d ** (-q))) ** (1.0 / q)
 
-    return phi
+        return phi
 
 
 class _LHC_Individual(object):
+    __slots__ = ['q', 'p', 'doe', 'shape', 'phi']
     def __init__(self, doe, q=2, p=1):
         self.q = q
         self.p = p
@@ -239,25 +249,6 @@ class _LHC_Individual(object):
         be a Latin hypercube.
         """
         return _LHC_Individual(_perturb(self.doe, mutation_count), self.q, self.p)
-
-    def __iter__(self):
-        return self._get_rows()
-
-    def _get_rows(self):
-        for row in self.doe:
-            yield row
-
-    def __repr__(self):
-        return repr(self.doe)
-
-    def __str__(self):
-        return str(self.doe)
-
-    def __getitem__(self, *args):
-        return self.doe.__getitem__(*args)
-
-    def _get_doe(self):
-        return self.doe
 
 
 def _rand_latin_hypercube(n, k):

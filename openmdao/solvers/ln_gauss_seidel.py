@@ -264,7 +264,7 @@ class LinearGaussSeidel(LinearSolver):
 
         norm = 0.0
         for voi, rhs in iteritems(rhs_mat):
-            rhs_vec[voi].vec[:] -= rhs
+            rhs_vec[voi].vec -= rhs
             norm += rhs_vec[voi].norm()**2
 
         return norm**0.5

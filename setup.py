@@ -1,5 +1,17 @@
 
 from distutils.core import setup
+import sys
+
+try:
+    from Cython.Build import cythonize
+    try:
+        ext_modules = cythonize("openmdao/speedups/*.pyx")
+    except:
+        # Note, the following message won't show up during pip install unless -v arg is used
+        sys.stderr.write("\nERROR: cython compilation of speedups failed.  Skipping speedups.\n")
+        ext_modules = []
+except ImportError:
+    ext_modules = []
 
 setup(name='openmdao',
       version='1.7.1',
@@ -56,6 +68,7 @@ setup(name='openmdao',
           'openmdao.devtools': ['*.template', '*.html'],
           'openmdao.util': ['*.html'],
       },
+      ext_modules=ext_modules,
       install_requires=[
         'six', 'numpydoc', 'networkx==1.11', 'numpy>=1.9.2',
         'scipy', 'sqlitedict', 'pyparsing'

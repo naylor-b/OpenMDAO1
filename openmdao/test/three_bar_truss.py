@@ -140,3 +140,84 @@ class ThreeBarTruss(Component):
             
         sigma = stress_calc(A, E)
         unknowns['stress'] = (np.abs(sigma)/sigma_y)
+
+
+class ThreeBarTrussVector(Component):
+    """ 3 Bar truss problem with 3 continuous design variables and 3 discrete
+    material choices. Material chosen as follows:
+    
+            1 Aluminum
+            2 Titanium
+            3 Steel
+            4 Nickel
+            
+    This component calculates the total mass of the truss.
+    
+    This version places all areas in a single vector and all materials in
+    a single vector for test purporses.
+    """
+
+    def __init__(self):
+        super(ThreeBarTrussVector, self).__init__()
+
+        # Continuous Inputs
+        self.add_param('area', np.array([0.0, 0.0, 0.0]), units='cm**2',
+                       desc='Cross-sectional area of beams')
+
+        # Discrete Inputs
+        self.add_param('mat', np.array([1, 1, 1]), lower=1, upper=4,
+                       desc='Material ID of beams')
+
+        # Outputs
+        self.add_output('mass', val=0.0)
+        self.add_output('stress', val=np.zeros((3, 1)))
+        
+        self.rho = { 1 : 2700.0,
+                     2 : 4500.0, 
+                     3 : 7872.0,
+                     4 : 8800.0 }
+        
+        self.E = { 1 : 68.9e9,
+                   2 : 116.0e9, 
+                   3 : 205.0e9,
+                   4 : 207.0e9 }
+        
+        self.sigma_y = { 1 : 55.2e6,
+                         2 : 140.0e6, 
+                         3 : 285.0e6,
+                         4 : 59.0e6 }        
+        
+        self.deriv_options['type'] = 'fd'
+        
+    def solve_nonlinear(self, params, unknowns, resids):
+        """ Define the function f(xI, xC)
+        Here xI is integer and xC is continuous"""
+
+        area = params['area']
+        mat = int(params['mat'])
+        
+        # Convert to meters^2 from cm^2
+        area /= 1.0e4
+        
+        length = np.array(np.sqrt(1.2**2 + 1.2**2),
+                          1.2,
+                          np.sqrt(1.2**2 + 1.2**2))
+        
+        rho = np.zeros((3))
+        rho[0] = self.rho[mat1]
+        rho[1] = self.rho[mat2]
+        rho[2] = self.rho[mat3]
+        
+        unknowns['mass'] = rho*area*length
+
+        E = np.zeros((3))
+        E[0] = self.E[mat1]
+        E[1] = self.E[mat2]
+        E[2] = self.E[mat3]
+        sigma_y = np.zeros((3))
+        sigma_y[0] = self.sigma_y[mat1]
+        sigma_y[1] = self.sigma_y[mat2]
+        sigma_y[2] = self.sigma_y[mat3]
+        
+        sigma = stress_calc(A, E)
+        unknowns['stress'] = (np.abs(sigma)/sigma_y)

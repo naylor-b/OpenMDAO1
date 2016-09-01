@@ -68,6 +68,8 @@ class Branch_and_Bound(Driver):
         opt.add_option('atol', 1.0e-6, lower=0.0,
                        desc='Absolute tolerance (inf-norm) of upper minus '
                        'lower bound for termination.')
+        opt.add_option('con_tol', 1.0e-6, lower=0.0,
+                       desc='Constraint thickness.')
         opt.add_option('concave_EI', False,
                        desc='Set to True to apply a transformation to make the '
                        'objective function concave.')
@@ -656,8 +658,9 @@ class Branch_and_Bound(Driver):
             eflag_sU = False
         else:
             eflag_sU = True
+            tol = self.options['con_tol']
             for ii in range(2*n):
-                if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + 1.0e-6):
+                if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + tol):
                     eflag_sU = False
                     break
 
@@ -726,8 +729,9 @@ class Branch_and_Bound(Driver):
                 eflag_yL = False
             else:
                 eflag_yL = True
+                tol = self.options['con_tol']
                 for ii in range(2*n):
-                    if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + 1.0e-6):
+                    if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + tol):
                         eflag_yL = False
                         break
 

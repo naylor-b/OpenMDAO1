@@ -57,7 +57,7 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.driver = AMIEGO_driver()
         prob.driver.cont_opt.options['tol'] = 1e-12
-        prob.driver.options['disp'] = False
+        #prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
 
         prob.driver.add_desvar('area1', lower=0.0005, upper=10.0)
@@ -92,13 +92,13 @@ class TestAMIEGOdriver(unittest.TestCase):
         prob = Problem()
         root = prob.root = Group()
 
-        root.add('xc_a', IndepVarComp('area', np.zeros([5.0, 5.0, 5.0])), promotes=['*'])
-        root.add('xi_m', IndepVarComp('mat', np.zeros([1, 1, 1])), promotes=['*'])
+        root.add('xc_a', IndepVarComp('area', np.array([5.0, 5.0, 5.0])), promotes=['*'])
+        root.add('xi_m', IndepVarComp('mat', np.array([1, 1, 1])), promotes=['*'])
         root.add('comp', ThreeBarTrussVector(), promotes=['*'])
 
         prob.driver = AMIEGO_driver()
         prob.driver.cont_opt.options['tol'] = 1e-12
-        prob.driver.options['disp'] = False
+        #prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
 
         prob.driver.add_desvar('area', lower=0.0005, upper=10.0)
@@ -118,9 +118,9 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.run()
 
-        assert_rel_error(self, prob['mat1'], 2, 1e-5)
-        assert_rel_error(self, prob['mat2'], 2, 1e-5)
-        assert_rel_error(self, prob['mat3'], 4, 1e-5)
+        assert_rel_error(self, prob['mat'][0], 2, 1e-5)
+        assert_rel_error(self, prob['mat'][1], 2, 1e-5)
+        assert_rel_error(self, prob['mat'][2], 4, 1e-5)
 
     def test_simple_greiwank_opt(self):
 

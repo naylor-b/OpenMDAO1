@@ -194,30 +194,31 @@ class ThreeBarTrussVector(Component):
         Here xI is integer and xC is continuous"""
 
         area = params['area']
-        mat = int(params['mat'])
+        mat = params['mat']
         
         # Convert to meters^2 from cm^2
         area /= 1.0e4
         
-        length = np.array(np.sqrt(1.2**2 + 1.2**2),
+        length = np.array([np.sqrt(1.2**2 + 1.2**2),
                           1.2,
-                          np.sqrt(1.2**2 + 1.2**2))
+                          np.sqrt(1.2**2 + 1.2**2)])
         
         rho = np.zeros((3))
-        rho[0] = self.rho[mat1]
-        rho[1] = self.rho[mat2]
-        rho[2] = self.rho[mat3]
+        rho[0] = self.rho[mat[0]]
+        rho[1] = self.rho[mat[1]]
+        rho[2] = self.rho[mat[2]]
         
-        unknowns['mass'] = rho*area*length
+        unknowns['mass'] = np.sum(rho*area*length)
 
         E = np.zeros((3))
-        E[0] = self.E[mat1]
-        E[1] = self.E[mat2]
-        E[2] = self.E[mat3]
+        E[0] = self.E[mat[0]]
+        E[1] = self.E[mat[1]]
+        E[2] = self.E[mat[2]]
         sigma_y = np.zeros((3))
-        sigma_y[0] = self.sigma_y[mat1]
-        sigma_y[1] = self.sigma_y[mat2]
-        sigma_y[2] = self.sigma_y[mat3]
         
-        sigma = stress_calc(A, E)
+        sigma_y[0] = self.sigma_y[mat[0]]
+        sigma_y[1] = self.sigma_y[mat[1]]
+        sigma_y[2] = self.sigma_y[mat[2]]
+        
+        sigma = stress_calc(area, E)
         unknowns['stress'] = (np.abs(sigma)/sigma_y)

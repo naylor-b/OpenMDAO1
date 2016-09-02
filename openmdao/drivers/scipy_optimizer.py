@@ -90,6 +90,7 @@ class ScipyOptimizer(Driver):
     def _setup(self):
         self.supports['gradients'] = self.options['optimizer'] in _gradient_optimizers
         super(ScipyOptimizer, self)._setup()
+        self.record_name = self.options['optimizer']
 
     def run(self, problem):
         """Optimize the problem using your choice of Scipy optimizer.
@@ -102,7 +103,7 @@ class ScipyOptimizer(Driver):
 
         # Metadata Setup
         opt = self.options['optimizer']
-        self.metadata = create_local_meta(None, opt)
+        self.metadata = create_local_meta(None, self.record_name)
         self.iter_count = 0
         update_local_meta(self.metadata, (self.iter_count,))
 

@@ -1,14 +1,16 @@
 
 from distutils.core import setup
 import sys
+import traceback
+import logging
 
 try:
     from Cython.Build import cythonize
     try:
-        ext_modules = cythonize("openmdao/speedups/*.pyx")
+        ext_modules = cythonize("openmdao/util/speedups/*.pyx")
     except:
         # Note, the following message won't show up during pip install unless -v arg is used
-        sys.stderr.write("\nERROR: cython compilation of speedups failed.  Skipping speedups.\n")
+        logging.error("%s\nERROR: cython compilation of speedups failed." % traceback.format_exc())
         ext_modules = []
 except ImportError:
     ext_modules = []

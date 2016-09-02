@@ -4,7 +4,6 @@ import sys
 import logging
 import traceback
 
-
 def func_replace(mod_import, fname, replace=True):
     """
     Use this decorator to replace a function with a different
@@ -35,3 +34,14 @@ def func_replace(mod_import, fname, replace=True):
         return f
 
     return wrap
+
+
+use_cython = not os.environ.get('OPENMDAO_NO_CYTHON')
+
+def cython_replace(mod_import, fname):
+    """
+    Decorator that replaces the current function with a cython version.
+    This decorator will do nothing if the OPENMDAO_NO_CYTHON environment
+    variable is set.
+    """
+    return func_replace(mod_import, fname, use_cython)

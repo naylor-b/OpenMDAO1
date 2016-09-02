@@ -14,12 +14,10 @@ from numpy.linalg import norm
 
 from openmdao.drivers.predeterminedruns_driver import PredeterminedRunsDriver
 from openmdao.util.array_util import evenly_distrib_idxs
-from openmdao.util.freplace import func_replace
+from openmdao.util.freplace import cython_replace
 
 trace = os.environ.get('OPENMDAO_TRACE')
 from openmdao.core.mpi_wrap import debug
-
-use_cython = not os.environ.get('OPENMDAO_NO_CYTHON')
 
 
 class LatinHypercubeDriver(PredeterminedRunsDriver):
@@ -167,15 +165,14 @@ class OptimizedLatinHypercubeDriver(LatinHypercubeDriver):
         # Optimize our LHC before returning it
         best_phi = 1.e99
         for q in self.qs:
-            lhc_start = _LHC_Individual(rand_lhc, q, self.norm_type)
-            lhc_opt = _mmlhs(lhc_start, self.population, self.generations)
-            if lhc_opt.phi < best_phi:
+            lhc_opt, phi = _mmlhs(rand_lhc, best_phi, q, self.norm_type,
+                                  self.population, self.generations)
+            if phi < best_phi:
                 best_lhc = lhc_opt
-                best_phi = best_lhc.phi
+                best_phi = phi
 
-        return best_lhc.doe.astype(int)
+        return best_lhc.astype(int)
 
-@func_replace("openmdao.util.speedups.latin_hypercube", "_perturb", use_cython)
 def _perturb(doe, mutation_count):
     """ Interchanges pairs of randomly chosen elements within randomly chosen
     columns of a DOE a number of times. The result of this operation will also
@@ -201,7 +198,6 @@ def _perturb(doe, mutation_count):
     return new_doe
 
 
-@func_replace("openmdao.util.speedups.latin_hypercube", "mmphi", use_cython)
 def mmphi(arr, q, p):
     """Returns the Morris-Mitchell sampling criterion for this Latin
     hypercube.
@@ -233,23 +229,6 @@ def mmphi(arr, q, p):
     return phi
 
 
-class _LHC_Individual(object):
-    __slots__ = ['q', 'p', 'doe', 'shape', 'phi']
-    def __init__(self, doe, q=2, p=1):
-        self.q = q
-        self.p = p
-        self.doe = doe  # ndarray
-        self.shape = doe.shape
-        self.phi = mmphi(doe, q, p)  # Morris-Mitchell sampling criterion
-
-    def perturb(self, mutation_count):
-        """ Interchanges pairs of randomly chosen elements within randomly chosen
-        columns of a DOE a number of times. The result of this operation will also
-        be a Latin hypercube.
-        """
-        return _LHC_Individual(_perturb(self.doe, mutation_count), self.q, self.p)
-
-
 def _rand_latin_hypercube(n, k):
     # Calculates a random Latin hypercube set of n points in k dimensions
     # within [0,n-1]^k hypercube.
@@ -275,13 +254,14 @@ def _is_latin_hypercube(lh):
     return True
 
 
-def _mmlhs(x_start, population, generations):
+@cython_replace("openmdao.util.speedups.latin_hypercube", "mmlhs")
+def _mmlhs(x_start, phi, q, p, population, generations):
     """Evolutionary search for most space filling Latin-Hypercube.
     Returns a new LatinHypercube instance with an optimized set of points.
     """
 
     x_best = x_start
-    phi_best = x_start.phi
+    phi_best = phi
     n = x_start.shape[1]
 
     level_off = np.floor(0.85 * generations)
@@ -297,8 +277,8 @@ def _mmlhs(x_start, population, generations):
         phi_improved = phi_best
 
         for offspring in range(population):
-            x_try = x_best.perturb(mutations)
-            phi_try = x_try.phi
+            x_try = _perturb(x_best, mutations)
+            phi_try = mmphi(x_try, q, p)
 
             if phi_try < phi_improved:
                 x_improved = x_try
@@ -308,4 +288,4 @@ def _mmlhs(x_start, population, generations):
             phi_best = phi_improved
             x_best = x_improved
 
-    return x_best
+    return x_best, phi_best

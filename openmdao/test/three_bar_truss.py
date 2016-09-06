@@ -4,6 +4,8 @@
 
 - 3 discrete material choices for each bar. Complete enumeration requires 64 continuous optimization.
 
+The global optima is 3,3,x (x can be anything), with mass = 5.28 kg
+
 """
 
 import numpy as np

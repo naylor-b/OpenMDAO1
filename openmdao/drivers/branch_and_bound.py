@@ -104,7 +104,7 @@ class Branch_and_Bound(Driver):
 
         # When this is slotted into AMIEGO, this will be set to False.
         self.standalone = True
-
+        
     def _setup(self):
         """  Initialize whatever we need."""
         super(Branch_and_Bound, self)._setup()
@@ -226,14 +226,15 @@ class Branch_and_Bound(Driver):
             obj_surrogate.R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
                                                                    obj_surrogate.S_inv,
                                                                    obj_surrogate.U.T))
-            # TODO: what is this?
+            # TODO: norm type, should probably always be 2
             obj_surrogate.p = 2
 
             obj_surrogate.c_r = obj_surrogate.alpha
 
-            # Thsi is also done in Ameigo. TODO: just do it once.
+            # This is also done in Ameigo. TODO: just do it once.
             obj_surrogate.y_best = np.min(obj_surrogate.y)
 
+            # This is the rest of the interface that any "surrogate" needs to contain.
             #obj_surrogate.X = surrogate.X
             #obj_surrogate.ynorm = surrogate.Y
             #obj_surrogate.thetas = surrogate.thetas
@@ -245,8 +246,8 @@ class Branch_and_Bound(Driver):
             con_surr.mu = np.mean(con_surr.Y)
             con_surr.SigmaSqr = con_surr.sigma2/np.square(con_surr.Y_std)
             con_surr.R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
-                                                                   con_surr.S_inv,
-                                                                   con_surr.U.T))
+                                                         con_surr.S_inv,
+                                                         con_surr.U.T))
             con_surr.p = 2
             con_surr.c_r = con_surr.alpha
 
@@ -407,31 +408,30 @@ class Branch_and_Bound(Driver):
 
                             M = len(self.con_surrogate)
                             EV = np.zeros([M, 1])
-                            if M>0:
-                                # Expected violation goes here
-                                for mm in range(M):
-                                    x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, con_surrogate[mm])
-                                    sU_g, eflag_sU_g = self.maximize_S(x_comL, x_comU, Ain_hat,
+                            
+                            # Expected constraint violation
+                            for mm in range(M):
+                                x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, con_surrogate[mm])
+                                sU_g, eflag_sU_g = self.maximize_S(x_comL, x_comU, Ain_hat,
+                                                                   bin_hat, con_surrogate[mm])
+                                
+                                if eflag_sU_g:
+                                    yL_g, eflag_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
                                                                        bin_hat, con_surrogate[mm])
-                                    sL_g = -1.*sU_g
-                                    if eflag_sU_g:
-                                        yL_g, eflag_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
-                                                                           bin_hat, con_surrogate[mm])
-                                        if eflag_yL_g:
-                                            EV[mm] = calc_conEV_norm([], con_surrogate[mm],
-                                                                     gSSqr=sL_g, g_hat=yL_g)
-                                        else:
-                                            S4_fail = True
-                                            break
+                                    if eflag_yL_g:
+                                        EV[mm] = calc_conEV_norm([], 
+                                                                 con_surrogate[mm],
+                                                                 gSSqr=-sU_g, 
+                                                                 g_hat=yL_g)
                                     else:
                                         S4_fail = True
+                                        break
+                                else:
+                                    S4_fail = True
+                                    
                         else:
-                            if disp:
-                                print("Cannot solve Min y_hat problem!")
                             S4_fail = True
                     else:
-                        if disp:
-                            print("Cannot solve Max S problem!")
                         S4_fail = True
 
                     # Convex approximation failed!
@@ -449,10 +449,10 @@ class Branch_and_Bound(Driver):
                     # lower than the UBD.
                     #--------------------------------------------------------------
 
-                    if (LBD_NegConEI) < UBD:
+                    if LBD_NegConEI < UBD:
                         node_num += 1
                         new_node = [node_num, lb, ub, LBD_NegConEI, floc_iter]
-                        active_set.extend([new_node])
+                        active_set.append(new_node)
                         child_info[ii] = np.array([node_num, LBD_NegConEI, floc_iter])
                     else:
                         child_info[ii] = np.array([par_node, LBD_NegConEI, floc_iter])
@@ -476,14 +476,13 @@ class Branch_and_Bound(Driver):
                 # Update LBD and select the current rectangle
 
                 # a. Set LBD as lowest in the active set
-                LBD = min([active_set[ii][3] for ii in range(len(active_set))])
-                ind_LBD = [active_set[ii][3] for ii in range(len(active_set))].index(LBD)
+                all_LBD = [item[3] for item in active_set]
+                LBD = min(all_LBD)
+                ind_LBD = all_LBD.index(LBD)
                 LBD_prev = LBD
 
                 # b. Select the lowest LBD node as the current node
-                xL_iter = active_set[ind_LBD][1]
-                xU_iter = active_set[ind_LBD][2]
-                par_node = active_set[ind_LBD][0]
+                par_node, xL_iter, xU_iter, _, _ = active_set[ind_LBD]
                 self.iter_count += 1
 
                 # c. Delete the selected node from the Active set of nodes
@@ -566,7 +565,7 @@ class Branch_and_Bound(Driver):
             ub = self.xI_ub
 
             # Normalized as per the convention in Kriging of openmdao
-            xval = (xI - obj_surrogate.X_mean.reshape((k, 1)))/obj_surrogate.X_std.reshape(k, 1)
+            xval = (xI - obj_surrogate.X_mean)/obj_surrogate.X_std
 
             NegEI = calc_conEI_norm(xval, obj_surrogate)
 
@@ -600,10 +599,10 @@ class Branch_and_Bound(Driver):
         n, k = X.shape
         one = np.ones([n, 1])
 
-        xhat_comL = x_comL.copy()
-        xhat_comU = x_comU.copy()
-        xhat_comL[k:] = np.zeros([n, 1])
-        xhat_comU[k:] = np.ones([n, 1])
+        xhat_comL = x_comL
+        xhat_comU = x_comU
+        xhat_comL[k:] = 0.0
+        xhat_comU[k:] = 1.0
 
         # Calculate the convexity factor alpha
         rL = x_comL[k:]
@@ -644,11 +643,11 @@ class Branch_and_Bound(Driver):
 
         #Note: Python defines constraints like g(x) >= 0
         cons = [{'type' : 'ineq',
-                 'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
+                 'fun' : lambda x : -np.dot(Ain_hat[ii, :], x) + bin_hat[ii],
                  'jac' : lambda x : -Ain_hat[ii, :]} for ii in range(2*n)]
 
         optResult = minimize(self.calc_SSqr_convex, x0,
-                             args=(x_comL,x_comU,xhat_comL,xhat_comU),
+                             args=(x_comL, x_comU, xhat_comL, xhat_comU),
                              method='SLSQP', constraints=cons, bounds=bnds,
                              options={'ftol' : self.options['ftol'],
                                       'maxiter' : 100})
@@ -668,6 +667,8 @@ class Branch_and_Bound(Driver):
         return sU, eflag_sU
 
     def calc_SSqr_convex(self, x_com, *param):
+        """ Callback function for minimization of mean squared error."""
+        
         obj_surrogate = self.obj_surrogate
         x_comL = param[0]
         x_comU = param[1]
@@ -680,20 +681,25 @@ class Branch_and_Bound(Driver):
         alpha = obj_surrogate._alpha
 
         n, k = X.shape
+        
         one = np.ones([n, 1])
+            
         rL = x_comL[k:]
         rU = x_comU[k:]
-        rhat = np.array([x_com[k:]]).reshape(n, 1)
+        rhat = x_com[k:].reshape(n, 1)
 
         r = rL + rhat*(rU - rL)
         rhat_L = xhat_comL[k:]
         rhat_U = xhat_comU[k:]
-        term1 = -SigmaSqr*(1.0 - r.T.dot(np.dot(R_inv, r)) + \
-        ((1.0-one.T.dot(np.dot(R_inv, r)))**2/(one.T.dot(np.dot(R_inv, one)))))
+        
+        term0 = np.dot(R_inv, r)
+        term1 = -SigmaSqr*(1.0 - r.T.dot(term0) + \
+        ((1.0 - one.T.dot(term0))**2/(one.T.dot(np.dot(R_inv, one)))))
 
-        term2 = alpha*np.sum((rhat-rhat_L)*(rhat-rhat_U))
+        term2 = alpha*(rhat-rhat_L).T.dot(rhat-rhat_U)
         S2 = term1 + term2
-        return S2[0,0]
+        
+        return S2[0, 0]
 
     def minimize_y(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):
 
@@ -702,13 +708,12 @@ class Branch_and_Bound(Driver):
         app = 1
 
         X = surrogate.X
-        n = np.shape(X)[0]
-        k = np.shape(X)[1]
+        n, k = X.shape
 
-        xhat_comL = x_comL.copy()
-        xhat_comU = x_comU.copy()
-        xhat_comL[k:] = np.zeros([n, 1])
-        xhat_comU[k:] = np.ones([n, 1])
+        xhat_comL = x_comL
+        xhat_comU = x_comU
+        xhat_comL[k:] = 0.0
+        xhat_comU[k:] = 1.0
 
         if app == 1:
             x0 = 0.5*(xhat_comL + xhat_comU)
@@ -936,9 +941,9 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
     design space.
     """
     y_min = (obj_surrogate.y_best - obj_surrogate.Y_mean)/obj_surrogate.Y_std
-    X = obj_surrogate.X
 
     if not SSqr:
+        X = obj_surrogate.X
         c_r = obj_surrogate.c_r
         thetas = obj_surrogate.thetas
         SigmaSqr = obj_surrogate.SigmaSqr
@@ -948,19 +953,20 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
 
         n = np.shape(X)[0]
         one = np.ones([n, 1])
-        r = np.ones([n, 1])
-        for ii in range(n):
-            r[ii] = np.exp(-np.sum(thetas*(xval - X[ii])**p))
+
+        r = np.exp(-np.sum(thetas*(xval - X)**p, 1)).reshape(n, 1)
 
         y_hat = mu + np.dot(r.T,c_r)
-        SSqr = SigmaSqr*(1.0 - r.T.dot(np.dot(R_inv, r)) + \
-        ((1.0 - one.T.dot(np.dot(R_inv, r)))**2)/(one.T.dot(np.dot(R_inv, one))))
+        term0 = np.dot(R_inv, r)
+        SSqr = SigmaSqr*(1.0 - r.T.dot(term0) + \
+        ((1.0 - one.T.dot(term0))**2)/(one.T.dot(np.dot(R_inv, one))))
 
     if SSqr <= 0.0:
         NegEI = 0.0
     else:
-        ei1 = (y_min-y_hat)*(0.5+0.5*erf((1/np.sqrt(2))*((y_min-y_hat)/np.sqrt(abs(SSqr)))))
-        ei2 = np.sqrt(np.abs(SSqr))*(1.0/np.sqrt(2.0*np.pi))*np.exp(-0.5*((y_min-y_hat)**2/np.abs(SSqr)))
+        dy = y_min - y_hat
+        ei1 = dy*(0.5+0.5*erf((1/np.sqrt(2))*(dy/np.sqrt(SSqr))))
+        ei2 = np.sqrt(SSqr)*(1.0/np.sqrt(2.0*np.pi))*np.exp(-0.5*(dy**2/SSqr))
         NegEI = -(ei1 + ei2)
 
     return NegEI
@@ -971,9 +977,9 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
     design sapce"""
 
     g_min = 0.0
-    X = con_surrogate.X
 
     if not gSSqr:
+        X = con_surrogate.X
         c_r = con_surrogate.c_r
         thetas = con_surrogate.thetas
         SigmaSqr = con_surrogate.SigmaSqr
@@ -981,21 +987,22 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
         mu = con_surrogate.mu
         p = con_surrogate.p
         n = np.shape(X)[0]
-        one = np.ones([n,1])
-        r = np.ones([n,1])
-        for ii in range(n):
-            r[ii] = np.exp(-np.sum(thetas*(xval - X[ii])**p))
+        one = np.ones([n, 1])
+        
+        r = np.exp(-np.sum(thetas*(xval - X)**p, 1)).reshape(n, 1)
 
-        g_hat = mu + np.dot(r.T,c_r)
-        gSSqr = SigmaSqr*(1.0 - r.T.dot(np.dot(R_inv, r)) + \
-        ((1.0 - one.T.dot(np.dot(R_inv, r)))**2)/(one.T.dot(np.dot(R_inv, one))))
+        g_hat = mu + np.dot(r.T, c_r)
+        term0 = np.dot(R_inv, r)
+        gSSqr = SigmaSqr*(1.0 - r.T.dot(term0) + \
+                          ((1.0 - one.T.dot(term0))**2)/(one.T.dot(np.dot(R_inv, one))))
 
     if gSSqr <= 0:
         EV = 0.0
     else:
         # Calculate expected violation
-        ei1 = (g_hat-g_min)*(0.5+0.5*erf((1.0/np.sqrt(2.0))*((g_hat-g_min)/np.sqrt(np.abs(gSSqr)))))
-        ei2 = np.sqrt(np.abs(gSSqr))*(1.0/np.sqrt(2.0*np.pi))*np.exp(-0.5*((g_hat-g_min)**2/np.abs(gSSqr)))
+        dg = g_hat - g_min
+        ei1 = dg*(0.5 + 0.5*erf((1.0/np.sqrt(2.0))*(dg/np.sqrt(gSSqr))))
+        ei2 = np.sqrt(gSSqr)*(1.0/np.sqrt(2.0*np.pi))*np.exp(-0.5*(dg**2/gSSqr))
         EV = (ei1 + ei2)
 
     return EV

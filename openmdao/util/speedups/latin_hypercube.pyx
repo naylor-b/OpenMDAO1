@@ -54,7 +54,7 @@ cdef DTYPE_I_t[:, ::1] _perturb_(DTYPE_I_t[:, ::1] doe, int mutation_count):
 
     return new_doe
 
-cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms):
+cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms) nogil:
     cdef DTYPE_I_t n = arr.shape[0]
     cdef DTYPE_I_t m = arr.shape[1]
     cdef DTYPE_I_t i, ii, col, ncount = 0
@@ -73,7 +73,7 @@ cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms):
             ncount += 1
 
 
-cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p):
+cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p) nogil:
     cdef DTYPE_I_t n = arr.shape[0]
     cdef DTYPE_I_t m = arr.shape[1]
     cdef DTYPE_I_t i, ii, col, ncount = 0
@@ -166,4 +166,4 @@ cpdef mmlhs(DTYPE_I_t[:, ::1] x_start, double phi_best,
             phi_best = phi_improved
             x_best = x_improved
 
-    return np.asarray(x_best), phi_best
+    return np.asarray(x_best, dtype=int), phi_best

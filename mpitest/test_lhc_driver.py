@@ -21,7 +21,7 @@ from openmdao.test.util import assert_rel_error
 from openmdao.test.paraboloid import Paraboloid
 
 from openmdao.drivers.latinhypercube_driver import LatinHypercubeDriver, OptimizedLatinHypercubeDriver
-from openmdao.drivers.latinhypercube_driver import _is_latin_hypercube, _rand_latin_hypercube, _mmlhs, _LHC_Individual
+from openmdao.drivers.latinhypercube_driver import _is_latin_hypercube, _rand_latin_hypercube, _mmlhs
 
 
 class TestLatinHypercubeDriver(MPITestCase):

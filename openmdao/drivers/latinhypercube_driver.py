@@ -227,8 +227,8 @@ def mmphi(arr, q, p):
 def _rand_latin_hypercube(n, k):
     # Calculates a random Latin hypercube set of n points in k dimensions
     # within [0,n-1]^k hypercube.
-    arr = np.empty((n, k))
-    row = np.arange(n)
+    arr = np.empty((n, k), dtype=int)
+    row = np.arange(n, dtype=int)
     for i in range(k):
         shuffle(row)
         arr[:, i] = row

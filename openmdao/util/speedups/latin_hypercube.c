@@ -5,7 +5,7 @@
     "distutils": {
         "depends": []
     }, 
-    "module_name": "speedups"
+    "module_name": "openmdao.util.speedups.latin_hypercube"
 }
 END: Cython Metadata */
 
@@ -1778,6 +1778,7 @@ static const char __pyx_k_stop[] = "stop";
 static const char __pyx_k_test[] = "__test__";
 static const char __pyx_k_ASCII[] = "ASCII";
 static const char __pyx_k_class[] = "__class__";
+static const char __pyx_k_dtype[] = "dtype";
 static const char __pyx_k_empty[] = "empty";
 static const char __pyx_k_error[] = "error";
 static const char __pyx_k_flags[] = "flags";
@@ -1874,6 +1875,7 @@ static PyObject *__pyx_n_u_c;
 static PyObject *__pyx_n_s_class;
 static PyObject *__pyx_kp_s_contiguous_and_direct;
 static PyObject *__pyx_kp_s_contiguous_and_indirect;
+static PyObject *__pyx_n_s_dtype;
 static PyObject *__pyx_n_s_dtype_is_object;
 static PyObject *__pyx_n_s_empty;
 static PyObject *__pyx_n_s_encode;
@@ -2336,7 +2338,7 @@ static __Pyx_memviewslice __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__p
  * 
  *     return new_doe             # <<<<<<<<<<<<<<
  * 
- * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms):
+ * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms) nogil:
  */
   __PYX_INC_MEMVIEW(&__pyx_v_new_doe, 0);
   __pyx_r = __pyx_v_new_doe;
@@ -2380,7 +2382,7 @@ static __Pyx_memviewslice __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__p
 /* "openmdao/util/speedups/latin_hypercube.pyx":57
  *     return new_doe
  * 
- * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms):             # <<<<<<<<<<<<<<
+ * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms) nogil:             # <<<<<<<<<<<<<<
  *     cdef DTYPE_I_t n = arr.shape[0]
  *     cdef DTYPE_I_t m = arr.shape[1]
  */
@@ -2394,7 +2396,6 @@ static void __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__calc_norms_p1_(
   __pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t __pyx_v_ncount;
   double __pyx_v_sum;
   double __pyx_v_diff;
-  __Pyx_RefNannyDeclarations
   __pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t __pyx_t_1;
   __pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t __pyx_t_2;
   __pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t __pyx_t_3;
@@ -2407,11 +2408,10 @@ static void __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__calc_norms_p1_(
   Py_ssize_t __pyx_t_10;
   int __pyx_t_11;
   Py_ssize_t __pyx_t_12;
-  __Pyx_RefNannySetupContext("_calc_norms_p1_", 0);
 
   /* "openmdao/util/speedups/latin_hypercube.pyx":58
  * 
- * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms):
+ * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms) nogil:
  *     cdef DTYPE_I_t n = arr.shape[0]             # <<<<<<<<<<<<<<
  *     cdef DTYPE_I_t m = arr.shape[1]
  *     cdef DTYPE_I_t i, ii, col, ncount = 0
@@ -2419,7 +2419,7 @@ static void __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__calc_norms_p1_(
   __pyx_v_n = (__pyx_v_arr.shape[0]);
 
   /* "openmdao/util/speedups/latin_hypercube.pyx":59
- * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms):
+ * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms) nogil:
  *     cdef DTYPE_I_t n = arr.shape[0]
  *     cdef DTYPE_I_t m = arr.shape[1]             # <<<<<<<<<<<<<<
  *     cdef DTYPE_I_t i, ii, col, ncount = 0
@@ -2553,19 +2553,18 @@ static void __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__calc_norms_p1_(
   /* "openmdao/util/speedups/latin_hypercube.pyx":57
  *     return new_doe
  * 
- * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms):             # <<<<<<<<<<<<<<
+ * cdef void _calc_norms_p1_(DTYPE_I_t[:, ::1] arr, double[::1] norms) nogil:             # <<<<<<<<<<<<<<
  *     cdef DTYPE_I_t n = arr.shape[0]
  *     cdef DTYPE_I_t m = arr.shape[1]
  */
 
   /* function exit code */
-  __Pyx_RefNannyFinishContext();
 }
 
 /* "openmdao/util/speedups/latin_hypercube.pyx":76
  * 
  * 
- * cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p):             # <<<<<<<<<<<<<<
+ * cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p) nogil:             # <<<<<<<<<<<<<<
  *     cdef DTYPE_I_t n = arr.shape[0]
  *     cdef DTYPE_I_t m = arr.shape[1]
  */
@@ -2579,7 +2578,6 @@ static void __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__calc_norms_(__P
   __pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t __pyx_v_ncount;
   double __pyx_v_sum;
   double __pyx_v_diff;
-  __Pyx_RefNannyDeclarations
   __pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t __pyx_t_1;
   __pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t __pyx_t_2;
   __pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t __pyx_t_3;
@@ -2591,11 +2589,10 @@ static void __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__calc_norms_(__P
   Py_ssize_t __pyx_t_9;
   Py_ssize_t __pyx_t_10;
   Py_ssize_t __pyx_t_11;
-  __Pyx_RefNannySetupContext("_calc_norms_", 0);
 
   /* "openmdao/util/speedups/latin_hypercube.pyx":77
  * 
- * cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p):
+ * cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p) nogil:
  *     cdef DTYPE_I_t n = arr.shape[0]             # <<<<<<<<<<<<<<
  *     cdef DTYPE_I_t m = arr.shape[1]
  *     cdef DTYPE_I_t i, ii, col, ncount = 0
@@ -2603,7 +2600,7 @@ static void __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__calc_norms_(__P
   __pyx_v_n = (__pyx_v_arr.shape[0]);
 
   /* "openmdao/util/speedups/latin_hypercube.pyx":78
- * cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p):
+ * cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p) nogil:
  *     cdef DTYPE_I_t n = arr.shape[0]
  *     cdef DTYPE_I_t m = arr.shape[1]             # <<<<<<<<<<<<<<
  *     cdef DTYPE_I_t i, ii, col, ncount = 0
@@ -2709,13 +2706,12 @@ static void __pyx_f_8openmdao_4util_8speedups_15latin_hypercube__calc_norms_(__P
   /* "openmdao/util/speedups/latin_hypercube.pyx":76
  * 
  * 
- * cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p):             # <<<<<<<<<<<<<<
+ * cdef void _calc_norms_(DTYPE_I_t[:, ::1] arr, double[::1] norms, DTYPE_I_t p) nogil:             # <<<<<<<<<<<<<<
  *     cdef DTYPE_I_t n = arr.shape[0]
  *     cdef DTYPE_I_t m = arr.shape[1]
  */
 
   /* function exit code */
-  __Pyx_RefNannyFinishContext();
 }
 
 /* "openmdao/util/speedups/latin_hypercube.pyx":93
@@ -3325,7 +3321,7 @@ static PyObject *__pyx_f_8openmdao_4util_8speedups_15latin_hypercube_mmlhs(__Pyx
  *             phi_best = phi_improved
  *             x_best = x_improved             # <<<<<<<<<<<<<<
  * 
- *     return np.asarray(x_best), phi_best
+ *     return np.asarray(x_best, dtype=int), phi_best
  */
       __PYX_XDEC_MEMVIEW(&__pyx_v_x_best, 1);
       __PYX_INC_MEMVIEW(&__pyx_v_x_improved, 0);
@@ -3344,54 +3340,41 @@ static PyObject *__pyx_f_8openmdao_4util_8speedups_15latin_hypercube_mmlhs(__Pyx
   /* "openmdao/util/speedups/latin_hypercube.pyx":169
  *             x_best = x_improved
  * 
- *     return np.asarray(x_best), phi_best             # <<<<<<<<<<<<<<
+ *     return np.asarray(x_best, dtype=int), phi_best             # <<<<<<<<<<<<<<
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_3 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 169, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 169, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_asarray); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 169, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_asarray); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 169, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = __pyx_memoryview_fromslice(__pyx_v_x_best, 2, (PyObject *(*)(char *)) __pyx_memview_get_nn___pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t, (int (*)(char *, PyObject *)) __pyx_memview_set_nn___pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t, 0);; if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 169, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_5 = PyTuple_New(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 169, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_3 = __pyx_memoryview_fromslice(__pyx_v_x_best, 2, (PyObject *(*)(char *)) __pyx_memview_get_nn___pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t, (int (*)(char *, PyObject *)) __pyx_memview_set_nn___pyx_t_8openmdao_4util_8speedups_15latin_hypercube_DTYPE_I_t, 0);; if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 169, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_2 = NULL;
-  if (CYTHON_COMPILING_IN_CPYTHON && unlikely(PyMethod_Check(__pyx_t_5))) {
-    __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_5);
-    if (likely(__pyx_t_2)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_5);
-      __Pyx_INCREF(__pyx_t_2);
-      __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_5, function);
-    }
-  }
-  if (!__pyx_t_2) {
-    __pyx_t_1 = __Pyx_PyObject_CallOneArg(__pyx_t_5, __pyx_t_3); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 169, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __Pyx_GOTREF(__pyx_t_1);
-  } else {
-    __pyx_t_4 = PyTuple_New(1+1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 169, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    __Pyx_GIVEREF(__pyx_t_2); PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_t_2); __pyx_t_2 = NULL;
-    __Pyx_GIVEREF(__pyx_t_3);
-    PyTuple_SET_ITEM(__pyx_t_4, 0+1, __pyx_t_3);
-    __pyx_t_3 = 0;
-    __pyx_t_1 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_4, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 169, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_1);
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  }
-  __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __pyx_t_5 = PyFloat_FromDouble(__pyx_v_phi_best); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 169, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_5);
-  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 169, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_4);
   __Pyx_GIVEREF(__pyx_t_1);
-  PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_t_1);
-  __Pyx_GIVEREF(__pyx_t_5);
-  PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_t_5);
+  PyTuple_SET_ITEM(__pyx_t_5, 0, __pyx_t_1);
   __pyx_t_1 = 0;
+  __pyx_t_1 = PyDict_New(); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 169, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_s_dtype, ((PyObject *)(&PyInt_Type))) < 0) __PYX_ERR(0, 169, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_t_3, __pyx_t_5, __pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 169, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = PyFloat_FromDouble(__pyx_v_phi_best); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 169, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_5 = PyTuple_New(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 169, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_5);
+  __Pyx_GIVEREF(__pyx_t_2);
+  PyTuple_SET_ITEM(__pyx_t_5, 0, __pyx_t_2);
+  __Pyx_GIVEREF(__pyx_t_1);
+  PyTuple_SET_ITEM(__pyx_t_5, 1, __pyx_t_1);
+  __pyx_t_2 = 0;
+  __pyx_t_1 = 0;
+  __pyx_r = __pyx_t_5;
   __pyx_t_5 = 0;
-  __pyx_r = __pyx_t_4;
-  __pyx_t_4 = 0;
   goto __pyx_L0;
 
   /* "openmdao/util/speedups/latin_hypercube.pyx":128
@@ -17957,6 +17940,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_class, __pyx_k_class, sizeof(__pyx_k_class), 0, 0, 1, 1},
   {&__pyx_kp_s_contiguous_and_direct, __pyx_k_contiguous_and_direct, sizeof(__pyx_k_contiguous_and_direct), 0, 0, 1, 0},
   {&__pyx_kp_s_contiguous_and_indirect, __pyx_k_contiguous_and_indirect, sizeof(__pyx_k_contiguous_and_indirect), 0, 0, 1, 0},
+  {&__pyx_n_s_dtype, __pyx_k_dtype, sizeof(__pyx_k_dtype), 0, 0, 1, 1},
   {&__pyx_n_s_dtype_is_object, __pyx_k_dtype_is_object, sizeof(__pyx_k_dtype_is_object), 0, 0, 1, 1},
   {&__pyx_n_s_empty, __pyx_k_empty, sizeof(__pyx_k_empty), 0, 0, 1, 1},
   {&__pyx_n_s_encode, __pyx_k_encode, sizeof(__pyx_k_encode), 0, 0, 1, 1},

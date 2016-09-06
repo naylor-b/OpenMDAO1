@@ -12,7 +12,7 @@ from openmdao.test.util import assert_rel_error
 
 from openmdao.drivers.latinhypercube_driver import LatinHypercubeDriver, \
                         OptimizedLatinHypercubeDriver, _is_latin_hypercube, \
-                        _rand_latin_hypercube, _mmlhs, _LHC_Individual
+                        _rand_latin_hypercube, _mmlhs, mmphi
 
 
 class TestLatinHypercubeDriver(unittest.TestCase):
@@ -39,16 +39,18 @@ class TestLatinHypercubeDriver(unittest.TestCase):
         generations = 6
 
         test_lhc = _rand_latin_hypercube(n, k)
-        best_lhc = _LHC_Individual(test_lhc, 1, p)
-        mmphi_initial = best_lhc.phi
+        mmphi_initial = mmphi(test_lhc, 1, p)
         for q in (1, 2, 5, 10, 20, 50, 100):
-            lhc_start = _LHC_Individual(test_lhc, q, p)
-            lhc_opt = _mmlhs(lhc_start, population, generations)
-            if lhc_opt.phi < best_lhc.phi:
+            lhc_start = test_lhc
+            best_phi = mmphi(lhc_start, q, p)
+            lhc_opt, phi_opt = _mmlhs(lhc_start, best_phi, q, p,
+                                      population, generations)
+            if phi_opt < best_phi:
                 best_lhc = lhc_opt
+                best_phi = phi_opt
 
         self.assertTrue(
-                best_lhc.phi < mmphi_initial,
+                best_phi < mmphi_initial,
                 "'_mmlhs' didn't yield lower phi. Seed was {}".format(self.seedval))
 
     def test_mmlhs_latin(self):
@@ -204,7 +206,7 @@ class TestLatinHypercubeDriverArray(unittest.TestCase):
         root.add('comp', ParaboloidArray(), promotes=['*'])
 
         top.driver = OptimizedLatinHypercubeDriver(num_samples=4, seed=0, population=20,
-                                                   generations=4, norm_method=2)
+                                                   generations=4, norm_type=2)
         top.driver.add_desvar('X', lower=np.array([-50., -50.]), upper=np.array([50., 50.]))
 
         top.driver.add_objective('f_xy')

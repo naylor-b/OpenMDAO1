@@ -8,7 +8,6 @@ from collections import OrderedDict
 from openmdao.core.system import AnalysisError
 from openmdao.solvers.solver_base import LinearSolver
 
-
 class LinearGaussSeidel(LinearSolver):
     """ LinearSolver that uses linear Gauss Seidel.
 

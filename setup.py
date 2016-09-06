@@ -18,8 +18,9 @@ if USE_SPEEDUPS:
     sources = fnmatch.filter(os.listdir(spd_dir), pattern)
 
     extensions = [
-        Extension("speedups",
-                  [os.path.join(spd_dir, s) for s in sources]),
+        Extension("openmdao.util.speedups.%s" % os.path.splitext(s)[0],
+                  [os.path.join(spd_dir, s)])
+            for s in sources
     ]
 
     if USE_CYTHON:

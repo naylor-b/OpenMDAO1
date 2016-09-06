@@ -1,19 +1,33 @@
 
-from distutils.core import setup
 import sys
+import os
 import traceback
 import logging
+import fnmatch
+from distutils.core import setup
+from distutils.extension import Extension
 
-try:
-    from Cython.Build import cythonize
-    try:
-        ext_modules = cythonize("openmdao/util/speedups/*.pyx")
-    except:
-        # Note, the following message won't show up during pip install unless -v arg is used
-        logging.error("%s\nERROR: cython compilation of speedups failed." % traceback.format_exc())
-        ext_modules = []
-except ImportError:
-    ext_modules = []
+USE_CYTHON = os.environ.get("OPENMDAO_BUILD_WITH_CYTHON")
+USE_SPEEDUPS = os.environ.get("OPENMDAO_USE_SPEEDUPS")
+
+if USE_SPEEDUPS:
+    pattern = '*.pyx' if USE_CYTHON else '*.c'
+
+    mydir = os.path.dirname(os.path.abspath(__file__))
+    spd_dir = os.path.join(mydir, "openmdao", "util", "speedups")
+    sources = fnmatch.filter(os.listdir(spd_dir), pattern)
+
+    extensions = [
+        Extension("speedups",
+                  [os.path.join(spd_dir, s) for s in sources]),
+    ]
+
+    if USE_CYTHON:
+        from Cython.Build import cythonize
+        extensions = cythonize(extensions)
+else:
+    extensions = []
+
 
 setup(name='openmdao',
       version='1.7.1',
@@ -70,7 +84,7 @@ setup(name='openmdao',
           'openmdao.devtools': ['*.template', '*.html'],
           'openmdao.util': ['*.html'],
       },
-      ext_modules=ext_modules,
+      ext_modules=extensions,
       install_requires=[
         'six', 'numpydoc', 'networkx==1.11', 'numpy>=1.9.2',
         'scipy', 'sqlitedict', 'pyparsing'

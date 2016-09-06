@@ -171,7 +171,7 @@ class OptimizedLatinHypercubeDriver(LatinHypercubeDriver):
                 best_lhc = lhc_opt
                 best_phi = phi
 
-        return best_lhc.astype(int)
+        return lhc_opt.astype(int)
 
 def _perturb(doe, mutation_count):
     """ Interchanges pairs of randomly chosen elements within randomly chosen
@@ -203,28 +203,23 @@ def mmphi(arr, q, p):
     hypercube.
     """
 
-    distdict = {}
-
     # Calculate the norm between each pair of points in the DOE
     n, m = arr.shape
+    diffs = np.empty((n*(n-1)/2, m))
+
+    start = 0
     for i in range(1, n):
-        nrm = norm(arr[i] - arr[:i], ord=p, axis=1)
-        for j in range(i):
-            nrmj = nrm[j]
-            if nrmj in distdict:
-                distdict[nrmj] += 1
-            else:
-                distdict[nrmj] = 1
+        end = start + i
+        diffs[start:end] = arr[:i] - arr[i]
+        start = end
 
-    size = len(distdict)
+    norms = norm(diffs, ord=p, axis=1)
 
-    distinct_d = np.fromiter(distdict, dtype=float, count=size)
-
-    # Mutltiplicity array with a count of how many pairs of points
+    # distance array and mutltiplicity array J with a count of how many pairs of points
     # have a given distance
-    J = np.fromiter(itervalues(distdict), dtype=int, count=size)
+    dist, J = np.unique(norms, return_counts=True)
 
-    phi = np.sum(J * (distinct_d ** (-q))) ** (1.0 / q)
+    phi = np.sum(J * (dist ** (-q))) ** (1.0 / q)
 
     return phi
 

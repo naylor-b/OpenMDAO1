@@ -320,14 +320,14 @@ class Branch_and_Bound(Driver):
             #--------------------------------------------------------------
             child_info = np.zeros([2,3])
             dis_flag = [' ',' ']
+            l_iter = (xU_iter - xL_iter).argmax()
+            if xloc_iter[l_iter]<xU_iter[l_iter]:
+                delta = 0.5 #0<delta<1
+            else:
+                delta = -0.5 #-1<delta<0
             for ii in range(2):
                 lb = xL_iter.copy()
                 ub = xU_iter.copy()
-                l_iter = (xU_iter - xL_iter).argmax()
-                if xloc_iter[l_iter]<ub[l_iter]:
-                    delta = 0.5 #0<delta<1
-                else:
-                    delta = -0.5 #-1<delta<0
                 if ii == 0:
                     ub[l_iter] = np.floor(xloc_iter[l_iter]+delta)
                 elif ii == 1:
@@ -408,15 +408,15 @@ class Branch_and_Bound(Driver):
                     child_info[ii] = np.array([par_node, np.inf, floc_iter])
                     dis_flag[ii] = 'x' #Flag for No child created
 
-            #Update the active set whenever better solution found
-            if floc_iter < UBD:
-                UBD = floc_iter
-                fopt = UBD
-                xopt = xloc_iter.copy().reshape(num_des)
+                #Update the active set whenever better solution found
+                if floc_iter < UBD:
+                    UBD = floc_iter
+                    fopt = UBD
+                    xopt = xloc_iter.copy().reshape(num_des)
 
-                # Update active set: Removes the current node
-                if len(active_set) >= 1:
-                    active_set = update_active_set(active_set, UBD)
+                    # Update active set: Removes the current node
+                    if len(active_set) >= 1:
+                        active_set = update_active_set(active_set, UBD)
 
 
             if disp:

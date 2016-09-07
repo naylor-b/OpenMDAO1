@@ -1,4 +1,4 @@
-""" Test objects for the single-discipline Brannin (or Brannin-Hoo) problem.
+""" Test objects for the single-discipline Branin (or Branin-Hoo) problem.
 
 The Branin, or Branin-Hoo, function has three global minima. The recommended
 values of a, b, c, r, s and t are:
@@ -19,12 +19,12 @@ import numpy as np
 from openmdao.core.component import Component
 
 
-class Brannin(Component):
-    """ The Brannin test problem. This version is the standard version and
+class Branin(Component):
+    """ The Branin test problem. This version is the standard version and
     contains two continuous parameters. """
 
     def __init__(self):
-        super(Brannin, self).__init__()
+        super(Branin, self).__init__()
 
         # Inputs
         self.add_param('x0', 0.0)
@@ -67,12 +67,12 @@ class Brannin(Component):
 
         return J
 
-class BranninInteger(Component):
-    """ The Brannin test problem. This version contains a continuous and an
+class BraninInteger(Component):
+    """ The Branin test problem. This version contains a continuous and an
     integer parameter. """
 
     def __init__(self):
-        super(BranninInteger, self).__init__()
+        super(BraninInteger, self).__init__()
 
         # Inputs
         self.add_param('xI', 0)

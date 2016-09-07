@@ -1,22 +1,22 @@
-""" Testing the simple Branning problem."""
+""" Testing the simple Branin problem."""
 
 import unittest
 
 from openmdao.api import IndepVarComp, Group, Problem, ScipyOptimizer, ExecComp
-from openmdao.test.branin import Brannin
+from openmdao.test.branin import Branin
 from openmdao.test.util import assert_rel_error
 
 
-class TestBrannin(unittest.TestCase):
+class TestBranin(unittest.TestCase):
 
-    def test_simple_brannin_opt(self):
+    def test_simple_branin_opt(self):
 
         prob = Problem()
         root = prob.root = Group()
 
         root.add('p1', IndepVarComp('x0', 0.0), promotes=['*'])
         root.add('p2', IndepVarComp('x1', 0.0), promotes=['*'])
-        root.add('comp', Brannin(), promotes=['*'])
+        root.add('comp', Branin(), promotes=['*'])
 
         prob.driver = ScipyOptimizer()
         prob.driver.options['optimizer'] = 'SLSQP'

@@ -30,6 +30,7 @@ from openmdao.surrogate_models.kriging import KrigingSurrogate
 from openmdao.util.record_util import create_local_meta, update_local_meta
 from openmdao.util.freplace import cython_replace
 
+from openmdao.util.speedups.branch_and_bound import _calc_SSqr_convex, _calc_y_hat_convex
 
 class Branch_and_Bound(Driver):
     """ Class definition for the Branch_and_Bound driver. This driver can be run
@@ -351,7 +352,7 @@ class Branch_and_Bound(Driver):
                             NegEI = calc_conEI_norm([], obj_surrogate, SSqr=sU, y_hat=yL)
 
                             M = len(self.con_surrogate)
-                            EV = np.zeros([M, 1])
+                            EV = np.zeros((M, 1))
 
                             # Expected constraint violation
                             for mm in range(M):
@@ -415,7 +416,7 @@ class Branch_and_Bound(Driver):
                     xopt = xloc_iter.copy().reshape(num_des)
 
                     # Update active set: Removes the current node
-                    if len(active_set) >= 1:
+                    if active_set:
                         active_set = update_active_set(active_set, UBD)
 
 
@@ -434,7 +435,7 @@ class Branch_and_Bound(Driver):
                                   dis_flag[1], child_info[1, 1], child_info[1, 2]))
 
             # Termination
-            if len(active_set) >= 1:
+            if active_set:
                 # Update LBD and select the current rectangle
 
                 # a. Set LBD as lowest in the active set
@@ -516,7 +517,7 @@ class Branch_and_Bound(Driver):
                 # gathered in MPI.
                 self.recorders.record_iteration(system, metadata)
 
-        # When run under AMEIGO, objecitve is the expected improvment
+        # When run under AMEIGO, objective is the expected improvment
         # function with modifications to make it concave.
         else:
             #ModelInfo_obj=param[0];ModelInfo_g=param[1];con_fac=param[2];flag=param[3]
@@ -570,20 +571,20 @@ class Branch_and_Bound(Driver):
         rL = x_comL[k:]
         rU = x_comU[k:]
 
-        dr_drhat = np.zeros([n, n])
+        dr_drhat = np.zeros((n, n))
         for ii in range(n):
             dr_drhat[ii, ii] = rU[ii, 0] - rL[ii, 0]
 
-        T2_num = np.dot(np.dot(R_inv, one),np.dot(R_inv, one).T)
-        T2_den = np.dot(one.T, np.dot(R_inv, one))
+        ri_dot1 = np.dot(R_inv, one)
+        T2_num = np.dot(ri_dot1, ri_dot1.T)
+        T2_den = np.dot(one.T, ri_dot1)
         d2S_dr2 = 2.0*SigmaSqr*(R_inv - (T2_num/T2_den))
         H_hat = np.dot(np.dot(dr_drhat, d2S_dr2), dr_drhat.T)
 
         # Use Gershgorin's circle theorem to find a lower bound of the
         # min eigen value of the hessian
-        eig_lb = np.zeros([n, 1])
+        eig_lb = np.empty(n)
         for ii in range(n):
-            dia_ele = H_hat[ii, ii]
             sum_rw = 0.0
             sum_col = 0.0
             for jj in range(n):
@@ -591,7 +592,7 @@ class Branch_and_Bound(Driver):
                     sum_rw += np.abs(H_hat[ii,jj])
                     sum_col += np.abs(H_hat[jj,ii])
 
-                eig_lb[ii] = dia_ele - np.min(np.array([sum_rw, sum_col]))
+            eig_lb[ii] = H_hat[ii, ii] - np.min(np.array([sum_rw, sum_col]))
 
         eig_min = np.min(eig_lb)
         alpha = np.max(np.array([0.0, -0.5*eig_min]))
@@ -605,17 +606,16 @@ class Branch_and_Bound(Driver):
 
         #Note: Python defines constraints like g(x) >= 0
         cons = [{'type' : 'ineq',
-                 'fun' : lambda x : -np.dot(Ain_hat[ii, :], x) + bin_hat[ii],
+                 'fun' : lambda x : bin_hat[ii] - np.dot(Ain_hat[ii, :], x),
                  'jac' : lambda x : -Ain_hat[ii, :]
                 } for ii in range(2*n)]
 
-        sum_R_inv = np.sum(R_inv)
         optResult = minimize(self.calc_SSqr_convex, x0,
                              args=(x_comL, x_comU, xhat_comL, xhat_comU,
-                             X, R_inv, sum_R_inv, SigmaSqr, alpha),
+                             X, R_inv, T2_den, SigmaSqr, alpha),
                              method='SLSQP', constraints=cons, bounds=bnds,
                              options={'ftol' : self.options['ftol'],
-                                      'maxiter' : 30})
+                                      'maxiter' : 100})
 
         Neg_sU = optResult.fun
         #print("NIT: %d" % optResult.nit)
@@ -662,6 +662,8 @@ class Branch_and_Bound(Driver):
         app = 1
 
         X = surrogate.X
+        c_r = surrogate.c_r
+        mu = surrogate.mu
         n, k = X.shape
 
         xhat_comL = x_comL.copy()
@@ -674,11 +676,12 @@ class Branch_and_Bound(Driver):
             bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in range(len(xhat_comL))]
 
             cons = [{'type' : 'ineq',
-                     'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
-                     'jac': lambda x: -Ain_hat[ii, :]} for ii in range(2*n)]
+                     'fun' : lambda x : bin_hat[ii] - np.dot(Ain_hat[ii, :],x),
+                     'jac': lambda x: -Ain_hat[ii, :]
+                    } for ii in range(2*n)]
 
-            optResult = minimize(self.calc_y_hat_convex, x0,
-                                 args=(x_comL, x_comU), method='SLSQP',
+            optResult = minimize(calc_y_hat_convex, x0,
+                                 args=(x_comL, x_comU, n, k, c_r, mu), method='SLSQP',
                                  constraints=cons, bounds=bnds,
                                  options={'ftol' : self.options['ftol'],
                                           'maxiter' : 100})
@@ -697,21 +700,16 @@ class Branch_and_Bound(Driver):
         return yL, eflag_yL
 
 
-    def calc_y_hat_convex(self, x_com, x_comL, x_comU):
-        obj_surrogate = self.obj_surrogate
+@cython_replace("openmdao.util.speedups.branch_and_bound", "_calc_y_hat_convex")
+def calc_y_hat_convex(x_com, x_comL, x_comU, n, k, c_r, mu):
+    rL = x_comL[k:]
+    rU = x_comU[k:]
+    rhat = np.array([x_com[k:]]).reshape(n, 1)
+    r = rL + rhat*(rU - rL)
 
-        X = obj_surrogate.X
-        c_r = obj_surrogate.c_r
-        mu = obj_surrogate.mu
-        n, k = X.shape
+    y_hat = mu + np.dot(r.T, c_r)
 
-        rL = x_comL[k:]
-        rU = x_comU[k:]
-        rhat = np.array([x_com[k:]]).reshape(n, 1)
-        r = rL + rhat*(rU - rL)
-
-        y_hat = mu + np.dot(r.T, c_r)
-        return y_hat[0, 0]
+    return y_hat[0, 0]
 
 
 def update_active_set(active_set, ubd):
@@ -775,11 +773,11 @@ def interval_analysis(lb_x, ub_x, surrogate):
     p = surrogate.p
     n, k = X.shape
 
-    t1L = np.zeros([n, k]); t1U = np.zeros([n, k])
-    t2L = np.zeros([n, k]); t2U = np.zeros([n, k])
-    t3L = np.zeros([n, k]); t3U = np.zeros([n, k])
-    t4L = np.zeros([n, 1]); t4U = np.zeros([n, 1])
-    lb_r = np.zeros([n, 1]); ub_r = np.zeros([n, 1])
+    t1L = np.zeros(X.shape); t1U = np.zeros(X.shape)
+    t2L = np.zeros(X.shape); t2U = np.zeros(X.shape)
+    t3L = np.zeros(X.shape); t3U = np.zeros(X.shape)
+    t4L = np.zeros((n,1)); t4U = np.zeros((n,1))
+    lb_r = np.zeros((n,1)); ub_r = np.zeros((n,1))
 
     if p == 2:
         for i in range(n):
@@ -818,74 +816,69 @@ def lin_underestimator(lb, ub, surrogate):
     lb_x = lb[:k]; ub_x = ub[:k]
     lb_r = lb[k:]; ub_r = ub[k:]
 
-    a1 = np.zeros([n, n]); a3 = np.zeros([n, n])
-    a1_hat = np.zeros([n, n]); a3_hat = np.zeros([n, n])
-    a2 = np.zeros([n, k]); a4 = np.zeros([n, k])
-    b2 = np.zeros([n, k]); b4 = np.zeros([n, k])
-    b1 = np.zeros([n, 1]); b3 = np.zeros([n, 1])
-    b1_hat = np.zeros([n, 1]); b3_hat = np.zeros([n, 1])
+    b2 = np.zeros(X.shape); b4 = np.zeros(X.shape)
+    b1_hat = np.zeros((n, 1)); b3_hat = np.zeros((n, 1))
+    
+    Ain_hat = np.zeros((2*n, n+k))
+    bin_hat = np.zeros((2*n, 1))
+    
+    a1_hat = Ain_hat[0:n, k:]
+    a3_hat = Ain_hat[n:, k:]
+    a2 = Ain_hat[:n, :k]
+    a4 = Ain_hat[n:, :k]
 
     for i in range(n):
-        #T1: Linearize under-estimator of ln[r_i] = a1[i,i]*r[i] + b1[i]
+        #T1: Linearize under-estimator of ln[r_i] = a1[i,i]*r[i] + b1
         if ub_r[i] < 1.0e-323 or (ub_r[i] - lb_r[i]) < 1.0e-308:
-            # a1[i,i] = 0.
-            # b1[i] = -np.inf
-            a1_hat[i,i] = 0.0 #a1[i,i]*(ub_r[i]-lb_r[i])
-            b1_hat[i] = -np.inf #a1[i,i]*lb_r[i] + b1[i]
+            # b1 = -np.inf
+            #a1_hat[i,i] = 0.0 #a1[i,i]*(ub_r[i]-lb_r[i])
+            b1_hat[i] = -np.inf #a1[i,i]*lb_r[i] + b1
         elif ub_r[i] <= lb_r[i]:
-            # a1[i,i] = 0.0
             # b1[i] = np.log(ub_r[i])
-            a1_hat[i,i] = 0.0 #a1[i,i]*(ub_r[i]-lb_r[i])
-            b1_hat[i] = np.log(ub_r[i]) #a1[i,i]*lb_r[i] + b1[i]
+            #a1_hat[i,i] = 0.0 #a1[i,i]*(ub_r[i]-lb_r[i])
+            b1_hat[i] = np.log(ub_r[i]) #a1[i,i]*lb_r[i] + b1
         elif lb_r[i] < 1.0e-323:
             # a1[i,i] = np.inf
-            # b1[i] = -np.inf
+            # b1 = -np.inf
             a1_hat[i,i] = np.inf #a1[i,i]*(ub_r[i]-lb_r[i])
-            b1_hat[i] = -np.inf #b1[i]
+            b1_hat[i] = -np.inf #b1
         else:
-            a1[i,i] = ((np.log(ub_r[i]) - np.log(lb_r[i]))/(ub_r[i] - lb_r[i]))
-            b1[i] = np.log(ub_r[i]) - a1[i,i]*ub_r[i]
-            a1_hat[i,i] = a1[i,i]*(ub_r[i]-lb_r[i])
-            b1_hat[i] = a1[i,i]*lb_r[i] + b1[i]
+            a1 = ((np.log(ub_r[i]) - np.log(lb_r[i]))/(ub_r[i] - lb_r[i]))
+            a1_hat[i,i] = a1*(ub_r[i]-lb_r[i])
+            b1_hat[i] = a1*lb_r[i] + np.log(ub_r[i]) - a1*ub_r[i]
 
-        #T3: Linearize under-estimator of -ln[r_i] = a3[i,i]*r[i] + b3[i]
+        #T3: Linearize under-estimator of -ln[r_i] = a3[i,i]*r[i] + b3
         if ub_r[i] < 1.0e-323:
-            a3_hat[i,i] = 0.0
             b3_hat[i] = np.inf
         else:
-            r_m_i = (lb_r[i] + ub_r[i])/2.0
+            r_m_i = (lb_r[i] + ub_r[i])*0.5
             if r_m_i < 1e-308:
                 a3_hat[i,i] = -np.inf
                 b3_hat[i] = np.inf
             else:
-                a3[i,i] = -1.0/r_m_i
-                b3[i] = -np.log(r_m_i) - a3[i,i]*r_m_i
-                a3_hat[i,i] = a3[i,i]*(ub_r[i] - lb_r[i])
-                b3_hat[i] = a3[i,i]*lb_r[i] + b3[i]
+                a3 = -1.0/r_m_i
+                a3_hat[i,i] = a3*(ub_r[i] - lb_r[i])
+                b3_hat[i] = a3*lb_r[i] - np.log(r_m_i) + 1.0
 
         for h in range(k):
             #T2: Linearize under-estimator of thetas_h*(x_h - X_h_i)^2 = a4[i,h]*x_h[h] + b4[i,h]
-            x_m_h = (ub_x[h] + lb_x[h])/2.0
+            x_m_h = (ub_x[h] + lb_x[h])*0.5
             a2[i,h] = p*thetas[h]*(x_m_h - X[i,h])**(p-1.0)
             yy = thetas[h]*(x_m_h - X[i,h])**p
-            b2[i,h] = -a2[i,h]*x_m_h + yy
+            b2[i,h] = yy - a2[i,h]*x_m_h
 
             #T4: Linearize under-estimator of -theta_h*(x_h - X_h_i)^2 = a4[i,h]*x_h[h] + b4[i,h]
             yy2 = -thetas[h]*(ub_x[h] - X[i,h])**p
             yy1 = -thetas[h]*(lb_x[h] - X[i,h])**p
 
-            if ub_x[h] <= lb_x[h]:
-                a4[i,h] = 0.0
-            else:
+            if ub_x[h] > lb_x[h]:
                 a4[i,h] = (yy2 - yy1)/(ub_x[h] - lb_x[h])
+                b4[i,h] = -a4[i,h]*lb_x[h] + yy1
+            else:
+                b4[i,h] = yy1
 
-            b4[i,h] = -a4[i,h]*lb_x[h] + yy1
-
-    Ain1 = np.concatenate((a2, a4), axis=0)
-    Ain2 = np.concatenate((a1_hat, a3_hat), axis=0)
-    Ain_hat = np.concatenate((Ain1, Ain2), axis=1)
-    bin_hat = np.concatenate((-(b1_hat + np.sum(b2, axis=1).reshape(n,1)),
-                              -(b3_hat + np.sum(b4, axis=1).reshape(n,1))), axis=0)
+    bin_hat[:n] = -(b1_hat + np.sum(b2, axis=1).reshape(n,1))
+    bin_hat[n:] = -(b3_hat + np.sum(b4, axis=1).reshape(n,1))
 
     return Ain_hat, bin_hat
 

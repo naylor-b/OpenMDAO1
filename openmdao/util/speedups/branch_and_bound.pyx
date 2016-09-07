@@ -15,8 +15,8 @@ from libc.math cimport exp
 DTYPE_I = np.int
 ctypedef np.int_t DTYPE_I_t
 
-DTYPE_F = np.float
-ctypedef np.float_t DTYPE_F_t
+DTYPE_F = np.float64
+ctypedef np.float64_t DTYPE_F_t
 
 
 cpdef _interval_analysis(DTYPE_F_t[::1] lb_x, DTYPE_F_t[::1] ub_x, surrogate):
@@ -99,22 +99,18 @@ cpdef _calc_SSqr_convex(DTYPE_F_t[:] x_com, DTYPE_F_t[:, :] x_comL,
     cdef DTYPE_I_t com_n = x_com.shape[0]
 
     cdef DTYPE_I_t i, j
-    cdef DTYPE_F_t term0, rterm0, temp, dot_r_hats, rhat, rhatL, rhatU
+    cdef DTYPE_F_t term0, rterm0, temp, dot_r_hats, rhat
     cdef DTYPE_F_t[:] r = x_com.copy()
 
     dot_r_hats = 0.0
 
     for i in range(k, com_n):
         rhat = x_com[i]
-        rhatL = x_comL[i,0]
-        rhatU = x_comU[i,0]
 
-        r[i-k] = rhatL + rhat*(rhatU - rhatL)
-        dot_r_hats += (rhat-rhatL)*(rhat-rhatU)
+        r[i-k] = x_comL[i,0] + rhat*(x_comU[i,0] - x_comL[i,0])
+        dot_r_hats += ((rhat-xhat_comL[i,0])*(rhat-xhat_comU[i,0]))
 
-    dot_r_hats *= alpha
-
-    term0 - 0.0
+    term0 = 0.0
     rterm0 = 0.0
 
     for i in range(n):
@@ -124,4 +120,19 @@ cpdef _calc_SSqr_convex(DTYPE_F_t[:] x_com, DTYPE_F_t[:, :] x_comL,
         term0 += temp
         rterm0 += r[i]*temp
 
-    return -SigmaSqr[0]*(1.0 - rterm0 + ((1.0 - term0)**2/sum_R_inv)) + dot_r_hats
+    return -SigmaSqr[0]*(1.0 - rterm0 + ((1.0 - term0)**2/sum_R_inv)) + dot_r_hats*alpha
+
+
+cpdef _calc_y_hat_convex(DTYPE_F_t[:] x_com,
+                         DTYPE_F_t[:, :] x_comL, DTYPE_F_t[:, :] x_comU,
+                         DTYPE_I_t n, DTYPE_I_t k, DTYPE_F_t[:, :] c_r,
+                         DTYPE_F_t mu):
+
+    cdef DTYPE_I_t i
+    cdef DTYPE_F_t prod = 0.0
+    cdef DTYPE_I_t com_n = x_com.shape[0]
+
+    for i in range(k, com_n):
+        prod += (c_r[i-k,0]*(x_comL[i,0] + x_com[i]*(x_comU[i,0] - x_comL[i,0])))
+
+    return mu + prod  # y_hat

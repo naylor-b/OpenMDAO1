@@ -27,6 +27,7 @@ from scipy.special import erf
 from openmdao.core.driver import Driver
 from openmdao.surrogate_models.kriging import KrigingSurrogate
 from openmdao.util.record_util import create_local_meta, update_local_meta
+from openmdao.util.freplace import cython_replace
 
 
 class Branch_and_Bound(Driver):
@@ -104,7 +105,7 @@ class Branch_and_Bound(Driver):
 
         # When this is slotted into AMIEGO, this will be set to False.
         self.standalone = True
-        
+
     def _setup(self):
         """  Initialize whatever we need."""
         super(Branch_and_Bound, self)._setup()
@@ -408,27 +409,27 @@ class Branch_and_Bound(Driver):
 
                             M = len(self.con_surrogate)
                             EV = np.zeros([M, 1])
-                            
+
                             # Expected constraint violation
                             for mm in range(M):
                                 x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, con_surrogate[mm])
                                 sU_g, eflag_sU_g = self.maximize_S(x_comL, x_comU, Ain_hat,
                                                                    bin_hat, con_surrogate[mm])
-                                
+
                                 if eflag_sU_g:
                                     yL_g, eflag_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
                                                                        bin_hat, con_surrogate[mm])
                                     if eflag_yL_g:
-                                        EV[mm] = calc_conEV_norm([], 
+                                        EV[mm] = calc_conEV_norm([],
                                                                  con_surrogate[mm],
-                                                                 gSSqr=-sU_g, 
+                                                                 gSSqr=-sU_g,
                                                                  g_hat=yL_g)
                                     else:
                                         S4_fail = True
                                         break
                                 else:
                                     S4_fail = True
-                                    
+
                         else:
                             S4_fail = True
                     else:
@@ -597,7 +598,7 @@ class Branch_and_Bound(Driver):
         X = surogate.X
 
         n, k = X.shape
-        one = np.ones([n, 1])
+        one = np.ones(n)
 
         xhat_comL = x_comL
         xhat_comU = x_comU
@@ -634,8 +635,8 @@ class Branch_and_Bound(Driver):
         eig_min = np.min(eig_lb)
         alpha = np.max(np.array([0.0, -0.5*eig_min]))
 
-        # Just storing it here to pull it out in the callback?
-        surogate._alpha = alpha
+        # # Just storing it here to pull it out in the callback?
+        # surogate._alpha = alpha
 
         # Maximize S
         x0 = 0.5*(xhat_comL + xhat_comU)
@@ -644,15 +645,19 @@ class Branch_and_Bound(Driver):
         #Note: Python defines constraints like g(x) >= 0
         cons = [{'type' : 'ineq',
                  'fun' : lambda x : -np.dot(Ain_hat[ii, :], x) + bin_hat[ii],
-                 'jac' : lambda x : -Ain_hat[ii, :]} for ii in range(2*n)]
+                 'jac' : lambda x : -Ain_hat[ii, :]
+                } for ii in range(2*n)]
 
+        sum_R_inv = np.sum(R_inv)
         optResult = minimize(self.calc_SSqr_convex, x0,
-                             args=(x_comL, x_comU, xhat_comL, xhat_comU),
+                             args=(x_comL, x_comU, xhat_comL, xhat_comU,
+                             X, R_inv, sum_R_inv, SigmaSqr, alpha),
                              method='SLSQP', constraints=cons, bounds=bnds,
                              options={'ftol' : self.options['ftol'],
-                                      'maxiter' : 100})
+                                      'maxiter' : 30})
 
         Neg_sU = optResult.fun
+        #print("NIT: %d" % optResult.nit)
         if not optResult.success:
             eflag_sU = False
         else:
@@ -666,24 +671,13 @@ class Branch_and_Bound(Driver):
         sU = - Neg_sU
         return sU, eflag_sU
 
-    def calc_SSqr_convex(self, x_com, *param):
+    @cython_replace("openmdao.util.speedups.branch_and_bound", "_calc_SSqr_convex")
+    def calc_SSqr_convex(self, x_com, x_comL, x_comU, xhat_comL, xhat_comU,
+                         X, R_inv, sum_R_inv, SigmaSqr, alpha):
         """ Callback function for minimization of mean squared error."""
-        
-        obj_surrogate = self.obj_surrogate
-        x_comL = param[0]
-        x_comU = param[1]
-        xhat_comL = param[2]
-        xhat_comU = param[3]
-
-        X = obj_surrogate.X
-        R_inv = obj_surrogate.R_inv
-        SigmaSqr = obj_surrogate.SigmaSqr
-        alpha = obj_surrogate._alpha
 
         n, k = X.shape
-        
-        one = np.ones([n, 1])
-            
+
         rL = x_comL[k:]
         rU = x_comU[k:]
         rhat = x_com[k:].reshape(n, 1)
@@ -691,14 +685,13 @@ class Branch_and_Bound(Driver):
         r = rL + rhat*(rU - rL)
         rhat_L = xhat_comL[k:]
         rhat_U = xhat_comU[k:]
-        
+
         term0 = np.dot(R_inv, r)
         term1 = -SigmaSqr*(1.0 - r.T.dot(term0) + \
-        ((1.0 - one.T.dot(term0))**2/(one.T.dot(np.dot(R_inv, one)))))
+                  ((1.0 - np.sum(term0))**2/(sum_R_inv)))
 
-        term2 = alpha*(rhat-rhat_L).T.dot(rhat-rhat_U)
-        S2 = term1 + term2
-        
+        S2 = term1 + alpha*(rhat-rhat_L).T.dot(rhat-rhat_U)
+
         return S2[0, 0]
 
     def minimize_y(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):
@@ -743,10 +736,8 @@ class Branch_and_Bound(Driver):
         return yL, eflag_yL
 
 
-    def calc_y_hat_convex(self, x_com, *param):
+    def calc_y_hat_convex(self, x_com, x_comL, x_comU):
         obj_surrogate = self.obj_surrogate
-        x_comL = param[0]
-        x_comU = param[1]
 
         X = obj_surrogate.X
         c_r = obj_surrogate.c_r
@@ -808,6 +799,7 @@ def gen_coeff_bound(xI_lb, xI_ub, surrogate):
     return x_comL, x_comU, Ain_hat, bin_hat
 
 
+@cython_replace("openmdao.util.speedups.branch_and_bound", "_interval_analysis")
 def interval_analysis(lb_x, ub_x, surrogate):
     """ The module predicts the lower and upper bound of the artificial
     variable 'r' from the bounds of the design variable x r is related to x
@@ -828,7 +820,7 @@ def interval_analysis(lb_x, ub_x, surrogate):
     t4L = np.zeros([n, 1]); t4U = np.zeros([n, 1])
     lb_r = np.zeros([n, 1]); ub_r = np.zeros([n, 1])
 
-    if p % 2 == 0:
+    if p == 2:
         for i in range(n):
             for h in range(k):
                 t1L[i,h] = lb_x[h] - X[i, h]
@@ -988,7 +980,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
         p = con_surrogate.p
         n = np.shape(X)[0]
         one = np.ones([n, 1])
-        
+
         r = np.exp(-np.sum(thetas*(xval - X)**p, 1)).reshape(n, 1)
 
         g_hat = mu + np.dot(r.T, c_r)

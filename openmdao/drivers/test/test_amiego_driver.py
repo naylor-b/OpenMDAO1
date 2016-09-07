@@ -6,7 +6,7 @@ import numpy as np
 
 from openmdao.api import IndepVarComp, Group, Problem, ExecComp
 from openmdao.drivers.amiego_driver import AMIEGO_driver
-from openmdao.test.branin import BranninInteger
+from openmdao.test.branin import BraninInteger
 from openmdao.test.griewank import Greiwank
 from openmdao.test.three_bar_truss import ThreeBarTruss, ThreeBarTrussVector
 from openmdao.test.util import assert_rel_error
@@ -14,18 +14,18 @@ from openmdao.test.util import assert_rel_error
 
 class TestAMIEGOdriver(unittest.TestCase):
 
-    def test_simple_brannin_opt(self):
+    def test_simple_branin_opt(self):
 
         prob = Problem()
         root = prob.root = Group()
 
         root.add('p1', IndepVarComp('xC', 7.5), promotes=['*'])
         root.add('p2', IndepVarComp('xI', 0), promotes=['*'])
-        root.add('comp', BranninInteger(), promotes=['*'])
+        root.add('comp', BraninInteger(), promotes=['*'])
 
         prob.driver = AMIEGO_driver()
         prob.driver.cont_opt.options['tol'] = 1e-12
-        prob.driver.options['disp'] = False
+        #prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
 
         prob.driver.add_desvar('xI', lower=-5, upper=10)

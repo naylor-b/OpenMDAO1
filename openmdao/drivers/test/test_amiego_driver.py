@@ -83,9 +83,9 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.run()
 
-        assert_rel_error(self, prob['mat1'], 2, 1e-5)
-        assert_rel_error(self, prob['mat2'], 2, 1e-5)
-        assert_rel_error(self, prob['mat3'], 4, 1e-5)
+        assert_rel_error(self, prob['mat1'], 3, 1e-5)
+        assert_rel_error(self, prob['mat2'], 3, 1e-5)
+        assert_rel_error(self, prob['mat3'], 1, 1e-5)
 
     def test_three_bar_truss_vector(self):
 
@@ -118,9 +118,9 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.run()
 
-        assert_rel_error(self, prob['mat'][0], 2, 1e-5)
-        assert_rel_error(self, prob['mat'][1], 2, 1e-5)
-        assert_rel_error(self, prob['mat'][2], 4, 1e-5)
+        assert_rel_error(self, prob['mat'][0], 3, 1e-5)
+        assert_rel_error(self, prob['mat'][1], 3, 1e-5)
+        assert_rel_error(self, prob['mat'][2], 1, 1e-5)
 
     def test_simple_greiwank_opt(self):
 

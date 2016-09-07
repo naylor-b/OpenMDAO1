@@ -104,7 +104,7 @@ class Branch_and_Bound(Driver):
 
         # When this is slotted into AMIEGO, this will be set to False.
         self.standalone = True
-        
+
     def _setup(self):
         """  Initialize whatever we need."""
         super(Branch_and_Bound, self)._setup()
@@ -408,27 +408,27 @@ class Branch_and_Bound(Driver):
 
                             M = len(self.con_surrogate)
                             EV = np.zeros([M, 1])
-                            
+
                             # Expected constraint violation
                             for mm in range(M):
                                 x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, con_surrogate[mm])
                                 sU_g, eflag_sU_g = self.maximize_S(x_comL, x_comU, Ain_hat,
                                                                    bin_hat, con_surrogate[mm])
-                                
+
                                 if eflag_sU_g:
                                     yL_g, eflag_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
                                                                        bin_hat, con_surrogate[mm])
                                     if eflag_yL_g:
-                                        EV[mm] = calc_conEV_norm([], 
+                                        EV[mm] = calc_conEV_norm([],
                                                                  con_surrogate[mm],
-                                                                 gSSqr=-sU_g, 
+                                                                 gSSqr=-sU_g,
                                                                  g_hat=yL_g)
                                     else:
                                         S4_fail = True
                                         break
                                 else:
                                     S4_fail = True
-                                    
+
                         else:
                             S4_fail = True
                     else:
@@ -470,6 +470,7 @@ class Branch_and_Bound(Driver):
                     print(template % (self.iter_count, LBD, UBD, par_node, child_info[0, 0],
                                       dis_flag[0], child_info[0, 1], child_info[1, 0],
                                       dis_flag[1], child_info[1, 1], child_info[1, 2]))
+                    pass
 
             # Termination
             if len(active_set) >= 1:
@@ -599,8 +600,8 @@ class Branch_and_Bound(Driver):
         n, k = X.shape
         one = np.ones([n, 1])
 
-        xhat_comL = x_comL
-        xhat_comU = x_comU
+        xhat_comL = x_comL.copy()
+        xhat_comU = x_comU.copy()
         xhat_comL[k:] = 0.0
         xhat_comU[k:] = 1.0
 
@@ -668,7 +669,7 @@ class Branch_and_Bound(Driver):
 
     def calc_SSqr_convex(self, x_com, *param):
         """ Callback function for minimization of mean squared error."""
-        
+
         obj_surrogate = self.obj_surrogate
         x_comL = param[0]
         x_comU = param[1]
@@ -681,9 +682,9 @@ class Branch_and_Bound(Driver):
         alpha = obj_surrogate._alpha
 
         n, k = X.shape
-        
+
         one = np.ones([n, 1])
-            
+
         rL = x_comL[k:]
         rU = x_comU[k:]
         rhat = x_com[k:].reshape(n, 1)
@@ -691,14 +692,14 @@ class Branch_and_Bound(Driver):
         r = rL + rhat*(rU - rL)
         rhat_L = xhat_comL[k:]
         rhat_U = xhat_comU[k:]
-        
+
         term0 = np.dot(R_inv, r)
         term1 = -SigmaSqr*(1.0 - r.T.dot(term0) + \
         ((1.0 - one.T.dot(term0))**2/(one.T.dot(np.dot(R_inv, one)))))
 
         term2 = alpha*(rhat-rhat_L).T.dot(rhat-rhat_U)
         S2 = term1 + term2
-        
+
         return S2[0, 0]
 
     def minimize_y(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):
@@ -710,8 +711,8 @@ class Branch_and_Bound(Driver):
         X = surrogate.X
         n, k = X.shape
 
-        xhat_comL = x_comL
-        xhat_comU = x_comU
+        xhat_comL = x_comL.copy()
+        xhat_comU = x_comU.copy()
         xhat_comL[k:] = 0.0
         xhat_comU[k:] = 1.0
 
@@ -956,7 +957,7 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
 
         r = np.exp(-np.sum(thetas*(xval - X)**p, 1)).reshape(n, 1)
 
-        y_hat = mu + np.dot(r.T,c_r)
+        y_hat = mu + np.dot(r.T, c_r)
         term0 = np.dot(R_inv, r)
         SSqr = SigmaSqr*(1.0 - r.T.dot(term0) + \
         ((1.0 - one.T.dot(term0))**2)/(one.T.dot(np.dot(R_inv, one))))
@@ -988,7 +989,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
         p = con_surrogate.p
         n = np.shape(X)[0]
         one = np.ones([n, 1])
-        
+
         r = np.exp(-np.sum(thetas*(xval - X)**p, 1)).reshape(n, 1)
 
         g_hat = mu + np.dot(r.T, c_r)

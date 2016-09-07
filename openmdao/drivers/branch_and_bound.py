@@ -23,6 +23,7 @@ from six.moves import range
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import erf
+from random import uniform
 
 from openmdao.core.driver import Driver
 from openmdao.surrogate_models.kriging import KrigingSurrogate
@@ -83,6 +84,9 @@ class Branch_and_Bound(Driver):
         opt.add_option('use_surrogate', False,
                        desc='Use surrogate model for the optimization. Training '
                        'data must be supplied.')
+        opt.add_option('local_search', False,
+                        desc='Set to True if local search needs to be performed '
+                        ' in step 2.')
 
         # Initial Sampling
         # TODO: Somehow slot an object that generates this (LHC for example)
@@ -145,6 +149,7 @@ class Branch_and_Bound(Driver):
         ftol = self.options['ftol']
         integer_tol = self.options['integer_tol']
         disp = self.options['disp']
+        local_search = self.options['local_search']
 
         # Metadata Setup
         self.metadata = create_local_meta(None, self.record_name)
@@ -257,20 +262,21 @@ class Branch_and_Bound(Driver):
 
         terminate = False
         num_des = len(self.xI_lb)
-        self.eflag_MINLPBB = False
         node_num = 0
 
         # Initial B&B bounds are infinite.
         LBD = -np.inf
-        UBD = np.inf
         LBD_prev =- np.inf
 
         xL_iter = self.xI_lb.copy()
         xU_iter = self.xI_ub.copy()
 
-        # Optimal objective and solution
-        fopt = np.inf
-        xopt = np.empty(xL_iter.shape)
+        # Initial optimal objective and solution
+        # Randomly generate an integer point
+        xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
+        fopt = self.objective_callback(xopt)
+        self.eflag_MINLPBB = True
+        UBD = fopt
 
         # This stuff is just for printing.
         par_node = 0
@@ -281,119 +287,56 @@ class Branch_and_Bound(Driver):
         active_set = []
 
         while not terminate:
-            int_flag = False
+            xloc_iter = np.round(xL_iter + 0.49*(xU_iter - xL_iter)) #Keep this to 0.49 to always round towards bottom-left
+            floc_iter = self.objective_callback(xloc_iter)
+            efloc_iter = True
+            if local_search:
+                if np.abs(floc_iter) > active_tol: #Perform at non-flat starting point
+                    #--------------------------------------------------------------
+                    #Step 2: Obtain a local solution
+                    #--------------------------------------------------------------
+                    # Using a gradient-based method here.
+                    # TODO: Make it more pluggable.
+                    # TODO: Use SNOPT [Not a priority-Not going to use local search anytime soon]
+                    xC_iter = xloc_iter
+                    bnds = [(xL_iter[ii], xU_iter[ii]) for ii in range(num_des)]
 
-            # Reduce the active set if the upper and lower bounds are really
-            # close. This is not considered an independent iteration.
-            if np.linalg.norm(xL_iter - xU_iter) <= active_tol:
-                xloc_iter = xL_iter.copy()
-                floc_iter = self.objective_callback(xloc_iter)
+                    optResult = minimize(self.objective_callback, xC_iter,
+                                         method='SLSQP', bounds=bnds,
+                                         options={'ftol' : ftol})
 
-                #Better solution found
-                if floc_iter < UBD:
-                    UBD = floc_iter
-                    fopt = UBD
-                    xopt = xloc_iter.copy().reshape(num_des)
-                    self.eflag_MINLPBB = True
+                    xloc_iter = np.round(optResult.x.reshape(num_des, 1))
+                    floc_iter = self.objective_callback(xloc_iter)
 
-                    # Update active set: Removes the current node
-                    if len(active_set) >= 1:
-                        active_set = update_active_set(active_set, UBD)
-
-            # Branch and Bound main iteration.
-            else:
-
-                #--------------------------------------------------------------
-                #Step 2: Obtain a local solution
-                #--------------------------------------------------------------
-
-                # Using a gradient-based method here.
-                # TODO: Make it more pluggable.
-                xC_iter = (0.5*(xU_iter + xL_iter)).reshape((num_des, 1))
-                bnds = [(xL_iter[ii], xU_iter[ii]) for ii in range(num_des)]
-
-                optResult = minimize(self.objective_callback, xC_iter,
-                                     method='SLSQP', bounds=bnds,
-                                     options={'ftol' : ftol})
-
-                xloc_iter = optResult.x.reshape(num_des, 1)
-                floc_iter = optResult.fun
-
-                if not optResult.success:
-                    efloc_iter = False
-                    floc_iter = np.inf
-                else:
-                    efloc_iter = True
-
-                # Round any close to integer value to integer solution.
-                for aa in range(len(xloc_iter)):
-                    rounded = np.round(xloc_iter[aa])
-                    if np.abs(rounded - xloc_iter[aa]) <= integer_tol:
-                        xloc_iter[aa] = rounded
-
-                # Reduce the active set if an Integer solution was found.
-                if np.linalg.norm(xloc_iter - np.round(xloc_iter)) <= active_tol and \
-                   efloc_iter:
-                    int_flag = True
-
-                    # Better integer solution found
-                    if floc_iter < UBD:
-                        UBD = 1.0*floc_iter
-                        fopt = 1.0*UBD
-                        xopt = xloc_iter.copy().reshape(num_des)
-                        self.eflag_MINLPBB = True
-
-                        # Update active set
-                        if len(active_set) >= 1:
-                            active_set = update_active_set(active_set, UBD)
-
-                #--------------------------------------------------------------
-                # Step 3: Partition the current rectangle as per the new
-                # branching scheme.
-                #--------------------------------------------------------------
-
-                child_info = np.zeros([2,3])
-                dis_flag = [' ',' ']
-                for ii in range(2):
-                    lb = xL_iter.copy()
-                    ub = xU_iter.copy()
-
-                    if efloc_iter:
-                        #Case 1: Not an integer sol. Branch at variable farthest from the integer value
-                        if int_flag is False:
-                            l_iter = np.abs(np.round(xloc_iter) - xloc_iter).argmax()
-                            if ii == 0:
-                                ub[l_iter] = np.floor(xloc_iter[l_iter])
-                            elif ii == 1:
-                                lb[l_iter] = np.ceil(xloc_iter[l_iter])
-
-                        #Case 2: Integer sol. Branch at variable with the largest edge
-                        else:
-                            l_iter = (xU_iter - xL_iter).argmax()
-                            if ii == 0:
-                                if lb[l_iter] < xloc_iter[l_iter]:
-                                    #Bound shifted by 1 unit to the left
-                                    ub[l_iter] = xloc_iter[l_iter] - 1
-                                else:
-                                    ub[l_iter] = 1.0*lb[l_iter]
-                            elif ii == 1:
-                                if ub[l_iter] > xloc_iter[l_iter]:
-                                    #Bound shifted by 1 unit to the right
-                                    lb[l_iter] = xloc_iter[l_iter] + 1
-                                else:
-                                    lb[l_iter] = 1.0*ub[l_iter]
+                    if not optResult.success:
+                        efloc_iter = False
+                        floc_iter = np.inf
                     else:
-                        #Branch at variable with largest edge
-                        l_iter = (xU_iter - xL_iter).argmax()
-                        if ii == 0:
-                            ub[l_iter] = np.floor(0.5*(xU_iter[l_iter] + xL_iter[l_iter]))
-                        elif ii == 1:
-                            lb[l_iter] = np.ceil(0.5*(xU_iter[l_iter] + xL_iter[l_iter]))
+                        efloc_iter = True
 
+            #--------------------------------------------------------------
+            # Step 3: Partition the current rectangle as per the new
+            # branching scheme.
+            #--------------------------------------------------------------
+            child_info = np.zeros([2,3])
+            dis_flag = [' ',' ']
+            for ii in range(2):
+                lb = xL_iter.copy()
+                ub = xU_iter.copy()
+                l_iter = (xU_iter - xL_iter).argmax()
+                if xloc_iter[l_iter]<ub[l_iter]:
+                    delta = 0.5 #0<delta<1
+                else:
+                    delta = -0.5 #-1<delta<0
+                if ii == 0:
+                    ub[l_iter] = np.floor(xloc_iter[l_iter]+delta)
+                elif ii == 1:
+                    lb[l_iter] = np.ceil(xloc_iter[l_iter]+delta)
+
+                if np.linalg.norm(ub - lb) > active_tol: #Not a point
                     #--------------------------------------------------------------
                     # Step 4: Obtain an LBD of f in the newly created node
                     #--------------------------------------------------------------
-
                     S4_fail = False
                     x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, obj_surrogate)
                     sU, eflag_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat,
@@ -428,6 +371,7 @@ class Branch_and_Bound(Driver):
                                         break
                                 else:
                                     S4_fail = True
+                                    break
 
                         else:
                             S4_fail = True
@@ -456,21 +400,38 @@ class Branch_and_Bound(Driver):
                         child_info[ii] = np.array([node_num, LBD_NegConEI, floc_iter])
                     else:
                         child_info[ii] = np.array([par_node, LBD_NegConEI, floc_iter])
+                        dis_flag[ii] = 'X' #Flag for child created but not added to active set (fathomed)
+                else:
+                    if ii == 1:
+                        xloc_iter = ub
+                        floc_iter = self.objective_callback(xloc_iter)
+                    child_info[ii] = np.array([par_node, np.inf, floc_iter])
+                    dis_flag[ii] = 'x' #Flag for No child created
 
-                if disp:
-                    if (self.iter_count-1) % 25 == 0:
-                        # Display output in a tabular format
-                        print("="*85)
-                        print("%19s%12s%14s%21s" % ("Global", "Parent", "Child1", "Child2"))
-                        template = "%s%8s%10s%8s%9s%11s%10s%11s%11s"
-                        print(template % ("Iter", "LBD", "UBD", "Node", "Node1", "LBD1",
-                                          "Node2", "LBD2", "Flocal"))
-                        print("="*85)
-                    template = "%3d%10.2f%10.2f%6d%8d%1s%13.2f%8d%1s%13.2f%9.2f"
-                    print(template % (self.iter_count, LBD, UBD, par_node, child_info[0, 0],
-                                      dis_flag[0], child_info[0, 1], child_info[1, 0],
-                                      dis_flag[1], child_info[1, 1], child_info[1, 2]))
-                    pass
+            #Update the active set whenever better solution found
+            if floc_iter < UBD:
+                UBD = floc_iter
+                fopt = UBD
+                xopt = xloc_iter.copy().reshape(num_des)
+
+                # Update active set: Removes the current node
+                if len(active_set) >= 1:
+                    active_set = update_active_set(active_set, UBD)
+
+
+            if disp:
+                if (self.iter_count-1) % 25 == 0:
+                    # Display output in a tabular format
+                    print("="*85)
+                    print("%19s%12s%14s%21s" % ("Global", "Parent", "Child1", "Child2"))
+                    template = "%s%8s%10s%8s%9s%11s%10s%11s%11s"
+                    print(template % ("Iter", "LBD", "UBD", "Node", "Node1", "LBD1",
+                                      "Node2", "LBD2", "Flocal"))
+                    print("="*85)
+                template = "%3d%10.2f%10.2f%6d%8d%1s%13.2f%8d%1s%13.2f%9.2f"
+                print(template % (self.iter_count, LBD, UBD, par_node, child_info[0, 0],
+                                  dis_flag[0], child_info[0, 1], child_info[1, 0],
+                                  dis_flag[1], child_info[1, 1], child_info[1, 2]))
 
             # Termination
             if len(active_set) >= 1:

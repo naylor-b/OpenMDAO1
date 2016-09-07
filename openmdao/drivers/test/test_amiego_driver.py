@@ -25,7 +25,7 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.driver = AMIEGO_driver()
         prob.driver.cont_opt.options['tol'] = 1e-12
-        #prob.driver.options['disp'] = False
+        prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
 
         prob.driver.add_desvar('xI', lower=-5, upper=10)

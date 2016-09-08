@@ -32,6 +32,9 @@ from openmdao.util.freplace import cython_replace
 
 from openmdao.util.speedups.branch_and_bound import _calc_SSqr_convex, _calc_y_hat_convex
 
+# optimizer used for scipy.minimize calls
+minimizer_type = 'COBYLA'
+
 class Branch_and_Bound(Driver):
     """ Class definition for the Branch_and_Bound driver. This driver can be run
     standalone or plugged into the AMIEGO driver.
@@ -103,7 +106,7 @@ class Branch_and_Bound(Driver):
         self.con_cache = None
 
         # Set to True if we have found a minimum.
-        self.eflag_MINLPBB = False
+        self.success_MINLPBB = False
 
         self.xopt = None
         self.fopt = None
@@ -277,7 +280,7 @@ class Branch_and_Bound(Driver):
         # Randomly generate an integer point
         xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
         fopt = self.objective_callback(xopt)
-        self.eflag_MINLPBB = True
+        self.success_MINLPBB = True
         UBD = fopt
 
         # This stuff is just for printing.
@@ -304,7 +307,7 @@ class Branch_and_Bound(Driver):
                     bnds = [(xL_iter[ii], xU_iter[ii]) for ii in range(num_des)]
 
                     optResult = minimize(self.objective_callback, xC_iter,
-                                         method='SLSQP', bounds=bnds,
+                                         method=minimizer_type, bounds=bnds,
                                          options={'ftol' : ftol})
 
                     xloc_iter = np.round(optResult.x.reshape(num_des, 1))
@@ -341,14 +344,14 @@ class Branch_and_Bound(Driver):
                     #--------------------------------------------------------------
                     S4_fail = False
                     x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, obj_surrogate)
-                    sU, eflag_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat,
+                    sU, success_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat,
                                                    obj_surrogate)
 
-                    if eflag_sU:
-                        yL, eflag_yL = self.minimize_y(x_comL, x_comU, Ain_hat, bin_hat,
+                    if success_sU:
+                        yL, success_yL = self.minimize_y(x_comL, x_comU, Ain_hat, bin_hat,
                                                        obj_surrogate)
 
-                        if eflag_yL:
+                        if success_yL:
                             NegEI = calc_conEI_norm([], obj_surrogate, SSqr=sU, y_hat=yL)
 
                             M = len(self.con_surrogate)
@@ -357,13 +360,14 @@ class Branch_and_Bound(Driver):
                             # Expected constraint violation
                             for mm in range(M):
                                 x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, con_surrogate[mm])
-                                sU_g, eflag_sU_g = self.maximize_S(x_comL, x_comU, Ain_hat,
+
+                                sU_g, success_sU_g = self.maximize_S(x_comL, x_comU, Ain_hat,
                                                                    bin_hat, con_surrogate[mm])
 
-                                if eflag_sU_g:
-                                    yL_g, eflag_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
+                                if success_sU_g:
+                                    yL_g, success_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
                                                                        bin_hat, con_surrogate[mm])
-                                    if eflag_yL_g:
+                                    if success_yL_g:
                                         EV[mm] = calc_conEV_norm([],
                                                                  con_surrogate[mm],
                                                                  gSSqr=-sU_g,
@@ -595,7 +599,10 @@ class Branch_and_Bound(Driver):
             eig_lb[ii] = H_hat[ii, ii] - np.min(np.array([sum_rw, sum_col]))
 
         eig_min = np.min(eig_lb)
-        alpha = np.max(np.array([0.0, -0.5*eig_min]))
+        if eig_min < 0.0:
+            alpha = -0.5*eig_min
+        else:
+            alpha = 0.0
 
         # # Just storing it here to pull it out in the callback?
         # surogate._alpha = alpha
@@ -613,24 +620,24 @@ class Branch_and_Bound(Driver):
         optResult = minimize(self.calc_SSqr_convex, x0,
                              args=(x_comL, x_comU, xhat_comL, xhat_comU,
                              X, R_inv, T2_den, SigmaSqr, alpha),
-                             method='SLSQP', constraints=cons, bounds=bnds,
+                             method=minimizer_type, constraints=cons, bounds=bnds,
                              options={'ftol' : self.options['ftol'],
                                       'maxiter' : 100})
 
         Neg_sU = optResult.fun
         #print("NIT: %d" % optResult.nit)
         if not optResult.success:
-            eflag_sU = False
+            success_sU = False
         else:
-            eflag_sU = True
+            success_sU = True
             tol = self.options['con_tol']
             for ii in range(2*n):
                 if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + tol):
-                    eflag_sU = False
+                    success_sU = False
                     break
 
-        sU = - Neg_sU
-        return sU, eflag_sU
+        sU = -Neg_sU
+        return sU, success_sU
 
     @cython_replace("openmdao.util.speedups.branch_and_bound", "_calc_SSqr_convex")
     def calc_SSqr_convex(self, x_com, x_comL, x_comU, xhat_comL, xhat_comU,
@@ -681,23 +688,23 @@ class Branch_and_Bound(Driver):
                     } for ii in range(2*n)]
 
             optResult = minimize(calc_y_hat_convex, x0,
-                                 args=(x_comL, x_comU, n, k, c_r, mu), method='SLSQP',
+                                 args=(x_comL, x_comU, n, k, c_r, mu), method=minimizer_type,
                                  constraints=cons, bounds=bnds,
                                  options={'ftol' : self.options['ftol'],
                                           'maxiter' : 100})
             yL = optResult.fun
 
             if not optResult.success:
-                eflag_yL = False
+                success_yL = False
             else:
-                eflag_yL = True
+                success_yL = True
                 tol = self.options['con_tol']
                 for ii in range(2*n):
                     if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + tol):
-                        eflag_yL = False
+                        success_yL = False
                         break
 
-        return yL, eflag_yL
+        return yL, success_yL
 
 
 @cython_replace("openmdao.util.speedups.branch_and_bound", "_calc_y_hat_convex")
@@ -818,10 +825,10 @@ def lin_underestimator(lb, ub, surrogate):
 
     b2 = np.zeros(X.shape); b4 = np.zeros(X.shape)
     b1_hat = np.zeros((n, 1)); b3_hat = np.zeros((n, 1))
-    
+
     Ain_hat = np.zeros((2*n, n+k))
     bin_hat = np.zeros((2*n, 1))
-    
+
     a1_hat = Ain_hat[0:n, k:]
     a3_hat = Ain_hat[n:, k:]
     a2 = Ain_hat[:n, :k]

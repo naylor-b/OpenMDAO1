@@ -331,14 +331,14 @@ class AMIEGO_driver(Driver):
                 if disp:
                     print("======================MINLPBB-End=======================================")
 
-                eflag_MINLPBB = minlp.eflag_MINLPBB
+                success_MINLPBB = minlp.success_MINLPBB
                 x0I = minlp.xopt
                 ei_min = minlp.fopt
 
                 if disp:
-                    print("Eflag = ", eflag_MINLPBB)
+                    print("Eflag = ", success_MINLPBB)
 
-                if eflag_MINLPBB >= 1:
+                if success_MINLPBB: # >= 1:
 
                     x0I_hat = (x0I - xI_lb)/(xI_ub - xI_lb)
 
@@ -358,7 +358,7 @@ class AMIEGO_driver(Driver):
                         dist = np.sum((x_i[ii] - x0I)**2)**0.5
                         if dist <= rad:
                             if disp:
-                                print("Point already exists!")  
+                                print("Point already exists!")
                             ec2 = 1
                             break
                     x_i.append(x0I)
@@ -412,5 +412,3 @@ class AMIEGO_driver(Driver):
             print("Best Integer designs: ", best_int_design)
             print("Corresponding continuous designs: ", best_cont_design)
             print("=====================================================")
-
-

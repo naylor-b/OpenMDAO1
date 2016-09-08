@@ -944,7 +944,7 @@ def interval_analysis(lb_x, ub_x, surrogate):
     t2L = np.zeros([n, k]); t2U = np.zeros([n, k])
     t3L = np.zeros([n, k]); t3U = np.zeros([n, k])
     t4L = np.zeros([n, 1]); t4U = np.zeros([n, 1])
-    lb_r = np.zeros([n, 1]); ub_r = np.zeros([n, 1])
+    lb_r = np.zeros([n, 1]); ub_r = np.ones([n, 1])
 
     # if p % 2 == 0:
     #     for i in range(n):

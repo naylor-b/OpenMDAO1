@@ -1012,30 +1012,30 @@ def interval_analysis(lb_x, ub_x, surrogate):
     t4L = np.zeros([n, 1]); t4U = np.zeros([n, 1])
     lb_r = np.zeros([n, 1]); ub_r = np.zeros([n, 1])
 
-    if p % 2 == 0:
-        for i in range(n):
-            for h in range(k):
-                t1L[i,h] = lb_x[h] - X[i, h]
-                t1U[i,h] = ub_x[h] - X[i, h]
-
-                t2L[i,h] = np.max(np.array([0,np.min(np.array([t1L[i, h]*t1L[i, h],
-                                                                t1L[i, h]*t1U[i, h],
-                                                                t1U[i, h]*t1U[i, h]]))]))
-                t2U[i,h] = np.max(np.array([0,np.max(np.array([t1L[i, h]*t1L[i, h],
-                                                                t1L[i, h]*t1U[i, h],
-                                                                t1U[i, h]*t1U[i, h]]))]))
-
-                t3L[i,h] = np.min(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
-                t3U[i,h] = np.max(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
-
-            t4L[i] = np.sum(t3L[i, :])
-            t4U[i] = np.sum(t3U[i, :])
-
-            lb_r[i] = np.exp(t4L[i])
-            ub_r[i] = np.exp(t4U[i])
-    else:
-        print("\nWarning! Value of p should be 2. Cannot perform interval analysis")
-        print("\nReturing global bound of the r variable")
+    # if p % 2 == 0:
+    #     for i in range(n):
+    #         for h in range(k):
+    #             t1L[i,h] = lb_x[h] - X[i, h]
+    #             t1U[i,h] = ub_x[h] - X[i, h]
+    #
+    #             t2L[i,h] = np.max(np.array([0,np.min(np.array([t1L[i, h]*t1L[i, h],
+    #                                                             t1L[i, h]*t1U[i, h],
+    #                                                             t1U[i, h]*t1U[i, h]]))]))
+    #             t2U[i,h] = np.max(np.array([0,np.max(np.array([t1L[i, h]*t1L[i, h],
+    #                                                             t1L[i, h]*t1U[i, h],
+    #                                                             t1U[i, h]*t1U[i, h]]))]))
+    #
+    #             t3L[i,h] = np.min(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
+    #             t3U[i,h] = np.max(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
+    #
+    #         t4L[i] = np.sum(t3L[i, :])
+    #         t4U[i] = np.sum(t3U[i, :])
+    #
+    #         lb_r[i] = np.exp(t4L[i])
+    #         ub_r[i] = np.exp(t4U[i])
+    # else:
+    #     print("\nWarning! Value of p should be 2. Cannot perform interval analysis")
+    #     print("\nReturing global bound of the r variable")
 
     return lb_r, ub_r
 

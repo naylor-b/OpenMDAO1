@@ -812,7 +812,7 @@ class Branch_and_Bound(Driver):
 
         dterm1a = (rhat.T.dot(R_inv) + rhat.T.dot(R_inv.T))
         dterm1b = 2.0*((1.0 - one.T.dot(term0))*np.sum(R_inv, 0)/(one.T.dot(np.dot(R_inv, one))))
-        dterm1 = -SigmaSqr*(dterm1a + dterm1b)
+        dterm1 = SigmaSqr*(dterm1a + dterm1b)
 
         dterm2 = alpha*(2.0*rhat - rhat_L - rhat_U)
 
@@ -1010,7 +1010,7 @@ def interval_analysis(lb_x, ub_x, surrogate):
     t2L = np.zeros([n, k]); t2U = np.zeros([n, k])
     t3L = np.zeros([n, k]); t3U = np.zeros([n, k])
     t4L = np.zeros([n, 1]); t4U = np.zeros([n, 1])
-    lb_r = np.zeros([n, 1]); ub_r = np.zeros([n, 1])
+    lb_r = np.zeros([n, 1]); ub_r = np.ones([n, 1])
 
     # if p % 2 == 0:
     #     for i in range(n):

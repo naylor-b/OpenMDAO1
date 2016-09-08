@@ -17,6 +17,7 @@ Implemented in OpenMDAO, Aug 2016, Kenneth T. Moore
 
 from __future__ import print_function
 
+from collections import OrderedDict
 from six import iteritems
 from six.moves import range
 from random import uniform
@@ -32,7 +33,7 @@ from openmdao.surrogate_models.kriging import KrigingSurrogate
 from openmdao.util.record_util import create_local_meta, update_local_meta
 
 
-def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None):
+def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None, sens=None):
     """ Wrapper function for running a SNOPT optimization through
     pyoptsparse."""
 
@@ -63,7 +64,7 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None):
     opt.setOption('iSumm', 0)
     #opt.setOption('iPrint', 0)
 
-    sol = opt(opt_prob, sens=None, sensStep=1.0e-6)
+    sol = opt(opt_prob, sens=sens, sensStep=1.0e-6)
     #print(sol)
 
     x = sol.getDVs()['x']
@@ -668,7 +669,8 @@ class Branch_and_Bound(Driver):
         opt_x, opt_f, succ_flag = snopt_opt(self.calc_SSqr_convex, x0, xhat_comL,
                                             xhat_comU, len(bin_hat),
                                             title='Maximize_S',
-                                            options={'Major optimality tolerance' : self.options['ftol']})
+                                            options={'Major optimality tolerance' : self.options['ftol']},
+                                            sens=self.calc_SSqr_convex_grad)
 
         #Neg_sU = optResult.fun
         #if not optResult.success:
@@ -680,7 +682,6 @@ class Branch_and_Bound(Driver):
                 #if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + tol):
                     #eflag_sU = False
                     #break
-
 
         Neg_sU = opt_f
         if not succ_flag:
@@ -778,6 +779,60 @@ class Branch_and_Bound(Driver):
 
         return func_dict, fail
 
+    def calc_SSqr_convex_grad(self, dv_dict, func_dict):
+        """ Callback function for gradient of mean squared error."""
+        fail = 0
+
+        x_com = dv_dict['x']
+        obj_surrogate = self.obj_surrogate
+        x_comL = self.x_comL
+        x_comU = self.x_comU
+        xhat_comL = self.xhat_comL
+        xhat_comU = self.xhat_comU
+
+        X = obj_surrogate.X
+        R_inv = obj_surrogate.R_inv
+        SigmaSqr = obj_surrogate.SigmaSqr
+        alpha = obj_surrogate._alpha
+
+        n, k = X.shape
+        nn = len(x_com)
+
+        one = np.ones([n, 1])
+
+        rL = x_comL[k:]
+        rU = x_comU[k:]
+        rhat = x_com[k:].reshape(n, 1)
+
+        r = rL + rhat*(rU - rL)
+        rhat_L = xhat_comL[k:]
+        rhat_U = xhat_comU[k:]
+
+        term0 = np.dot(R_inv, r)
+
+        dterm1a = (rhat.T.dot(R_inv) + rhat.T.dot(R_inv.T))
+        dterm1b = 2.0*((1.0 - one.T.dot(term0))*np.sum(R_inv, 0)/(one.T.dot(np.dot(R_inv, one))))
+        dterm1 = -SigmaSqr*(dterm1a + dterm1b)
+
+        dterm2 = alpha*(2.0*rhat - rhat_L - rhat_U)
+
+        dobj_dr = dterm1 + dterm2.T
+
+        # Objectives
+        sens_dict = OrderedDict()
+        sens_dict['obj'] = OrderedDict()
+        sens_dict['obj']['x'] = np.zeros((1, nn))
+        sens_dict['obj']['x'][:, k:] = dobj_dr*(rU - rL).T
+
+        # Constraints
+        Ain_hat = self.Ain_hat
+        bin_hat = self.bin_hat
+
+        sens_dict['con'] = OrderedDict()
+        sens_dict['con']['x'] = Ain_hat
+
+        return sens_dict, fail
+
     def minimize_y(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):
 
         # 1- Formulates y_hat as LP (weaker bound)
@@ -800,44 +855,55 @@ class Branch_and_Bound(Driver):
                      'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
                      'jac': lambda x: -Ain_hat[ii, :]} for ii in range(2*n)]
 
-            optResult = minimize(self.calc_y_hat_convex_old, x0,
-                                 args=(x_comL, x_comU), method='SLSQP',
-                                 constraints=cons, bounds=bnds,
-                                 options={'ftol' : self.options['ftol'],
-                                          'maxiter' : 100})
+            #optResult = minimize(self.calc_y_hat_convex_old, x0,
+                                 #args=(x_comL, x_comU, surrogate), method='SLSQP',
+                                 #constraints=cons, bounds=bnds,
+                                 #options={'ftol' : self.options['ftol'],
+                                          #'maxiter' : 100})
 
             self.x_comL = x_comL
             self.x_comU = x_comU
             self.Ain_hat = Ain_hat
             self.bin_hat = bin_hat
+            self.surrogate = surrogate
 
             opt_x, opt_f, succ_flag = snopt_opt(self.calc_y_hat_convex, x0, xhat_comL,
                                                 xhat_comU, len(bin_hat),
                                                 title='minimize_y',
                                                 options={'Major optimality tolerance' : self.options['ftol']})
 
-            yL = optResult.fun
+            #yL = optResult.fun
+            #if not optResult.success:
+                #eflag_yL = False
+            #else:
+                #eflag_yL = True
+                #tol = self.options['con_tol']
+                #for ii in range(2*n):
+                    #if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + tol):
+                        #eflag_yL = False
+                        #break
 
-            if not optResult.success:
+            yL = opt_f
+            if not succ_flag:
                 eflag_yL = False
             else:
                 eflag_yL = True
                 tol = self.options['con_tol']
                 for ii in range(2*n):
-                    if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + tol):
+                    if np.dot(Ain_hat[ii, :], opt_x) > (bin_hat[ii, 0] + tol):
                         eflag_yL = False
                         break
 
         return yL, eflag_yL
 
     def calc_y_hat_convex_old(self, x_com, *param):
-        obj_surrogate = self.obj_surrogate
         x_comL = param[0]
         x_comU = param[1]
+        surrogate = param[2]
 
-        X = obj_surrogate.X
-        c_r = obj_surrogate.c_r
-        mu = obj_surrogate.mu
+        X = surrogate.X
+        c_r = surrogate.c_r
+        mu = surrogate.mu
         n, k = X.shape
 
         rL = x_comL[k:]
@@ -852,13 +918,13 @@ class Branch_and_Bound(Driver):
         fail = 0
 
         x_com = dv_dict['x']
-        obj_surrogate = self.obj_surrogate
+        surrogate = self.surrogate
         x_comL = self.x_comL
         x_comU = self.x_comU
 
-        X = obj_surrogate.X
-        c_r = obj_surrogate.c_r
-        mu = obj_surrogate.mu
+        X = surrogate.X
+        c_r = surrogate.c_r
+        mu = surrogate.mu
         n, k = X.shape
 
         rL = x_comL[k:]
@@ -877,7 +943,7 @@ class Branch_and_Bound(Driver):
         bin_hat = self.bin_hat
 
         func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
-
+        print(func_dict['con'])
         return func_dict, fail
 
 def update_active_set(active_set, ubd):

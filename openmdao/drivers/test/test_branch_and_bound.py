@@ -6,20 +6,20 @@ import numpy as np
 
 from openmdao.api import IndepVarComp, Group, Problem, ExecComp
 from openmdao.drivers.branch_and_bound import Branch_and_Bound
-from openmdao.test.branin import BranninInteger
+from openmdao.test.branin import BraninInteger
 from openmdao.test.three_bar_truss import ThreeBarTruss
 from openmdao.test.util import assert_rel_error
 
 
 class TestBranchAndBounddriver(unittest.TestCase):
 
-    def test_brannin_just_opt_integer(self):
+    def test_branin_just_opt_integer(self):
 
         prob = Problem()
         root = prob.root = Group()
 
         root.add('p2', IndepVarComp('xI', 0), promotes=['*'])
-        root.add('comp', BranninInteger(), promotes=['*'])
+        root.add('comp', BraninInteger(), promotes=['*'])
 
         prob.driver = Branch_and_Bound()
         prob.driver.options['use_surrogate'] = True

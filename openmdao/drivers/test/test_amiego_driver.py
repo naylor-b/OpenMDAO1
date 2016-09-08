@@ -6,7 +6,7 @@ import numpy as np
 
 from openmdao.api import IndepVarComp, Group, Problem, ExecComp
 from openmdao.drivers.amiego_driver import AMIEGO_driver
-from openmdao.test.branin import BranninInteger
+from openmdao.test.branin import BraninInteger
 from openmdao.test.griewank import Greiwank
 from openmdao.test.three_bar_truss import ThreeBarTruss, ThreeBarTrussVector
 from openmdao.test.util import assert_rel_error
@@ -14,14 +14,14 @@ from openmdao.test.util import assert_rel_error
 
 class TestAMIEGOdriver(unittest.TestCase):
 
-    def test_simple_brannin_opt(self):
+    def test_simple_branin_opt(self):
 
         prob = Problem()
         root = prob.root = Group()
 
         root.add('p1', IndepVarComp('xC', 7.5), promotes=['*'])
         root.add('p2', IndepVarComp('xI', 0), promotes=['*'])
-        root.add('comp', BranninInteger(), promotes=['*'])
+        root.add('comp', BraninInteger(), promotes=['*'])
 
         prob.driver = AMIEGO_driver()
         prob.driver.cont_opt.options['tol'] = 1e-12
@@ -83,9 +83,9 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.run()
 
-        assert_rel_error(self, prob['mat1'], 2, 1e-5)
-        assert_rel_error(self, prob['mat2'], 2, 1e-5)
-        assert_rel_error(self, prob['mat3'], 4, 1e-5)
+        assert_rel_error(self, prob['mat1'], 3, 1e-5)
+        assert_rel_error(self, prob['mat2'], 3, 1e-5)
+        assert_rel_error(self, prob['mat3'], 1, 1e-5)
 
     def test_three_bar_truss_vector(self):
 
@@ -118,9 +118,9 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.run()
 
-        assert_rel_error(self, prob['mat'][0], 2, 1e-5)
-        assert_rel_error(self, prob['mat'][1], 2, 1e-5)
-        assert_rel_error(self, prob['mat'][2], 4, 1e-5)
+        assert_rel_error(self, prob['mat'][0], 3, 1e-5)
+        assert_rel_error(self, prob['mat'][1], 3, 1e-5)
+        assert_rel_error(self, prob['mat'][2], 1, 1e-5)
 
     def test_simple_greiwank_opt(self):
 

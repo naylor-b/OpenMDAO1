@@ -33,7 +33,8 @@ from openmdao.surrogate_models.kriging import KrigingSurrogate
 from openmdao.util.record_util import create_local_meta, update_local_meta
 
 
-def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None, sens=None):
+def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
+              sens=None, jac=None):
     """ Wrapper function for running a SNOPT optimization through
     pyoptsparse."""
 
@@ -42,7 +43,8 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None, sens=None)
     ndv = len(desvar)
 
     opt_prob.addVarGroup('x', ndv, type='c', value=desvar.flatten(), lower=lb.flatten(), upper=ub.flatten())
-    opt_prob.addConGroup('con', ncon, upper=np.zeros((ncon)))
+    opt_prob.addConGroup('con', ncon, upper=np.zeros((ncon)), linear=True, wrt='x',
+                         jac={'x' : jac})
     opt_prob.addObj('obj')
 
     # Fall back on SLSQP if SNOPT isn't there
@@ -319,6 +321,7 @@ class Branch_and_Bound(Driver):
         # Initial optimal objective and solution
         # Randomly generate an integer point
         xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
+        xopt = 1.0
         fopt = self.objective_callback(xopt)
         self.eflag_MINLPBB = True
         UBD = fopt
@@ -438,7 +441,7 @@ class Branch_and_Bound(Driver):
                     # lower than the UBD.
                     #--------------------------------------------------------------
 
-                    if LBD_NegConEI < UBD:
+                    if LBD_NegConEI < UBD - 1.0e-6:
                         node_num += 1
                         new_node = [node_num, lb, ub, LBD_NegConEI, floc_iter]
                         active_set.append(new_node)
@@ -670,7 +673,8 @@ class Branch_and_Bound(Driver):
                                             xhat_comU, len(bin_hat),
                                             title='Maximize_S',
                                             options={'Major optimality tolerance' : self.options['ftol']},
-                                            sens=self.calc_SSqr_convex_grad)
+                                            jac=Ain_hat,
+                                            )#sens=self.calc_SSqr_convex_grad)
 
         #Neg_sU = optResult.fun
         #if not optResult.success:
@@ -688,11 +692,6 @@ class Branch_and_Bound(Driver):
             eflag_sU = False
         else:
             eflag_sU = True
-            tol = self.options['con_tol']
-            for ii in range(2*n):
-                if np.dot(Ain_hat[ii, :], opt_x) > (bin_hat[ii ,0] + tol):
-                    eflag_sU = False
-                    break
 
         sU = - Neg_sU
         return sU, eflag_sU
@@ -730,6 +729,8 @@ class Branch_and_Bound(Driver):
         term2 = alpha*(rhat-rhat_L).T.dot(rhat-rhat_U)
         S2 = term1 + term2
 
+        #print('x', x_com)
+        #print('obj', S2[0, 0])
         return S2[0, 0]
 
     def calc_SSqr_convex(self, dv_dict):
@@ -772,11 +773,12 @@ class Branch_and_Bound(Driver):
         func_dict['obj'] = S2[0, 0]
 
         # Constraints
-        Ain_hat = self.Ain_hat
-        bin_hat = self.bin_hat
+        #Ain_hat = self.Ain_hat
+        #bin_hat = self.bin_hat
 
-        func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
-
+        #func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
+        #print('x', dv_dict)
+        #print('obj', func_dict['obj'])
         return func_dict, fail
 
     def calc_SSqr_convex_grad(self, dv_dict, func_dict):
@@ -825,11 +827,11 @@ class Branch_and_Bound(Driver):
         sens_dict['obj']['x'][:, k:] = dobj_dr*(rU - rL).T
 
         # Constraints
-        Ain_hat = self.Ain_hat
-        bin_hat = self.bin_hat
+        #Ain_hat = self.Ain_hat
+        #bin_hat = self.bin_hat
 
-        sens_dict['con'] = OrderedDict()
-        sens_dict['con']['x'] = Ain_hat
+        #sens_dict['con'] = OrderedDict()
+        #sens_dict['con']['x'] = Ain_hat
 
         return sens_dict, fail
 
@@ -870,7 +872,8 @@ class Branch_and_Bound(Driver):
             opt_x, opt_f, succ_flag = snopt_opt(self.calc_y_hat_convex, x0, xhat_comL,
                                                 xhat_comU, len(bin_hat),
                                                 title='minimize_y',
-                                                options={'Major optimality tolerance' : self.options['ftol']})
+                                                options={'Major optimality tolerance' : self.options['ftol']},
+                                                jac=Ain_hat)
 
             #yL = optResult.fun
             #if not optResult.success:
@@ -888,11 +891,6 @@ class Branch_and_Bound(Driver):
                 eflag_yL = False
             else:
                 eflag_yL = True
-                tol = self.options['con_tol']
-                for ii in range(2*n):
-                    if np.dot(Ain_hat[ii, :], opt_x) > (bin_hat[ii, 0] + tol):
-                        eflag_yL = False
-                        break
 
         return yL, eflag_yL
 
@@ -939,11 +937,10 @@ class Branch_and_Bound(Driver):
         func_dict['obj'] = y_hat[0, 0]
 
         # Constraints
-        Ain_hat = self.Ain_hat
-        bin_hat = self.bin_hat
+        #Ain_hat = self.Ain_hat
+        #bin_hat = self.bin_hat
 
-        func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
-        print(func_dict['con'])
+        #func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
         return func_dict, fail
 
 def update_active_set(active_set, ubd):
@@ -1010,32 +1007,32 @@ def interval_analysis(lb_x, ub_x, surrogate):
     t2L = np.zeros([n, k]); t2U = np.zeros([n, k])
     t3L = np.zeros([n, k]); t3U = np.zeros([n, k])
     t4L = np.zeros([n, 1]); t4U = np.zeros([n, 1])
-    lb_r = np.zeros([n, 1]); ub_r = np.ones([n, 1])
+    lb_r = np.zeros([n, 1]); ub_r = np.zeros([n, 1])
 
-    # if p % 2 == 0:
-    #     for i in range(n):
-    #         for h in range(k):
-    #             t1L[i,h] = lb_x[h] - X[i, h]
-    #             t1U[i,h] = ub_x[h] - X[i, h]
+    if p % 2 == 0:
+        for i in range(n):
+            for h in range(k):
+                t1L[i,h] = lb_x[h] - X[i, h]
+                t1U[i,h] = ub_x[h] - X[i, h]
     #
-    #             t2L[i,h] = np.max(np.array([0,np.min(np.array([t1L[i, h]*t1L[i, h],
-    #                                                             t1L[i, h]*t1U[i, h],
-    #                                                             t1U[i, h]*t1U[i, h]]))]))
-    #             t2U[i,h] = np.max(np.array([0,np.max(np.array([t1L[i, h]*t1L[i, h],
-    #                                                             t1L[i, h]*t1U[i, h],
-    #                                                             t1U[i, h]*t1U[i, h]]))]))
+                t2L[i,h] = np.max(np.array([0,np.min(np.array([t1L[i, h]*t1L[i, h],
+                                                                t1L[i, h]*t1U[i, h],
+                                                                t1U[i, h]*t1U[i, h]]))]))
+                t2U[i,h] = np.max(np.array([0,np.max(np.array([t1L[i, h]*t1L[i, h],
+                                                                t1L[i, h]*t1U[i, h],
+                                                                t1U[i, h]*t1U[i, h]]))]))
     #
-    #             t3L[i,h] = np.min(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
-    #             t3U[i,h] = np.max(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
+                t3L[i,h] = np.min(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
+                t3U[i,h] = np.max(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
     #
-    #         t4L[i] = np.sum(t3L[i, :])
-    #         t4U[i] = np.sum(t3U[i, :])
+            t4L[i] = np.sum(t3L[i, :])
+            t4U[i] = np.sum(t3U[i, :])
     #
-    #         lb_r[i] = np.exp(t4L[i])
-    #         ub_r[i] = np.exp(t4U[i])
-    # else:
-    #     print("\nWarning! Value of p should be 2. Cannot perform interval analysis")
-    #     print("\nReturing global bound of the r variable")
+            lb_r[i] = np.exp(t4L[i])
+            ub_r[i] = np.exp(t4U[i])
+    else:
+        print("\nWarning! Value of p should be 2. Cannot perform interval analysis")
+        print("\nReturing global bound of the r variable")
 
     return lb_r, ub_r
 

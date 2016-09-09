@@ -321,7 +321,7 @@ class Branch_and_Bound(Driver):
         # Initial optimal objective and solution
         # Randomly generate an integer point
         xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
-        xopt = 1.0
+        xopt[:] = 1.0
         fopt = self.objective_callback(xopt)
         self.eflag_MINLPBB = True
         UBD = fopt
@@ -773,10 +773,10 @@ class Branch_and_Bound(Driver):
         func_dict['obj'] = S2[0, 0]
 
         # Constraints
-        #Ain_hat = self.Ain_hat
-        #bin_hat = self.bin_hat
+        Ain_hat = self.Ain_hat
+        bin_hat = self.bin_hat
 
-        #func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
+        func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
         #print('x', dv_dict)
         #print('obj', func_dict['obj'])
         return func_dict, fail
@@ -937,10 +937,10 @@ class Branch_and_Bound(Driver):
         func_dict['obj'] = y_hat[0, 0]
 
         # Constraints
-        #Ain_hat = self.Ain_hat
-        #bin_hat = self.bin_hat
+        Ain_hat = self.Ain_hat
+        bin_hat = self.bin_hat
 
-        #func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
+        func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
         return func_dict, fail
 
 def update_active_set(active_set, ubd):
@@ -1123,7 +1123,7 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
     """
     y_min = (obj_surrogate.y_best - obj_surrogate.Y_mean)/obj_surrogate.Y_std
 
-    if not SSqr:
+    if SSqr is None:
         X = obj_surrogate.X
         c_r = obj_surrogate.c_r
         thetas = obj_surrogate.thetas
@@ -1159,7 +1159,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
 
     g_min = 0.0
 
-    if not gSSqr:
+    if gSSqr is None:
         X = con_surrogate.X
         c_r = con_surrogate.c_r
         thetas = con_surrogate.thetas

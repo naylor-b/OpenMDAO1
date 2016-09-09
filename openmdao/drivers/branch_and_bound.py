@@ -33,7 +33,7 @@ from openmdao.util.freplace import cython_replace
 from openmdao.util.speedups.branch_and_bound import _calc_SSqr_convex, _calc_y_hat_convex
 
 # optimizer used for scipy.minimize calls
-minimizer_type = 'COBYLA'
+minimizer_type = 'SLSQP'
 
 class Branch_and_Bound(Driver):
     """ Class definition for the Branch_and_Bound driver. This driver can be run
@@ -191,12 +191,12 @@ class Branch_and_Bound(Driver):
 
             # Run each case and extract obj/con
             cons = {}
-            for i_run in range(len(x_i)):
+            for xx_i in x_i:
 
                 # Set design variables
                 for var in self.dvs:
                     i, j = self.idx_cache[var]
-                    self.set_desvar(var, x_i[i_run][i:j])
+                    self.set_desvar(var, xx_i[i:j])
 
                 with system._dircontext:
                     system.solve_nonlinear(metadata=metadata)
@@ -270,8 +270,7 @@ class Branch_and_Bound(Driver):
         node_num = 0
 
         # Initial B&B bounds are infinite.
-        LBD = -np.inf
-        LBD_prev =- np.inf
+        LBD = LBD_prev = -np.inf
 
         xL_iter = self.xI_lb.copy()
         xU_iter = self.xI_ub.copy()
@@ -352,7 +351,7 @@ class Branch_and_Bound(Driver):
                                                        obj_surrogate)
 
                         if success_yL:
-                            NegEI = calc_conEI_norm([], obj_surrogate, SSqr=sU, y_hat=yL)
+                            NegEI = calc_conEI_norm(None, obj_surrogate, SSqr=sU, y_hat=yL)
 
                             M = len(self.con_surrogate)
                             EV = np.zeros((M, 1))
@@ -743,7 +742,6 @@ def gen_coeff_bound(xI_lb, xI_ub, surrogate):
     constraints. The version accepts design bound in the original design
     space, converts it to normalized design space.
     """
-
     #Normalized to 0-1 hypercube
     # xL_hat0 = (xI_lb - surrogate.lb_org)/(surrogate.ub_org - surrogate.lb_org)
     # xU_hat0 = (xI_ub - surrogate.lb_org)/(surrogate.ub_org - surrogate.lb_org)

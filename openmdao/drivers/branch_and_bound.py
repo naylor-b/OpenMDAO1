@@ -179,6 +179,31 @@ class Branch_and_Bound(Driver):
             self.xI_lb[i:j] = dv_dict[var]['lower']
             self.xI_ub[i:j] = dv_dict[var]['upper']
 
+    def _do_local_search(self, xL_iter, xU_iter, floc_iter, xloc_iter, active_tol):
+        if np.abs(floc_iter) > active_tol: #Perform at non-flat starting point
+            #--------------------------------------------------------------
+            #Step 2: Obtain a local solution
+            #--------------------------------------------------------------
+            # Using a gradient-based method here.
+            # TODO: Make it more pluggable.
+            # TODO: Use SNOPT [Not a priority-Not going to use local search anytime soon]
+            num_des = len(self.xI_lb)
+            xC_iter = xloc_iter
+            bnds = [(xL_iter[ii], xU_iter[ii]) for ii in range(num_des)]
+
+            optResult = minimize(self.objective_callback, xC_iter,
+                                 method='SLSQP', bounds=bnds,
+                                 options={'ftol' : self.options['ftol']})
+
+            xloc_iter = np.round(optResult.x.reshape(num_des, 1))
+
+            if not optResult.success:
+                return np.inf, xloc_iter, False
+
+            floc_iter = self.objective_callback(xloc_iter)
+
+            return floc_iter, xloc_iter, True
+
     def run(self, problem):
         """Execute the Branch_and_Bound method.
 
@@ -313,6 +338,8 @@ class Branch_and_Bound(Driver):
         LBD = -np.inf
         LBD_prev =- np.inf
 
+        # copy our desvars' user specified upper and lower bounds
+        # FIXME: is this copy really needed here since we copy these again inside the loop?
         xL_iter = self.xI_lb.copy()
         xU_iter = self.xI_ub.copy()
 
@@ -336,36 +363,17 @@ class Branch_and_Bound(Driver):
             floc_iter = self.objective_callback(xloc_iter)
             efloc_iter = True
             if local_search:
-                if np.abs(floc_iter) > active_tol: #Perform at non-flat starting point
-                    #--------------------------------------------------------------
-                    #Step 2: Obtain a local solution
-                    #--------------------------------------------------------------
-                    # Using a gradient-based method here.
-                    # TODO: Make it more pluggable.
-                    # TODO: Use SNOPT [Not a priority-Not going to use local search anytime soon]
-                    xC_iter = xloc_iter
-                    bnds = [(xL_iter[ii], xU_iter[ii]) for ii in range(num_des)]
-
-                    optResult = minimize(self.objective_callback, xC_iter,
-                                         method='SLSQP', bounds=bnds,
-                                         options={'ftol' : ftol})
-
-                    xloc_iter = np.round(optResult.x.reshape(num_des, 1))
-                    floc_iter = self.objective_callback(xloc_iter)
-
-                    if not optResult.success:
-                        efloc_iter = False
-                        floc_iter = np.inf
-                    else:
-                        efloc_iter = True
+                floc_iter, xloc_iter, efloc_iter = \
+                         self._do_local_search(xL_iter, xU_iter, floc_iter,
+                                               xloc_iter, active_tol)
 
             #--------------------------------------------------------------
             # Step 3: Partition the current rectangle as per the new
             # branching scheme.
             #--------------------------------------------------------------
-            child_info = np.zeros([2,3])
+            child_info = np.zeros((2,3))
             dis_flag = [' ',' ']
-            l_iter = (xU_iter - xL_iter).argmax()
+            l_iter = (xU_iter - xL_iter).argmax() # pick dv with largest lower and upper bound (should we do abs here???)
             if xloc_iter[l_iter]<xU_iter[l_iter]:
                 delta = 0.5 #0<delta<1
             else:
@@ -479,7 +487,7 @@ class Branch_and_Bound(Driver):
                                   dis_flag[1], child_info[1, 1], child_info[1, 2]))
 
             # Termination
-            if len(active_set) >= 1:
+            if active_set:
                 # Update LBD and select the current rectangle
 
                 # a. Set LBD as lowest in the active set
@@ -561,7 +569,7 @@ class Branch_and_Bound(Driver):
                 # gathered in MPI.
                 self.recorders.record_iteration(system, metadata)
 
-        # When run under AMEIGO, objecitve is the expected improvment
+        # When run under AMEIGO, objective is the expected improvment
         # function with modifications to make it concave.
         else:
             #ModelInfo_obj=param[0];ModelInfo_g=param[1];con_fac=param[2];flag=param[3]
@@ -646,12 +654,12 @@ class Branch_and_Bound(Driver):
 
         # Maximize S
         x0 = 0.5*(xhat_comL + xhat_comU)
-        bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in range(len(xhat_comL))]
+        #bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in range(len(xhat_comL))]
 
-        #Note: Python defines constraints like g(x) >= 0
-        cons = [{'type' : 'ineq',
-                 'fun' : lambda x : -np.dot(Ain_hat[ii, :], x) + bin_hat[ii],
-                 'jac' : lambda x : -Ain_hat[ii, :]} for ii in range(2*n)]
+        ##Note: Python defines constraints like g(x) >= 0
+        #cons = [{'type' : 'ineq',
+                 #'fun' : lambda x : -np.dot(Ain_hat[ii, :], x) + bin_hat[ii],
+                 #'jac' : lambda x : -Ain_hat[ii, :]} for ii in range(2*n)]
 
         #optResult = minimize(self.calc_SSqr_convex_old, x0,
                              #args=(x_comL, x_comU, xhat_comL, xhat_comU),
@@ -849,11 +857,11 @@ class Branch_and_Bound(Driver):
 
         if app == 1:
             x0 = 0.5*(xhat_comL + xhat_comU)
-            bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in range(len(xhat_comL))]
+            #bnds = [(xhat_comL[ii], xhat_comU[ii]) for ii in range(len(xhat_comL))]
 
-            cons = [{'type' : 'ineq',
-                     'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
-                     'jac': lambda x: -Ain_hat[ii, :]} for ii in range(2*n)]
+            #cons = [{'type' : 'ineq',
+                     #'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
+                     #'jac': lambda x: -Ain_hat[ii, :]} for ii in range(2*n)]
 
             #optResult = minimize(self.calc_y_hat_convex_old, x0,
                                  #args=(x_comL, x_comU, surrogate), method='SLSQP',

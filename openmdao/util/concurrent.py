@@ -4,15 +4,10 @@ from __future__ import print_function
 import os
 import sys
 import traceback
-from six import next
-
-from openmdao.core.mpi_wrap import under_mpirun, MPI, debug
-
-trace = os.environ.get("OPENMDAO_TRACE")
 
 def concurrent_eval_lb(func, cases, comm, broadcast=False):
     """
-    Runs a load balanced version of the function, with the master
+    Runs a load balanced version of the given function, with the master
     rank (0) sending a new case to each worker rank as soon as it
     has finished its last case.
 
@@ -23,17 +18,19 @@ def concurrent_eval_lb(func, cases, comm, broadcast=False):
         The function to execute in workers.
 
     cases : collection of function args
-        Queue entries are assumed to be of the form (args,) or (args, kwargs).
+        Entries are assumed to be of the form (args, kwargs) where
+        kwargs are allowed to be None and args should be a list or tuple.
 
-    com : MPI communicator
+    com : MPI communicator or None
         The MPI communicator that is shared between the master and workers.
+        If None, the function will be executed serially.
 
     broadcast : bool, optional
         If True, the results will be broadcast out to the worker procs so
         that the return value of concurrent_eval_lb will be the full result
         list in every process.
     """
-    if MPI:
+    if comm is not None:
         if comm.rank == 0:  # master rank
             results = _concurrent_eval_lb_master(cases, comm)
         else:
@@ -60,6 +57,10 @@ def concurrent_eval_lb(func, cases, comm, broadcast=False):
     return results
 
 def _concurrent_eval_lb_master(cases, comm):
+    """
+    This runs only on rank 0.  It sends cases to all of the workers and
+    collects their results.
+    """
     received = 0
     sent = 0
 
@@ -74,25 +75,14 @@ def _concurrent_eval_lb_master(cases, comm):
         except StopIteration:
             break
 
-        if trace: # pragma: no cover
-            debug('Sending Seed case %d' % i)
-
         comm.send(case, i, tag=1)
         sent += 1
-
-        if trace: # pragma: no cover
-            debug('Seed Case Sent %d' % i)
 
     # send the rest of the cases
     if sent > 0:
         while True:
-            if trace: # pragma: no cover
-                debug("Waiting on case")
-
+            # wait for any worker to finish
             worker, retval, err = comm.recv(tag=2)
-
-            if trace:  # pragma: no cover
-                debug("Case Recieved from Worker %d" % worker )
 
             received += 1
 
@@ -110,34 +100,21 @@ def _concurrent_eval_lb_master(cases, comm):
                 pass
             else:
                 # send new case to the last worker that finished
-                if trace: # pragma: no cover
-                    debug("Sending New Case to Worker %d" % worker )
                 comm.send(case, worker, tag=1)
                 sent += 1
-                if trace: # pragma: no cover
-                    debug("Case Sent to Worker %d" % worker )
 
     # tell all workers to stop
     for rank in range(1, comm.size):
-        if trace: # pragma: no cover
-            debug("Make Worker Stop on Rank %d" % rank )
-        comm.send((None, None), rank, tag=1)
-        if trace: # pragma: no cover
-            debug("Worker has Stopped on Rank %d" % rank )
+        comm.isend((None, None), rank, tag=1)
 
     return results
 
 def _concurrent_eval_lb_worker(func, comm):
     while True:
         # wait on a case from the master
-        if trace: debug("Receiving Case from Master") # pragma: no cover
-
         args, kwargs = comm.recv(source=0, tag=1)
 
-        if trace: debug("Case Received from Master") # pragma: no cover
-
         if args is None: # we're done
-            if trace: debug("Received None, quitting") # pragma: no cover
             break
 
         try:
@@ -152,18 +129,22 @@ def _concurrent_eval_lb_worker(func, comm):
             err = None
 
         # tell the master we're done with that case
-        if trace: debug("Send Master Return Value") # pragma: no cover
-
         comm.send((comm.rank, retval, err), 0, tag=2)
-
-        if trace: debug("Return Value Sent to Master") # pragma: no cover
 
 
 if __name__ == '__main__':
+    import time
+
+    try:
+        from mpi4py import MPI
+    except ImportError:
+        MPI = None
+
     def funct(job, option=None):
         if job == 5:
             raise RuntimeError("Job 5 had an error!")
-        print("Running job %d" % job)
+        print("Running job %d" % job); sys.stdout.flush()
+        time.sleep(1)
         if MPI:
             rank = MPI.COMM_WORLD.rank
         else:
@@ -173,6 +154,9 @@ if __name__ == '__main__':
     if MPI:
         comm = MPI.COMM_WORLD
         rank = comm.rank
+        if comm.size == 1:
+            # don't bother with MPI since we only have one proc
+            comm = None
     else:
         comm = None
         rank = 0
@@ -186,17 +170,18 @@ if __name__ == '__main__':
 
     results = concurrent_eval_lb(funct, cases, comm)
 
-    if MPI is None or comm.rank == 0:
-        print("Results:")
+    if comm is None or comm.rank == 0:
+        print("Results:"); sys.stdout.flush()
         for r in results:
-            print(r)
+            print(r); sys.stdout.flush()
 
-    if MPI:
+    if comm is not None:
         comm.barrier()
 
-    print("------ broadcast ----")
+    print("------ broadcast ----"); sys.stdout.flush()
+
     if ncases > 5:
         cases.remove(([5], {'option': 'foo5'}))  # git rid of excetption case
     results = concurrent_eval_lb(funct, cases, comm, broadcast=True)
 
-    print("Results for rank %d: %s" % (rank, results))
+    print("Results for rank %d: %s" % (rank, results)); sys.stdout.flush()

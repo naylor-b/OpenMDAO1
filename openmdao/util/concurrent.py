@@ -6,16 +6,60 @@ import sys
 import traceback
 from six import next
 
+from openmdao.core.mpi_wrap import under_mpirun, MPI, debug
+
 trace = os.environ.get("OPENMDAO_TRACE")
 
-def debug(*msg):  # pragma: no cover
-    newmsg = ["%d: " % MPI.COMM_WORLD.rank] + list(msg)
-    for m in newmsg:
-        sys.stdout.write("%s " % m)
-    sys.stdout.write('\n')
-    sys.stdout.flush()
+def concurrent_eval_lb(func, cases, comm, broadcast=False):
+    """
+    Runs a load balanced version of the function, with the master
+    rank (0) sending a new case to each worker rank as soon as it
+    has finished its last case.
 
-def _run_concurrent_lb_master(cases, comm):
+    Args
+    ----
+
+    func : function
+        The function to execute in workers.
+
+    cases : collection of function args
+        Queue entries are assumed to be of the form (args,) or (args, kwargs).
+
+    com : MPI communicator
+        The MPI communicator that is shared between the master and workers.
+
+    broadcast : bool, optional
+        If True, the results will be broadcast out to the worker procs so
+        that the return value of concurrent_eval_lb will be the full result
+        list in every process.
+    """
+    if MPI:
+        if comm.rank == 0:  # master rank
+            results = _concurrent_eval_lb_master(cases, comm)
+        else:
+            results = _concurrent_eval_lb_worker(func, comm)
+
+        if broadcast:
+            results = comm.bcast(results, root=0)
+
+    else: # serial execution
+        results = []
+        for args, kwargs in cases:
+            try:
+                if kwargs:
+                    retval = func(*args, **kwargs)
+                else:
+                    retval = func(*args)
+            except:
+                err = traceback.format_exc()
+                retval = None
+            else:
+                err = None
+            results.append((retval, err))
+
+    return results
+
+def _concurrent_eval_lb_master(cases, comm):
     received = 0
     sent = 0
 
@@ -83,7 +127,7 @@ def _run_concurrent_lb_master(cases, comm):
 
     return results
 
-def _run_concurrent_lb_worker(func, comm):
+def _concurrent_eval_lb_worker(func, comm):
     while True:
         # wait on a case from the master
         if trace: debug("Receiving Case from Master") # pragma: no cover
@@ -115,72 +159,44 @@ def _run_concurrent_lb_worker(func, comm):
         if trace: debug("Return Value Sent to Master") # pragma: no cover
 
 
-def run_concurrent_lb(func, cases, comm, broadcast=False):
-    """
-    Runs a load balanced version of the function, with the master
-    rank (0) sending a new case to each worker rank as soon as it
-    has finished its last case.
-
-    Args
-    ----
-
-    func : function
-        The function to execute in workers.
-
-    cases : collection of function args
-        Queue entries are assumed to be of the form (args,) or (args, kwargs).
-
-    com : MPI communicator
-        The MPI communicator that is shared between the master and workers.
-
-    broadcast : bool, optional
-        If True, the results will be broadcast out to the worker procs so
-        that the return value of run_concurrent_lb will be the full result
-        list in every process.
-    """
-    if comm.rank == 0:  # master rank
-        results = _run_concurrent_lb_master(cases, comm)
-    else:
-        results = _run_concurrent_lb_worker(func, comm)
-
-    if broadcast:
-        results = comm.bcast(results, root=0)
-
-    return results
-
-
 if __name__ == '__main__':
-    try:
-        from mpi4py import MPI
-    except ImportError:
-        pass
-    else:
-        def funct(name, job):
-            if name == 'Phil':
-                raise RuntimeError("Phil does not say hello!")
-            print("Hello %s from job %d" % (name, job))
-            return (name, job, MPI.COMM_WORLD.rank)
+    def funct(job, option=None):
+        if job == 5:
+            raise RuntimeError("Job 5 had an error!")
+        print("Running job %d" % job)
+        if MPI:
+            rank = MPI.COMM_WORLD.rank
+        else:
+            rank = 0
+        return (job, option, rank)
 
+    if MPI:
         comm = MPI.COMM_WORLD
+        rank = comm.rank
+    else:
+        comm = None
+        rank = 0
 
-        cases = [
-            (['Joe',42], None),
-            (['Frank',11], None),
-            (['Kate',-5], None),
-            (['Phil',99], None),
-        ]
+    if len(sys.argv) > 1:
+        ncases = int(sys.argv[1])
+    else:
+        ncases = 10
 
-        results = run_concurrent_lb(funct, cases, comm)
+    cases = [([i], {'option': 'foo%d'%i}) for i in range(ncases)]
 
-        if comm.rank == 0:
-            print("Results:")
-            for r in results:
-                print(r)
+    results = concurrent_eval_lb(funct, cases, comm)
 
+    if MPI is None or comm.rank == 0:
+        print("Results:")
+        for r in results:
+            print(r)
+
+    if MPI:
         comm.barrier()
 
-        print("------ broadcast ----")
-        cases.pop()  # git rid of Phil exception
-        results = run_concurrent_lb(funct, cases, comm, broadcast=True)
+    print("------ broadcast ----")
+    if ncases > 5:
+        cases.remove(([5], {'option': 'foo5'}))  # git rid of excetption case
+    results = concurrent_eval_lb(funct, cases, comm, broadcast=True)
 
-        print("Results for rank %d: %s" % (comm.rank, results))
+    print("Results for rank %d: %s" % (rank, results))

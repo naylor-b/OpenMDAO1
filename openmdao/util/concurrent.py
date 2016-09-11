@@ -75,7 +75,7 @@ def _concurrent_eval_lb_master(cases, comm):
         except StopIteration:
             break
 
-        comm.send(case, i, tag=1)
+        comm.isend(case, i, tag=1)
         sent += 1
 
     # send the rest of the cases
@@ -100,7 +100,7 @@ def _concurrent_eval_lb_master(cases, comm):
                 pass
             else:
                 # send new case to the last worker that finished
-                comm.send(case, worker, tag=1)
+                comm.isend(case, worker, tag=1)
                 sent += 1
 
     # tell all workers to stop
@@ -142,7 +142,7 @@ if __name__ == '__main__':
 
     def funct(job, option=None):
         if job == 5:
-            raise RuntimeError("Job 5 had an error!")
+            raise RuntimeError("Job 5 had an (intentional) error!")
         print("Running job %d" % job); sys.stdout.flush()
         time.sleep(1)
         if MPI:
@@ -167,6 +167,9 @@ if __name__ == '__main__':
         ncases = 10
 
     cases = [([i], {'option': 'foo%d'%i}) for i in range(ncases)]
+    ncases = len(cases)
+
+    start = time.time()
 
     results = concurrent_eval_lb(funct, cases, comm)
 
@@ -178,10 +181,10 @@ if __name__ == '__main__':
     if comm is not None:
         comm.barrier()
 
-    print("------ broadcast ----"); sys.stdout.flush()
+    if comm is None:
+        print("\nExecuted %d total cases in serial" % ncases); sys.stdout.flush()
+    elif comm.rank == 0:
+        print("\nExecuted %d total cases concurrently with %d workers" % (ncases, comm.size-1)); sys.stdout.flush()
 
-    if ncases > 5:
-        cases.remove(([5], {'option': 'foo5'}))  # git rid of excetption case
-    results = concurrent_eval_lb(funct, cases, comm, broadcast=True)
-
-    print("Results for rank %d: %s" % (rank, results)); sys.stdout.flush()
+    if comm is None or comm.rank == 0:
+        print("Elapsed time: %s" % (time.time()-start)); sys.stdout.flush()

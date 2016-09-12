@@ -43,8 +43,8 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
     ndv = len(desvar)
 
     opt_prob.addVarGroup('x', ndv, type='c', value=desvar.flatten(), lower=lb.flatten(), upper=ub.flatten())
-    opt_prob.addConGroup('con', ncon, upper=np.zeros((ncon)), linear=True, wrt='x',
-                         jac={'x' : jac})
+    opt_prob.addConGroup('con', ncon, upper=np.zeros((ncon)))#, linear=True, wrt='x',
+                         #jac={'x' : jac})
     opt_prob.addObj('obj')
 
     # Fall back on SLSQP if SNOPT isn't there
@@ -95,7 +95,7 @@ class Branch_and_Bound(Driver):
         super(Branch_and_Bound, self).__init__()
 
         # What we support
-        self.supports['inequality_constraints'] = False
+        self.supports['inequality_constraints'] = True
         self.supports['equality_constraints'] = False
         self.supports['multiple_objectives'] = False
         self.supports['two_sided_constraints'] = False
@@ -266,42 +266,42 @@ class Branch_and_Bound(Driver):
         # Calculate intermediate statistics. This stuff used to be stored in
         # the Modelinfo object, but more convenient to store it in the
         # Kriging surrogate.
-        if obj_surrogate:
+        #if obj_surrogate:
 
-            #This value should always be 0.0
-            obj_surrogate.mu = np.mean(obj_surrogate.Y)
+            ##This value should always be 0.0
+            #obj_surrogate.mu = np.mean(obj_surrogate.Y)
 
-            #This value should always be 1.0
-            obj_surrogate.SigmaSqr = obj_surrogate.sigma2/np.square(obj_surrogate.Y_std)
+            ##This value should always be 1.0
+            #obj_surrogate.SigmaSqr = obj_surrogate.sigma2/np.square(obj_surrogate.Y_std)
 
-            # TODO: mvp in Kriging
-            obj_surrogate.R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
-                                                                   obj_surrogate.S_inv,
-                                                                   obj_surrogate.U.T))
-            # TODO: norm type, should probably always be 2
-            obj_surrogate.p = 2
+            ## TODO: mvp in Kriging
+            #obj_surrogate.R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
+                                                                   #obj_surrogate.S_inv,
+                                                                   #obj_surrogate.U.T))
+            ## TODO: norm type, should probably always be 2
+            #obj_surrogate.p = 2
 
-            obj_surrogate.c_r = obj_surrogate.alpha
+            #obj_surrogate.c_r = obj_surrogate.alpha
 
-            # This is also done in Ameigo. TODO: just do it once.
-            obj_surrogate.y_best = np.min(obj_surrogate.y)
+            ## This is also done in Ameigo. TODO: just do it once.
+            #obj_surrogate.y_best = np.min(obj_surrogate.y)
 
-            # This is the rest of the interface that any "surrogate" needs to contain.
-            #obj_surrogate.X = surrogate.X
-            #obj_surrogate.ynorm = surrogate.Y
-            #obj_surrogate.thetas = surrogate.thetas
-            #obj_surrogate.X_std = obj_surrogate.X_std.reshape(num_xI,1)
-            #obj_surrogate.X_mean = obj_surrogate.X_mean.reshape(num_xI,1)
+            ## This is the rest of the interface that any "surrogate" needs to contain.
+            ##obj_surrogate.X = surrogate.X
+            ##obj_surrogate.ynorm = surrogate.Y
+            ##obj_surrogate.thetas = surrogate.thetas
+            ##obj_surrogate.X_std = obj_surrogate.X_std.reshape(num_xI,1)
+            ##obj_surrogate.X_mean = obj_surrogate.X_mean.reshape(num_xI,1)
 
-        for con_surr in con_surrogate:
+        #for con_surr in con_surrogate:
 
-            con_surr.mu = np.mean(con_surr.Y)
-            con_surr.SigmaSqr = con_surr.sigma2/np.square(con_surr.Y_std)
-            con_surr.R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
-                                                         con_surr.S_inv,
-                                                         con_surr.U.T))
-            con_surr.p = 2
-            con_surr.c_r = con_surr.alpha
+            #con_surr.mu = np.mean(con_surr.Y)
+            #con_surr.SigmaSqr = con_surr.sigma2/np.square(con_surr.Y_std)
+            #con_surr.R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
+                                                         #con_surr.S_inv,
+                                                         #con_surr.U.T))
+            #con_surr.p = 2
+            #con_surr.c_r = con_surr.alpha
 
         #----------------------------------------------------------------------
         # Step 1: Initialize
@@ -321,7 +321,7 @@ class Branch_and_Bound(Driver):
         # Initial optimal objective and solution
         # Randomly generate an integer point
         xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
-        xopt = 1.0
+        xopt[:] = 2.0
         fopt = self.objective_callback(xopt)
         self.eflag_MINLPBB = True
         UBD = fopt
@@ -575,7 +575,8 @@ class Branch_and_Bound(Driver):
             ub = self.xI_ub
 
             # Normalized as per the convention in Kriging of openmdao
-            xval = (xI - obj_surrogate.X_mean)/obj_surrogate.X_std
+            #xval = (xI - obj_surrogate.X_mean)/obj_surrogate.X_std
+            xval = (xI - obj_surrogate.lb_org.flatten())/(obj_surrogate.ub_org.flatten() - obj_surrogate.lb_org.flatten())
 
             NegEI = calc_conEI_norm(xval, obj_surrogate)
 
@@ -689,7 +690,7 @@ class Branch_and_Bound(Driver):
 
         Neg_sU = opt_f
         if not succ_flag:
-            eflag_sU = False
+            eflag_sU = True
         else:
             eflag_sU = True
 
@@ -729,8 +730,8 @@ class Branch_and_Bound(Driver):
         term2 = alpha*(rhat-rhat_L).T.dot(rhat-rhat_U)
         S2 = term1 + term2
 
-        #print('x', x_com)
-        #print('obj', S2[0, 0])
+        print('x', x_com)
+        print('obj', S2[0, 0])
         return S2[0, 0]
 
     def calc_SSqr_convex(self, dv_dict):
@@ -773,10 +774,10 @@ class Branch_and_Bound(Driver):
         func_dict['obj'] = S2[0, 0]
 
         # Constraints
-        #Ain_hat = self.Ain_hat
-        #bin_hat = self.bin_hat
+        Ain_hat = self.Ain_hat
+        bin_hat = self.bin_hat
 
-        #func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
+        func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
         #print('x', dv_dict)
         #print('obj', func_dict['obj'])
         return func_dict, fail
@@ -888,7 +889,7 @@ class Branch_and_Bound(Driver):
 
             yL = opt_f
             if not succ_flag:
-                eflag_yL = False
+                eflag_yL = True
             else:
                 eflag_yL = True
 
@@ -937,10 +938,10 @@ class Branch_and_Bound(Driver):
         func_dict['obj'] = y_hat[0, 0]
 
         # Constraints
-        #Ain_hat = self.Ain_hat
-        #bin_hat = self.bin_hat
+        Ain_hat = self.Ain_hat
+        bin_hat = self.bin_hat
 
-        #func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
+        func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
         return func_dict, fail
 
 def update_active_set(active_set, ubd):
@@ -969,12 +970,14 @@ def gen_coeff_bound(xI_lb, xI_ub, surrogate):
     """
 
     #Normalized to 0-1 hypercube
-    # xL_hat0 = (xI_lb - surrogate.lb_org)/(surrogate.ub_org - surrogate.lb_org)
-    # xU_hat0 = (xI_ub - surrogate.lb_org)/(surrogate.ub_org - surrogate.lb_org)
+    xL_hat0 = (xI_lb - surrogate.lb_org.flatten())/(surrogate.ub_org.flatten() - surrogate.lb_org.flatten())
+    xU_hat0 = (xI_ub - surrogate.lb_org.flatten())/(surrogate.ub_org.flatten() - surrogate.lb_org.flatten())
+    xL_hat = xL_hat0
+    xU_hat = xU_hat0
 
     #Normalized as per Openmdao kriging model
-    xL_hat = (xI_lb - surrogate.X_mean)/surrogate.X_std
-    xU_hat = (xI_ub - surrogate.X_mean)/surrogate.X_std
+    #xL_hat = (xI_lb - surrogate.X_mean)/surrogate.X_std
+    #xU_hat = (xI_ub - surrogate.X_mean)/surrogate.X_std
 
     rL, rU = interval_analysis(xL_hat, xU_hat, surrogate)
 
@@ -1121,7 +1124,8 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
     """This function evaluates the expected improvement in the normalized
     design space.
     """
-    y_min = (obj_surrogate.y_best - obj_surrogate.Y_mean)/obj_surrogate.Y_std
+    #y_min = (obj_surrogate.y_best - obj_surrogate.Y_mean)/obj_surrogate.Y_std
+    y_min = obj_surrogate.y_best
 
     if not SSqr:
         X = obj_surrogate.X
@@ -1135,7 +1139,10 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
         n = np.shape(X)[0]
         one = np.ones([n, 1])
 
-        r = np.exp(-np.sum(thetas*(xval - X)**p, 1)).reshape(n, 1)
+        # Normalize xval to the 0-1 hypercube
+        xval_0 = (xval - obj_surrogate.lb_org.flatten())/(obj_surrogate.ub_org.flatten() - obj_surrogate.lb_org.flatten())
+
+        r = np.exp(-np.sum(thetas.T*(xval_0 - X)**p, 1)).reshape(n, 1)
 
         y_hat = mu + np.dot(r.T, c_r)
         term0 = np.dot(R_inv, r)
@@ -1170,7 +1177,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
         n = np.shape(X)[0]
         one = np.ones([n, 1])
 
-        r = np.exp(-np.sum(thetas*(xval - X)**p, 1)).reshape(n, 1)
+        r = np.exp(-np.sum(thetas.T*(xval - X)**p, 1)).reshape(n, 1)
 
         g_hat = mu + np.dot(r.T, c_r)
         term0 = np.dot(R_inv, r)

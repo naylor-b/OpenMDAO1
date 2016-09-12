@@ -1127,7 +1127,7 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
     #y_min = (obj_surrogate.y_best - obj_surrogate.Y_mean)/obj_surrogate.Y_std
     y_min = obj_surrogate.y_best
 
-    if not SSqr:
+    if SSqr is None:
         X = obj_surrogate.X
         c_r = obj_surrogate.c_r
         thetas = obj_surrogate.thetas
@@ -1166,7 +1166,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
 
     g_min = 0.0
 
-    if not gSSqr:
+    if gSSqr is None:
         X = con_surrogate.X
         c_r = con_surrogate.c_r
         thetas = con_surrogate.thetas

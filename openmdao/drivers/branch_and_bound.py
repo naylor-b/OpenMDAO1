@@ -124,7 +124,7 @@ class Branch_and_Bound(Driver):
         opt.add_option('disp', True,
                        desc='Set to False to prevent printing of iteration '
                        'messages.')
-        opt.add_option('ftol', 1.0e-12, lower=0.0,
+        opt.add_option('ftol', 1.0e-6, lower=0.0,
                        desc='Absolute tolerance for sub-optimizations.')
         opt.add_option('integer_tol', 1.0e-6, lower=0.0,
                        desc='Integer Rounding Tolerance.')
@@ -675,7 +675,7 @@ class Branch_and_Bound(Driver):
                                             title='Maximize_S',
                                             options={'Major optimality tolerance' : self.options['ftol']},
                                             jac=Ain_hat,
-                                            )#sens=self.calc_SSqr_convex_grad)
+                                            sens=self.calc_SSqr_convex_grad)
 
         #Neg_sU = optResult.fun
         #if not optResult.success:
@@ -690,7 +690,7 @@ class Branch_and_Bound(Driver):
 
         Neg_sU = opt_f
         if not succ_flag:
-            eflag_sU = True
+            eflag_sU = False
         else:
             eflag_sU = True
 
@@ -828,11 +828,11 @@ class Branch_and_Bound(Driver):
         sens_dict['obj']['x'][:, k:] = dobj_dr*(rU - rL).T
 
         # Constraints
-        #Ain_hat = self.Ain_hat
-        #bin_hat = self.bin_hat
+        Ain_hat = self.Ain_hat
+        bin_hat = self.bin_hat
 
-        #sens_dict['con'] = OrderedDict()
-        #sens_dict['con']['x'] = Ain_hat
+        sens_dict['con'] = OrderedDict()
+        sens_dict['con']['x'] = Ain_hat
 
         return sens_dict, fail
 
@@ -889,7 +889,7 @@ class Branch_and_Bound(Driver):
 
             yL = opt_f
             if not succ_flag:
-                eflag_yL = True
+                eflag_yL = False
             else:
                 eflag_yL = True
 
@@ -942,6 +942,8 @@ class Branch_and_Bound(Driver):
         bin_hat = self.bin_hat
 
         func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
+        #print('x', dv_dict)
+        #print('obj', func_dict['obj'])
         return func_dict, fail
 
 def update_active_set(active_set, ubd):
@@ -1139,10 +1141,7 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
         n = np.shape(X)[0]
         one = np.ones([n, 1])
 
-        # Normalize xval to the 0-1 hypercube
-        xval_0 = (xval - obj_surrogate.lb_org.flatten())/(obj_surrogate.ub_org.flatten() - obj_surrogate.lb_org.flatten())
-
-        r = np.exp(-np.sum(thetas.T*(xval_0 - X)**p, 1)).reshape(n, 1)
+        r = np.exp(-np.sum(thetas.T*(xval - X)**p, 1)).reshape(n, 1)
 
         y_hat = mu + np.dot(r.T, c_r)
         term0 = np.dot(R_inv, r)

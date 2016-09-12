@@ -18,14 +18,16 @@ class CSRJacobian(object):
             transpose it?
         """
 
-    def __setitem__(self, output, input, value):
-        pass
+    def __setitem__(self, pair, value):
+        print ("setting %s to %s" % (pair, value))
 
-    def __getitem__(self, output, input):
-        pass
+    def __getitem__(self, pair):
+        print ("getting %s" % (pair,))
 
 
 
 if __name__ == '__main__':
     j = CSRJacobian()
-    j.set_sizes()
+    #j.set_sizes()
+    j['foo','bar'] = 10
+    j['blah','goo']

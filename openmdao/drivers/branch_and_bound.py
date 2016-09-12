@@ -675,7 +675,7 @@ class Branch_and_Bound(Driver):
                                             title='Maximize_S',
                                             options={'Major optimality tolerance' : self.options['ftol']},
                                             jac=Ain_hat,
-                                            sens=self.calc_SSqr_convex_grad)
+                                            )#sens=self.calc_SSqr_convex_grad)
 
         #Neg_sU = optResult.fun
         #if not optResult.success:

@@ -167,7 +167,6 @@ if __name__ == '__main__':
         ncases = 10
 
     cases = [([i], {'option': 'foo%d'%i}) for i in range(ncases)]
-    ncases = len(cases)
 
     start = time.time()
 

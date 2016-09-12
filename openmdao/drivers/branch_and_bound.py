@@ -17,6 +17,7 @@ Implemented in OpenMDAO, Aug 2016, Kenneth T. Moore
 
 from __future__ import print_function
 
+from collections import OrderedDict
 from six import iteritems
 from six.moves import range
 from random import uniform
@@ -32,7 +33,8 @@ from openmdao.surrogate_models.kriging import KrigingSurrogate
 from openmdao.util.record_util import create_local_meta, update_local_meta
 
 
-def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None):
+def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
+              sens=None, jac=None):
     """ Wrapper function for running a SNOPT optimization through
     pyoptsparse."""
 
@@ -41,7 +43,8 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None):
     ndv = len(desvar)
 
     opt_prob.addVarGroup('x', ndv, type='c', value=desvar.flatten(), lower=lb.flatten(), upper=ub.flatten())
-    opt_prob.addConGroup('con', ncon, upper=np.zeros((ncon)))
+    opt_prob.addConGroup('con', ncon, upper=np.zeros((ncon)))#, linear=True, wrt='x',
+                         #jac={'x' : jac})
     opt_prob.addObj('obj')
 
     # Fall back on SLSQP if SNOPT isn't there
@@ -63,7 +66,7 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None):
     opt.setOption('iSumm', 0)
     #opt.setOption('iPrint', 0)
 
-    sol = opt(opt_prob, sens=None, sensStep=1.0e-6)
+    sol = opt(opt_prob, sens=sens, sensStep=1.0e-6)
     #print(sol)
 
     x = sol.getDVs()['x']
@@ -92,7 +95,7 @@ class Branch_and_Bound(Driver):
         super(Branch_and_Bound, self).__init__()
 
         # What we support
-        self.supports['inequality_constraints'] = False
+        self.supports['inequality_constraints'] = True
         self.supports['equality_constraints'] = False
         self.supports['multiple_objectives'] = False
         self.supports['two_sided_constraints'] = False
@@ -121,7 +124,7 @@ class Branch_and_Bound(Driver):
         opt.add_option('disp', True,
                        desc='Set to False to prevent printing of iteration '
                        'messages.')
-        opt.add_option('ftol', 1.0e-12, lower=0.0,
+        opt.add_option('ftol', 1.0e-6, lower=0.0,
                        desc='Absolute tolerance for sub-optimizations.')
         opt.add_option('integer_tol', 1.0e-6, lower=0.0,
                        desc='Integer Rounding Tolerance.')
@@ -263,42 +266,42 @@ class Branch_and_Bound(Driver):
         # Calculate intermediate statistics. This stuff used to be stored in
         # the Modelinfo object, but more convenient to store it in the
         # Kriging surrogate.
-        if obj_surrogate:
+        #if obj_surrogate:
 
-            #This value should always be 0.0
-            obj_surrogate.mu = np.mean(obj_surrogate.Y)
+            ##This value should always be 0.0
+            #obj_surrogate.mu = np.mean(obj_surrogate.Y)
 
-            #This value should always be 1.0
-            obj_surrogate.SigmaSqr = obj_surrogate.sigma2/np.square(obj_surrogate.Y_std)
+            ##This value should always be 1.0
+            #obj_surrogate.SigmaSqr = obj_surrogate.sigma2/np.square(obj_surrogate.Y_std)
 
-            # TODO: mvp in Kriging
-            obj_surrogate.R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
-                                                                   obj_surrogate.S_inv,
-                                                                   obj_surrogate.U.T))
-            # TODO: norm type, should probably always be 2
-            obj_surrogate.p = 2
+            ## TODO: mvp in Kriging
+            #obj_surrogate.R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
+                                                                   #obj_surrogate.S_inv,
+                                                                   #obj_surrogate.U.T))
+            ## TODO: norm type, should probably always be 2
+            #obj_surrogate.p = 2
 
-            obj_surrogate.c_r = obj_surrogate.alpha
+            #obj_surrogate.c_r = obj_surrogate.alpha
 
-            # This is also done in Ameigo. TODO: just do it once.
-            obj_surrogate.y_best = np.min(obj_surrogate.y)
+            ## This is also done in Ameigo. TODO: just do it once.
+            #obj_surrogate.y_best = np.min(obj_surrogate.y)
 
-            # This is the rest of the interface that any "surrogate" needs to contain.
-            #obj_surrogate.X = surrogate.X
-            #obj_surrogate.ynorm = surrogate.Y
-            #obj_surrogate.thetas = surrogate.thetas
-            #obj_surrogate.X_std = obj_surrogate.X_std.reshape(num_xI,1)
-            #obj_surrogate.X_mean = obj_surrogate.X_mean.reshape(num_xI,1)
+            ## This is the rest of the interface that any "surrogate" needs to contain.
+            ##obj_surrogate.X = surrogate.X
+            ##obj_surrogate.ynorm = surrogate.Y
+            ##obj_surrogate.thetas = surrogate.thetas
+            ##obj_surrogate.X_std = obj_surrogate.X_std.reshape(num_xI,1)
+            ##obj_surrogate.X_mean = obj_surrogate.X_mean.reshape(num_xI,1)
 
-        for con_surr in con_surrogate:
+        #for con_surr in con_surrogate:
 
-            con_surr.mu = np.mean(con_surr.Y)
-            con_surr.SigmaSqr = con_surr.sigma2/np.square(con_surr.Y_std)
-            con_surr.R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
-                                                         con_surr.S_inv,
-                                                         con_surr.U.T))
-            con_surr.p = 2
-            con_surr.c_r = con_surr.alpha
+            #con_surr.mu = np.mean(con_surr.Y)
+            #con_surr.SigmaSqr = con_surr.sigma2/np.square(con_surr.Y_std)
+            #con_surr.R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
+                                                         #con_surr.S_inv,
+                                                         #con_surr.U.T))
+            #con_surr.p = 2
+            #con_surr.c_r = con_surr.alpha
 
         #----------------------------------------------------------------------
         # Step 1: Initialize
@@ -318,6 +321,7 @@ class Branch_and_Bound(Driver):
         # Initial optimal objective and solution
         # Randomly generate an integer point
         xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
+        xopt[:] = 2.0
         fopt = self.objective_callback(xopt)
         self.eflag_MINLPBB = True
         UBD = fopt
@@ -437,7 +441,7 @@ class Branch_and_Bound(Driver):
                     # lower than the UBD.
                     #--------------------------------------------------------------
 
-                    if LBD_NegConEI < UBD:
+                    if LBD_NegConEI < UBD - 1.0e-6:
                         node_num += 1
                         new_node = [node_num, lb, ub, LBD_NegConEI, floc_iter]
                         active_set.append(new_node)
@@ -571,7 +575,8 @@ class Branch_and_Bound(Driver):
             ub = self.xI_ub
 
             # Normalized as per the convention in Kriging of openmdao
-            xval = (xI - obj_surrogate.X_mean)/obj_surrogate.X_std
+            #xval = (xI - obj_surrogate.X_mean)/obj_surrogate.X_std
+            xval = (xI - obj_surrogate.lb_org.flatten())/(obj_surrogate.ub_org.flatten() - obj_surrogate.lb_org.flatten())
 
             NegEI = calc_conEI_norm(xval, obj_surrogate)
 
@@ -668,7 +673,9 @@ class Branch_and_Bound(Driver):
         opt_x, opt_f, succ_flag = snopt_opt(self.calc_SSqr_convex, x0, xhat_comL,
                                             xhat_comU, len(bin_hat),
                                             title='Maximize_S',
-                                            options={'Major optimality tolerance' : self.options['ftol']})
+                                            options={'Major optimality tolerance' : self.options['ftol']},
+                                            jac=Ain_hat,
+                                            )#sens=self.calc_SSqr_convex_grad)
 
         #Neg_sU = optResult.fun
         #if not optResult.success:
@@ -681,17 +688,11 @@ class Branch_and_Bound(Driver):
                     #eflag_sU = False
                     #break
 
-
         Neg_sU = opt_f
         if not succ_flag:
             eflag_sU = False
         else:
             eflag_sU = True
-            tol = self.options['con_tol']
-            for ii in range(2*n):
-                if np.dot(Ain_hat[ii, :], opt_x) > (bin_hat[ii ,0] + tol):
-                    eflag_sU = False
-                    break
 
         sU = - Neg_sU
         return sU, eflag_sU
@@ -729,6 +730,8 @@ class Branch_and_Bound(Driver):
         term2 = alpha*(rhat-rhat_L).T.dot(rhat-rhat_U)
         S2 = term1 + term2
 
+        print('x', x_com)
+        print('obj', S2[0, 0])
         return S2[0, 0]
 
     def calc_SSqr_convex(self, dv_dict):
@@ -775,8 +778,63 @@ class Branch_and_Bound(Driver):
         bin_hat = self.bin_hat
 
         func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
-
+        #print('x', dv_dict)
+        #print('obj', func_dict['obj'])
         return func_dict, fail
+
+    def calc_SSqr_convex_grad(self, dv_dict, func_dict):
+        """ Callback function for gradient of mean squared error."""
+        fail = 0
+
+        x_com = dv_dict['x']
+        obj_surrogate = self.obj_surrogate
+        x_comL = self.x_comL
+        x_comU = self.x_comU
+        xhat_comL = self.xhat_comL
+        xhat_comU = self.xhat_comU
+
+        X = obj_surrogate.X
+        R_inv = obj_surrogate.R_inv
+        SigmaSqr = obj_surrogate.SigmaSqr
+        alpha = obj_surrogate._alpha
+
+        n, k = X.shape
+        nn = len(x_com)
+
+        one = np.ones([n, 1])
+
+        rL = x_comL[k:]
+        rU = x_comU[k:]
+        rhat = x_com[k:].reshape(n, 1)
+
+        r = rL + rhat*(rU - rL)
+        rhat_L = xhat_comL[k:]
+        rhat_U = xhat_comU[k:]
+
+        term0 = np.dot(R_inv, r)
+
+        dterm1a = (rhat.T.dot(R_inv) + rhat.T.dot(R_inv.T))
+        dterm1b = 2.0*((1.0 - one.T.dot(term0))*np.sum(R_inv, 0)/(one.T.dot(np.dot(R_inv, one))))
+        dterm1 = SigmaSqr*(dterm1a + dterm1b)
+
+        dterm2 = alpha*(2.0*rhat - rhat_L - rhat_U)
+
+        dobj_dr = dterm1 + dterm2.T
+
+        # Objectives
+        sens_dict = OrderedDict()
+        sens_dict['obj'] = OrderedDict()
+        sens_dict['obj']['x'] = np.zeros((1, nn))
+        sens_dict['obj']['x'][:, k:] = dobj_dr*(rU - rL).T
+
+        # Constraints
+        Ain_hat = self.Ain_hat
+        bin_hat = self.bin_hat
+
+        sens_dict['con'] = OrderedDict()
+        sens_dict['con']['x'] = Ain_hat
+
+        return sens_dict, fail
 
     def minimize_y(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):
 
@@ -800,44 +858,51 @@ class Branch_and_Bound(Driver):
                      'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
                      'jac': lambda x: -Ain_hat[ii, :]} for ii in range(2*n)]
 
-            optResult = minimize(self.calc_y_hat_convex_old, x0,
-                                 args=(x_comL, x_comU), method='SLSQP',
-                                 constraints=cons, bounds=bnds,
-                                 options={'ftol' : self.options['ftol'],
-                                          'maxiter' : 100})
+            #optResult = minimize(self.calc_y_hat_convex_old, x0,
+                                 #args=(x_comL, x_comU, surrogate), method='SLSQP',
+                                 #constraints=cons, bounds=bnds,
+                                 #options={'ftol' : self.options['ftol'],
+                                          #'maxiter' : 100})
 
             self.x_comL = x_comL
             self.x_comU = x_comU
             self.Ain_hat = Ain_hat
             self.bin_hat = bin_hat
+            self.surrogate = surrogate
 
             opt_x, opt_f, succ_flag = snopt_opt(self.calc_y_hat_convex, x0, xhat_comL,
                                                 xhat_comU, len(bin_hat),
                                                 title='minimize_y',
-                                                options={'Major optimality tolerance' : self.options['ftol']})
+                                                options={'Major optimality tolerance' : self.options['ftol']},
+                                                jac=Ain_hat)
 
-            yL = optResult.fun
+            #yL = optResult.fun
+            #if not optResult.success:
+                #eflag_yL = False
+            #else:
+                #eflag_yL = True
+                #tol = self.options['con_tol']
+                #for ii in range(2*n):
+                    #if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + tol):
+                        #eflag_yL = False
+                        #break
 
-            if not optResult.success:
+            yL = opt_f
+            if not succ_flag:
                 eflag_yL = False
             else:
                 eflag_yL = True
-                tol = self.options['con_tol']
-                for ii in range(2*n):
-                    if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + tol):
-                        eflag_yL = False
-                        break
 
         return yL, eflag_yL
 
     def calc_y_hat_convex_old(self, x_com, *param):
-        obj_surrogate = self.obj_surrogate
         x_comL = param[0]
         x_comU = param[1]
+        surrogate = param[2]
 
-        X = obj_surrogate.X
-        c_r = obj_surrogate.c_r
-        mu = obj_surrogate.mu
+        X = surrogate.X
+        c_r = surrogate.c_r
+        mu = surrogate.mu
         n, k = X.shape
 
         rL = x_comL[k:]
@@ -852,13 +917,13 @@ class Branch_and_Bound(Driver):
         fail = 0
 
         x_com = dv_dict['x']
-        obj_surrogate = self.obj_surrogate
+        surrogate = self.surrogate
         x_comL = self.x_comL
         x_comU = self.x_comU
 
-        X = obj_surrogate.X
-        c_r = obj_surrogate.c_r
-        mu = obj_surrogate.mu
+        X = surrogate.X
+        c_r = surrogate.c_r
+        mu = surrogate.mu
         n, k = X.shape
 
         rL = x_comL[k:]
@@ -877,7 +942,8 @@ class Branch_and_Bound(Driver):
         bin_hat = self.bin_hat
 
         func_dict['con'] = np.dot(Ain_hat, x_com) - bin_hat.flatten()
-
+        #print('x', dv_dict)
+        #print('obj', func_dict['obj'])
         return func_dict, fail
 
 def update_active_set(active_set, ubd):
@@ -906,12 +972,14 @@ def gen_coeff_bound(xI_lb, xI_ub, surrogate):
     """
 
     #Normalized to 0-1 hypercube
-    # xL_hat0 = (xI_lb - surrogate.lb_org)/(surrogate.ub_org - surrogate.lb_org)
-    # xU_hat0 = (xI_ub - surrogate.lb_org)/(surrogate.ub_org - surrogate.lb_org)
+    xL_hat0 = (xI_lb - surrogate.lb_org.flatten())/(surrogate.ub_org.flatten() - surrogate.lb_org.flatten())
+    xU_hat0 = (xI_ub - surrogate.lb_org.flatten())/(surrogate.ub_org.flatten() - surrogate.lb_org.flatten())
+    xL_hat = xL_hat0
+    xU_hat = xU_hat0
 
     #Normalized as per Openmdao kriging model
-    xL_hat = (xI_lb - surrogate.X_mean)/surrogate.X_std
-    xU_hat = (xI_ub - surrogate.X_mean)/surrogate.X_std
+    #xL_hat = (xI_lb - surrogate.X_mean)/surrogate.X_std
+    #xU_hat = (xI_ub - surrogate.X_mean)/surrogate.X_std
 
     rL, rU = interval_analysis(xL_hat, xU_hat, surrogate)
 
@@ -946,30 +1014,30 @@ def interval_analysis(lb_x, ub_x, surrogate):
     t4L = np.zeros([n, 1]); t4U = np.zeros([n, 1])
     lb_r = np.zeros([n, 1]); ub_r = np.ones([n, 1])
 
-    # if p % 2 == 0:
-    #     for i in range(n):
-    #         for h in range(k):
-    #             t1L[i,h] = lb_x[h] - X[i, h]
-    #             t1U[i,h] = ub_x[h] - X[i, h]
+    if p % 2 == 0:
+        for i in range(n):
+            for h in range(k):
+                t1L[i,h] = lb_x[h] - X[i, h]
+                t1U[i,h] = ub_x[h] - X[i, h]
     #
-    #             t2L[i,h] = np.max(np.array([0,np.min(np.array([t1L[i, h]*t1L[i, h],
-    #                                                             t1L[i, h]*t1U[i, h],
-    #                                                             t1U[i, h]*t1U[i, h]]))]))
-    #             t2U[i,h] = np.max(np.array([0,np.max(np.array([t1L[i, h]*t1L[i, h],
-    #                                                             t1L[i, h]*t1U[i, h],
-    #                                                             t1U[i, h]*t1U[i, h]]))]))
+                t2L[i,h] = np.max(np.array([0,np.min(np.array([t1L[i, h]*t1L[i, h],
+                                                                t1L[i, h]*t1U[i, h],
+                                                                t1U[i, h]*t1U[i, h]]))]))
+                t2U[i,h] = np.max(np.array([0,np.max(np.array([t1L[i, h]*t1L[i, h],
+                                                                t1L[i, h]*t1U[i, h],
+                                                                t1U[i, h]*t1U[i, h]]))]))
     #
-    #             t3L[i,h] = np.min(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
-    #             t3U[i,h] = np.max(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
+                t3L[i,h] = np.min(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
+                t3U[i,h] = np.max(np.array([-thetas[h]*t2L[i, h], -thetas[h]*t2U[i, h]]))
     #
-    #         t4L[i] = np.sum(t3L[i, :])
-    #         t4U[i] = np.sum(t3U[i, :])
+            t4L[i] = np.sum(t3L[i, :])
+            t4U[i] = np.sum(t3U[i, :])
     #
-    #         lb_r[i] = np.exp(t4L[i])
-    #         ub_r[i] = np.exp(t4U[i])
-    # else:
-    #     print("\nWarning! Value of p should be 2. Cannot perform interval analysis")
-    #     print("\nReturing global bound of the r variable")
+            lb_r[i] = np.exp(t4L[i])
+            ub_r[i] = np.exp(t4U[i])
+    else:
+        print("\nWarning! Value of p should be 2. Cannot perform interval analysis")
+        print("\nReturing global bound of the r variable")
 
     return lb_r, ub_r
 
@@ -1058,9 +1126,10 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
     """This function evaluates the expected improvement in the normalized
     design space.
     """
-    y_min = (obj_surrogate.y_best - obj_surrogate.Y_mean)/obj_surrogate.Y_std
+    #y_min = (obj_surrogate.y_best - obj_surrogate.Y_mean)/obj_surrogate.Y_std
+    y_min = obj_surrogate.y_best
 
-    if not SSqr:
+    if SSqr is None:
         X = obj_surrogate.X
         c_r = obj_surrogate.c_r
         thetas = obj_surrogate.thetas
@@ -1072,7 +1141,7 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
         n = np.shape(X)[0]
         one = np.ones([n, 1])
 
-        r = np.exp(-np.sum(thetas*(xval - X)**p, 1)).reshape(n, 1)
+        r = np.exp(-np.sum(thetas.T*(xval - X)**p, 1)).reshape(n, 1)
 
         y_hat = mu + np.dot(r.T, c_r)
         term0 = np.dot(R_inv, r)
@@ -1096,7 +1165,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
 
     g_min = 0.0
 
-    if not gSSqr:
+    if gSSqr is None:
         X = con_surrogate.X
         c_r = con_surrogate.c_r
         thetas = con_surrogate.thetas
@@ -1107,7 +1176,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
         n = np.shape(X)[0]
         one = np.ones([n, 1])
 
-        r = np.exp(-np.sum(thetas*(xval - X)**p, 1)).reshape(n, 1)
+        r = np.exp(-np.sum(thetas.T*(xval - X)**p, 1)).reshape(n, 1)
 
         g_hat = mu + np.dot(r.T, c_r)
         term0 = np.dot(R_inv, r)

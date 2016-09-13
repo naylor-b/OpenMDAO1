@@ -70,27 +70,28 @@ class KrigingSurrogate(SurrogateModel):
                 'KrigingSurrogate require at least 2 training points.'
             )
 
+        X_mean = np.mean(x, axis=0)
+        X_std = np.std(x, axis=0)
+        Y_mean = np.mean(y, axis=0)
+        Y_std = np.std(y, axis=0)
+
+        X_std[X_std == 0.] = 1.
+        Y_std[Y_std == 0.] = 1.
+
+        # Normalize the data
         if normalize:
-            # Normalize the data
-            X_mean = np.mean(x, axis=0)
-            X_std = np.std(x, axis=0)
-            Y_mean = np.mean(y, axis=0)
-            Y_std = np.std(y, axis=0)
-
-            X_std[X_std == 0.] = 1.
-            Y_std[Y_std == 0.] = 1.
-
             X = (x - X_mean) / X_std
             Y = (y - Y_mean) / Y_std
 
             self.X = X
             self.Y = Y
 
-            self.X_mean, self.X_std = X_mean, X_std
-            self.Y_mean, self.Y_std = Y_mean, Y_std
         else:
             self.X = x
             self.Y = y
+
+        self.X_mean, self.X_std = X_mean, X_std
+        self.Y_mean, self.Y_std = Y_mean, Y_std
 
 
         def _calcll(thetas):

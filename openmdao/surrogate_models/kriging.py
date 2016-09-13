@@ -56,7 +56,8 @@ class KrigingSurrogate(SurrogateModel):
             Model responses at given inputs.
 
         normalize : bool
-            Normalize the train
+            Normalize the training data to lie on [-1, 1]. Default is True, but
+            some applications like Branch and Bound require False.
         """
 
         super(KrigingSurrogate, self).train(x, y)

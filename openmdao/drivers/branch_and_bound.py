@@ -265,6 +265,8 @@ class Branch_and_Bound(Driver):
             self.obj_surrogate = obj_surrogate = self.surrogate()
             obj_surrogate.train(x_i_hat, obj, normalize=False)
             obj_surrogate.y = obj
+            obj_surrogate.lb_org = self.xI_lb
+            obj_surrogate.ub_org = self.xI_ub
 
             self.con_surrogate = con_surrogate = []
             for name, val in iteritems(cons):
@@ -272,6 +274,8 @@ class Branch_and_Bound(Driver):
                 con_surr.train(x_i_hat, val, normalize=False)
                 con_surr.y = val
                 con_surr._name = name
+                con_surr.lb_org = self.xI_lb
+                con_surr.ub_org = self.xI_ub
                 con_surrogate.append(con_surr)
 
         # Calculate intermediate statistics. This stuff used to be stored in
@@ -370,7 +374,7 @@ class Branch_and_Bound(Driver):
                                          method='SLSQP', bounds=bnds,
                                          options={'ftol' : ftol})
 
-                    xloc_iter = np.round(optResult.x.reshape(num_des, 1))
+                    xloc_iter = np.round(optResult.x.reshape(num_des))
                     floc_iter = self.objective_callback(xloc_iter)
 
                     if not optResult.success:

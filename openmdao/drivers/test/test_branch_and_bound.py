@@ -55,7 +55,8 @@ class TestBranchAndBounddriver(unittest.TestCase):
 
         prob.driver = Branch_and_Bound()
         prob.driver.options['use_surrogate'] = True
-        prob.driver.options['disp'] = False
+        #prob.driver.options['disp'] = False
+        prob.driver.options['local_search'] = True
 
         prob.driver.add_desvar('mat1', lower=1, upper=4)
         prob.driver.add_desvar('mat2', lower=1, upper=4)
@@ -67,7 +68,7 @@ class TestBranchAndBounddriver(unittest.TestCase):
                             [0.0, 0.75, 0.0],
                             [0.75, 0.0, 0.25],
                             [0.75, 1.0, 0.5],
-                            [0.25, 0.5, 1.0]]) 
+                            [0.25, 0.5, 1.0]])
         prob.driver.sampling = {'mat1' : samples[:, 0].reshape((npt, 1)),
                                 'mat2' : samples[:, 1].reshape((npt, 1)),
                                 'mat3' : samples[:, 2].reshape((npt, 1))}
@@ -80,7 +81,7 @@ class TestBranchAndBounddriver(unittest.TestCase):
         prob['area3'] = 1.00010045e-6
 
         prob.run()
-        
+
         # Optimal solution
         assert_rel_error(self, prob['mat1'], 2, 1e-5)
         assert_rel_error(self, prob['mat2'], 2, 1e-5)

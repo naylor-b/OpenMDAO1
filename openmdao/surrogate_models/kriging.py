@@ -193,7 +193,7 @@ class KrigingSurrogate(SurrogateModel):
 
         return reduced_likelihood, params
 
-    def predict(self, x, eval_rmse=True):
+    def predict(self, x, eval_rmse=True, normalize=True):
         """
         Calculates a predicted value of the response based on the current
         trained model for the supplied list of inputs.
@@ -215,8 +215,7 @@ class KrigingSurrogate(SurrogateModel):
         x = np.atleast_2d(x)
         n_eval = x.shape[0]
 
-        norm_flag = True
-        if not norm_flag:
+        if normalize:
             # Normalize input
             x_n = (x - self.X_mean) / self.X_std
         else:

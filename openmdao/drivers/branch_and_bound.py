@@ -278,19 +278,19 @@ class Branch_and_Bound(Driver):
         if obj_surrogate:
 
             # TODO: mvp in Kriging
-            R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
-                                                               obj_surrogate.S_inv,
-                                                               obj_surrogate.U.T))
-            obj_surrogate.R_inv = R_inv
+            # R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
+                                                            #    obj_surrogate.S_inv,
+                                                            #    obj_surrogate.U.T))
+            # obj_surrogate.R_inv = R_inv
 
-            obj_surrogate.mu = np.dot(one.T,np.dot(R_inv,obj_surrogate.Y))/np.dot(one.T,np.dot(R_inv,one))
-
-            obj_surrogate.SigmaSqr = np.dot((obj_surrogate.Y - one*obj_surrogate.mu).T,np.dot(R_inv,(obj_surrogate.Y-one*obj_surrogate.mu)))/n_train
+            # obj_surrogate.mu = np.dot(one.T,np.dot(R_inv,obj_surrogate.Y))/np.dot(one.T,np.dot(R_inv,one))
+            #
+            # obj_surrogate.SigmaSqr = np.dot((obj_surrogate.Y - one*obj_surrogate.mu).T,np.dot(R_inv,(obj_surrogate.Y-one*obj_surrogate.mu)))/n_train
 
             # TODO: norm type, should probably always be 2 (Yes for sure)
             obj_surrogate.p = 2
 
-            obj_surrogate.c_r = np.dot(R_inv,(obj_surrogate.Y-one*obj_surrogate.mu))
+            # obj_surrogate.c_r = np.dot(R_inv,(obj_surrogate.Y-one*obj_surrogate.mu))
 
             ## This is also done in Ameigo. TODO: just do it once.
             obj_surrogate.y_best = np.min(obj_surrogate.Y)
@@ -304,15 +304,15 @@ class Branch_and_Bound(Driver):
 
         for con_surr in con_surrogate:
 
-            R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
-                                                         con_surr.S_inv,
-                                                         con_surr.U.T))
-            con_surr.R_inv = R_inv
-            con_surr.mu = np.dot(one.T,np.dot(R_inv,con_surr.Y))/np.dot(one.T,np.dot(R_inv,one))
-            con_surr.SigmaSqr = np.dot((con_surr.y - one*con_surr.mu).T,np.dot(R_inv,(con_surr.y-one*con_surr.mu)))/n_train
-
+            # R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
+            #                                              con_surr.S_inv,
+            #                                              con_surr.U.T))
+            # con_surr.R_inv = R_inv
+            # con_surr.mu = np.dot(one.T,np.dot(R_inv,con_surr.Y))/np.dot(one.T,np.dot(R_inv,one))
+            # con_surr.SigmaSqr = np.dot((con_surr.y - one*con_surr.mu).T,np.dot(R_inv,(con_surr.y-one*con_surr.mu)))/n_train
+            #
             con_surr.p = 2
-            con_surr.c_r = np.dot(R_inv,(con_surr.y-one*con_surr.mu))
+            # con_surr.c_r = np.dot(R_inv,(con_surr.y-one*con_surr.mu))
 
         #----------------------------------------------------------------------
         # Step 1: Initialize

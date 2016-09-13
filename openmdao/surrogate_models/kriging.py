@@ -100,9 +100,9 @@ class KrigingSurrogate(SurrogateModel):
             loglike = self._calculate_reduced_likelihood_params(np.exp(thetas))[0]
             return -loglike
 
-        bounds = [(np.log(1e-5), np.log(1e5)) for _ in range(self.n_dims)]
-
-        optResult = minimize(_calcll, 1e-1*np.ones(self.n_dims), method='slsqp',
+        bounds = [(-5.0, 5.0) for _ in range(self.n_dims)]
+        x0 = -3.0*np.ones([self.n_dims,1]) + 0.5*(5.0*np.ones([self.n_dims,1]))
+        optResult = minimize(_calcll, x0, method='slsqp',
                              options={'eps': 1e-3},
                              bounds=bounds)
 
@@ -111,11 +111,22 @@ class KrigingSurrogate(SurrogateModel):
 
         self.thetas = np.exp(optResult.x)
         _, params = self._calculate_reduced_likelihood_params()
-        self.alpha = params['alpha']
+
+        self.c_r = params['c_r']
         self.U = params['U']
         self.S_inv = params['S_inv']
         self.Vh = params['Vh']
-        self.sigma2 = params['sigma2']
+        self.mu = params['mu']
+        self.SigmaSqr = params['SigmaSqr']
+        self.R_inv = params['R_inv']
+        # print "kriging test"
+        # print self.thetas
+        # print self.U
+        # print self.Vh
+        # print self.S_inv
+        # print self.R_inv
+        # print params['R']
+        # exit()
 
     def _calculate_reduced_likelihood_params(self, thetas=None):
         """
@@ -150,20 +161,41 @@ class KrigingSurrogate(SurrogateModel):
         h = 1e-8 * S[0]
         inv_factors = S / (S ** 2. + h ** 2.)
 
-        alpha = Vh.T.dot(np.einsum('j,kj,kl->jl', inv_factors, U, Y))
-        logdet = -np.sum(np.log(inv_factors))
-        sigma2 = np.dot(Y.T, alpha).sum(axis=0) / self.n_samples
-        reduced_likelihood = -(np.log(np.sum(sigma2)) + logdet / self.n_samples)
+        # alpha = Vh.T.dot(np.einsum('j,kj,kl->jl', inv_factors, U, Y))
+        # logdet = -np.sum(np.log(inv_factors))
+        # sigma2 = np.dot(Y.T, alpha).sum(axis=0) / self.n_samples
+        # reduced_likelihood = -(np.log(np.sum(sigma2)) + logdet / self.n_samples)
 
-        params['alpha'] = alpha
-        params['sigma2'] = sigma2 * np.square(self.Y_std)
+        # params['alpha'] = alpha
+        # params['sigma2'] = sigma2 * np.square(self.Y_std)
+        # params['S_inv'] = inv_factors
+        # params['U'] = U
+        # params['Vh'] = Vh
+
+        # Using the approach suggested on 1. EGO by D.R.Jones et.al and
+        # 2. Engineering Deisgn via Surrogate Modeling-A practical guide
+        # by Alexander Forrester, Dr. Andras Sobester, Andy Keane
+        R_inv = Vh.T.dot(np.einsum('i,ij->ij',
+                                              inv_factors,
+                                              U.T))
+        logdet = 2.0*np.sum(np.log(np.abs(inv_factors)))
+        one = np.ones([self.n_samples,1])
+        mu = np.dot(one.T,np.dot(R_inv,Y))/np.dot(one.T,np.dot(R_inv,one))
+        c_r = np.dot(R_inv,(Y-one*mu))
+        SigmaSqr = np.dot((Y - one*mu).T,c_r)/self.n_samples
+        reduced_likelihood = 1.0*(-(self.n_samples/2.0)*np.log(SigmaSqr) - 0.5*logdet)
+
+        params['mu'] = mu
+        params['SigmaSqr'] = SigmaSqr
         params['S_inv'] = inv_factors
         params['U'] = U
         params['Vh'] = Vh
+        params['c_r'] = c_r
+        params['R_inv'] = R_inv
 
         return reduced_likelihood, params
 
-    def predict(self, x, eval_rmse=True):
+    def predict(self, x, eval_rmse=True, normalize=True):
         """
         Calculates a predicted value of the response based on the current
         trained model for the supplied list of inputs.
@@ -185,22 +217,33 @@ class KrigingSurrogate(SurrogateModel):
         x = np.atleast_2d(x)
         n_eval = x.shape[0]
 
-        # Normalize input
-        x_n = (x - self.X_mean) / self.X_std
+        if normalize:
+            # Normalize input
+            x_n = (x - self.X_mean) / self.X_std
+        else:
+            x_n = x
 
         r = np.zeros((n_eval, self.n_samples), dtype=x.dtype)
         for r_i, x_i in zip(r, x_n):
             r_i[:] = np.exp(-thetas.dot(np.square((x_i - X).T)))
 
-        # Scaled Predictor
-        y_t = np.dot(r, self.alpha)
+        # # Scaled Predictor
+        # y_t = np.dot(r, self.alpha)
+        #
+        # # Predictor
+        # y = self.Y_mean + self.Y_std * y_t
+
+        if r.shape[1] > 1: #Ensure r is always a column vector
+            r = r.T
 
         # Predictor
-        y = self.Y_mean + self.Y_std * y_t
+        y = self.mu + np.dot(r.T,self.c_r)
 
         if eval_rmse:
-            mse = (1. - np.dot(np.dot(r, self.Vh.T), np.einsum('j,kj,lk->jl', self.S_inv, self.U, r))) * self.sigma2
-
+            # mse = (1. - np.dot(np.dot(r, self.Vh.T), np.einsum('j,kj,lk->jl', self.S_inv, self.U, r))) * self.sigma2
+            one = np.ones([self.n_samples,1])
+            mse  = self.SigmaSqr*(1.0 - np.dot(r.T,np.dot(self.R_inv,r)) + \
+            ((1.0 - np.dot(one.T,np.dot(self.R_inv,r)))**2/np.dot(one.T,np.dot(R_inv,one))))
             # Forcing negative RMSE to zero if negative due to machine precision
             mse[mse < 0.] = 0.
             return y, np.sqrt(mse)

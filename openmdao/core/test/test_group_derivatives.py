@@ -66,7 +66,7 @@ class TestGroupDerivatves(unittest.TestCase):
         
         J, idx_dict = root.assemble_jacobian()
         
-        rs, re, cs, ce = idx_dict[('sub.sub1.comp1', ('y1', 'x1'))]
+        rs, re, cs, ce, _ = idx_dict[('sub.sub1.comp1', ('y1', 'x1'))]
         self.assertEqual(J[rs:re, cs:ce], 8)
 
     def test_group_fd(self):

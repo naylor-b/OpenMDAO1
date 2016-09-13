@@ -6,7 +6,8 @@ from collections import OrderedDict
 
 import numpy as np
 from scipy.linalg import lu_factor, lu_solve
-
+from scipy.sparse import issparse
+from scipy.sparse.linalg import spsolve, splu
 from openmdao.solvers.solver_base import MultLinearSolver
 
 
@@ -121,19 +122,27 @@ class DirectSolver(MultLinearSolver):
                 self.mode = mode
 
                 self.jacobian, _ = system.assemble_jacobian(mode=mode, method=method,
-                                                            mult=self.mult)
+                                                mult=self.mult,
+                                                solve_method=self.options['solve_method'])
                 system._jacobian_changed = False
 
                 if self.options['solve_method'] == 'LU':
-                    self.lup = lu_factor(self.jacobian)
+                    if issparse(self.jacobian):
+                        self.lup = splu(self.jacobian)
+                    else:
+                        self.lup = lu_factor(self.jacobian)
 
             if self.options['solve_method'] == 'LU':
-                deriv = lu_solve(self.lup, rhs)
+                if issparse(self.jacobian):
+                    deriv = self.lup.solve(rhs)
+                else:
+                    deriv = lu_solve(self.lup, rhs)
             else:
-                deriv = np.linalg.solve(self.jacobian, rhs)
-
+                if issparse(self.jacobian):
+                    deriv = spsolve(self.jacobian, rhs)
+                else:
+                    deriv = np.linalg.solve(self.jacobian, rhs)
             self.system = None
             sol_buf[voi] = deriv
 
         return sol_buf
-

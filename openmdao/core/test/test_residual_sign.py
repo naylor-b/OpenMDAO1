@@ -14,7 +14,7 @@ class SimpleImplicitSL(Component):
     def __init__(self):
         super(SimpleImplicitSL, self).__init__()
 
-        self.add_param('a', shape=1., step_size=1e-3)
+        self.add_param('a', shape=1, step_size=1e-3)
         self.add_param('b', shape=1)
 
         self.add_state('x', val=np.ones(2))

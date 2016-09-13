@@ -18,6 +18,7 @@ from openmdao.core.component import Component
 from openmdao.core.mpi_wrap import MPI, debug
 from openmdao.core.system import System
 from openmdao.core.fileref import FileRef
+from openmdao.core.jacobian import assemble_sparse_jacobian
 from openmdao.util.string_util import nearest_child, name_relative_to
 from openmdao.util.graph import collapse_nodes, break_strongly_connected
 
@@ -953,7 +954,8 @@ class Group(System):
             if isinstance(system, Group):
                 system.clear_dparams()  # only call on Groups
 
-    def assemble_jacobian(self, mode='fwd', method='assemble', mult=None):
+    def assemble_jacobian(self, mode='fwd', method='assemble', mult=None,
+                          solve_method='solve'):
         """ Assemble and return an ndarray containing the Jacobian for this
         Group.
 
@@ -974,6 +976,9 @@ class Group(System):
         mult : function(None)
             Solver mult function to coordinate the matrix vector product
 
+        solve_method : string('solve')
+            Method of system solution.
+
         Returns
         -------
         ndarray : Jacobian Matrix. Note: if mode is 'rev', then the transpose
@@ -992,13 +997,15 @@ class Group(System):
         # OpenMDAO does matrix vector product.
         if method == 'MVP':
 
-            ident = np.eye(n_edge)
+            ident_vec = np.zeros(n_edge)
             icache = None
 
             partials = np.empty((n_edge, n_edge))
 
             for i in range(n_edge):
-                partials[:, i] = mult(ident[:, i])
+                ident_vec[i-1] = 0.0
+                ident_vec[i] = 1.0
+                partials[:, i] = mult(ident_vec)
 
         # Assemble the Jacobian
         else:
@@ -1033,6 +1040,7 @@ class Group(System):
                         i_var_abs = '.'.join((sub_name, i_var))
                         i_var_pro = sys_prom_name[i_var_abs]
                         o_var_pro = sys_prom_name[o_var_abs]
+                        idxs = None
 
                         # States are fine ...
                         if i_var in sub.states:
@@ -1045,21 +1053,31 @@ class Group(System):
                             if i_var_abs not in conn:
                                 continue
 
-                            i_var_src = conn[i_var_abs][0]
+                            i_var_src, idxs = conn[i_var_abs]
                             i_var_pro = sys_prom_name[i_var_src]
 
                         o_start, o_end = u_vec._dat[o_var_pro].slice
                         i_start, i_end = u_vec._dat[i_var_pro].slice
 
-                        icache[key2] = (o_start, o_end, i_start, i_end)
+                        icache[key2] = (o_start, o_end, i_start, i_end, idxs)
 
                     else:
-                        (o_start, o_end, i_start, i_end) = icache[key2]
+                        (o_start, o_end, i_start, i_end, idxs) = icache[key2]
 
-                    if mode=='fwd':
-                        partials[o_start:o_end, i_start:i_end] = jac[key]
+                    if idxs:
+                        if mode=='fwd':
+                            J = jac[key]
+                            for count, j in enumerate(idxs):
+                                partials[o_start:o_end, i_start+j] = J[:,count]
+                        else:
+                            J = jac[key].T
+                            for count, j in enumerate(idxs):
+                                partials[i_start+j, o_start:o_end] = J[count, :]
                     else:
-                        partials[i_start:i_end, o_start:o_end] = jac[key].T
+                        if mode=='fwd':
+                            partials[o_start:o_end, i_start:i_end] = jac[key]
+                        else:
+                            partials[i_start:i_end, o_start:o_end] = jac[key].T
 
         return partials, icache
 

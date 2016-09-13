@@ -43,7 +43,7 @@ class KrigingSurrogate(SurrogateModel):
         self.Y_mean = np.zeros(0)
         self.Y_std = np.zeros(0)
 
-    def train(self, x, y):
+    def train(self, x, y, normalize=True):
         """
         Train the surrogate model with the given set of inputs and outputs.
 
@@ -54,6 +54,9 @@ class KrigingSurrogate(SurrogateModel):
 
         y : array-like
             Model responses at given inputs.
+
+        normalize : bool
+            Normalize the train
         """
 
         super(KrigingSurrogate, self).train(x, y)
@@ -66,8 +69,8 @@ class KrigingSurrogate(SurrogateModel):
             raise ValueError(
                 'KrigingSurrogate require at least 2 training points.'
             )
-        norm_flag = True
-        if not norm_flag:
+
+        if normalize:
             # Normalize the data
             X_mean = np.mean(x, axis=0)
             X_std = np.std(x, axis=0)

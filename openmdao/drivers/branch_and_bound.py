@@ -65,7 +65,7 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
             opt.setOption(name, value)
 
     opt.setOption('Major iterations limit', 100)
-    opt.setOption('Verify level', 3)
+    opt.setOption('Verify level', -1)
     opt.setOption('iSumm', 0)
     #opt.setOption('iPrint', 0)
 
@@ -217,6 +217,7 @@ class Branch_and_Bound(Driver):
 
             n_train = self.sampling[self.dvs[0]].shape[0]
             x_i = []
+            x_i_hat = []
             obj = []
             cons = {}
             for con in self.get_constraint_metadata():
@@ -262,13 +263,13 @@ class Branch_and_Bound(Driver):
                     cons[name].append(value.copy())
 
             self.obj_surrogate = obj_surrogate = self.surrogate()
-            obj_surrogate.train(x_i_hat, obj)
+            obj_surrogate.train(x_i_hat, obj, normalize=False)
             obj_surrogate.y = obj
 
             self.con_surrogate = con_surrogate = []
             for name, val in iteritems(cons):
                 con_surr = self.surrogate()
-                con_surr.train(x_i_hat, val)
+                con_surr.train(x_i_hat, val, normalize=False)
                 con_surr.y = val
                 con_surr._name = name
                 con_surrogate.append(con_surr)
@@ -687,7 +688,7 @@ class Branch_and_Bound(Driver):
                                                 title='Maximize_S',
                                                 options={'Major optimality tolerance' : self.options['ftol']},
                                                 jac=Ain_hat,
-                                                sens=self.calc_SSqr_convex_grad)
+                                                )#sens=self.calc_SSqr_convex_grad)
 
             Neg_sU = opt_f
             if not succ_flag:

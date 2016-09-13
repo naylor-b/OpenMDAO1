@@ -80,7 +80,7 @@ class AMIEGO_driver(Driver):
 
         # The default continuous optimizer. User can slot a different one
         self.cont_opt = ScipyOptimizer()
-        self.cont_opt.options['optimizer'] = 'SLSQP'
+        self.cont_opt.options['optimizer'] = 'SLSQP' #TODO Switch tp SNOPT
 
         # The default MINLP optimizer
         self.minlp = Branch_and_Bound()
@@ -198,6 +198,7 @@ class AMIEGO_driver(Driver):
         # Since we need to add a new point every iteration, make these lists
         # for speed.
         x_i = []
+        x_i_hat = []
         obj = []
         cons = {}
         for con in self.get_constraint_metadata():
@@ -208,15 +209,17 @@ class AMIEGO_driver(Driver):
         for i_train in range(n_train):
 
             xx_i = np.empty((self.i_size, ))
+            xx_i_hat = np.empty((self.i_size, ))
             for var in self.i_dvs:
                 lower = self._desvars[var]['lower']
                 upper = self._desvars[var]['upper']
                 i, j = self.i_idx[var]
-                x_i_0 = self.sampling[var][i_train, :]
+                x_i_0 = self.sampling[var][i_train, :] #Samples should be bounded in an unit hypercube [0,1]
 
                 xx_i[i:j] = np.round(lower + x_i_0 * (upper - lower))
-
+                xx_i_hat[i:j] = (xx_i[i:j] - lower)/(upper - lower)
             x_i.append(xx_i)
+            x_i_hat.append(xx_i_hat)
 
         # Need to cache the continuous desvars so that we start each new
         # optimziation back at the original initial condition.
@@ -290,20 +293,23 @@ class AMIEGO_driver(Driver):
             #------------------------------------------------------------------
             # Step 3: Build the surrogate models
             #------------------------------------------------------------------
-
             obj_surrogate = self.surrogate()
-            obj_surrogate.train(x_i, obj)
+            obj_surrogate.train(x_i_hat, obj)
 
             obj_surrogate.y = obj
+            obj_surrogate.lb_org = xI_lb
+            obj_surrogate.ub_org = xI_ub
 
             con_surrogate = []
             for name, val in iteritems(cons):
                 val = np.array(val)
                 for j in range(val.shape[1]):
                     con_surr = self.surrogate()
-                    con_surr.train(x_i, val[:, j:j+1])
+                    con_surr.train(x_i_hat, val[:, j:j+1])
                     con_surr.y = val[:, j:j+1]
                     con_surr._name = name
+                    con_surr.lb_org = xI_lb
+                    con_surr.ub_org = xI_ub
                     con_surrogate.append(con_surr)
 
             if disp:
@@ -349,7 +355,7 @@ class AMIEGO_driver(Driver):
                         print("New xI = ", x0I)
                         print("EI_min = ", ei_min)
 
-                    # Prevent the correlation matrix being close singular. No
+                    # Prevent the correlation matrix being close to singular. No
                     # point allowed within the pescribed hypersphere of any
                     # existing point
                     rad = 0.5
@@ -358,10 +364,11 @@ class AMIEGO_driver(Driver):
                         dist = np.sum((x_i[ii] - x0I)**2)**0.5
                         if dist <= rad:
                             if disp:
-                                print("Point already exists!")  
+                                print("Point already exists!")
                             ec2 = 1
                             break
                     x_i.append(x0I)
+                    x_i_hat.append(x0I_hat)
 
                 else:
                     ec2 = 1
@@ -412,5 +419,3 @@ class AMIEGO_driver(Driver):
             print("Best Integer designs: ", best_int_design)
             print("Corresponding continuous designs: ", best_cont_design)
             print("=====================================================")
-
-

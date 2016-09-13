@@ -15,7 +15,7 @@ July, 2016
 Implemented in OpenMDAO, Aug 2016, Kenneth T. Moore
 """
 
-from __future__ import print_function
+# from __future__ import print_function
 
 from collections import OrderedDict
 from six import iteritems
@@ -228,6 +228,7 @@ class Branch_and_Bound(Driver):
             for i_train in range(n_train):
 
                 xx_i = np.empty((self.size, ))
+                xx_i_hat = np.empty((self.size, ))
                 for var in self.dvs:
                     lower = self._desvars[var]['lower']
                     upper = self._desvars[var]['upper']
@@ -235,8 +236,10 @@ class Branch_and_Bound(Driver):
                     x_i_0 = self.sampling[var][i_train, :]
 
                     xx_i[i:j] = np.round(lower + x_i_0 * (upper - lower))
+                    xx_i_hat[i:j] = (xx_i[i:j] - lower)/(upper - lower)
 
                 x_i.append(xx_i)
+                x_i_hat.append(xx_i_hat)
 
             # Run each case and extract obj/con
             cons = {}
@@ -259,13 +262,13 @@ class Branch_and_Bound(Driver):
                     cons[name].append(value.copy())
 
             self.obj_surrogate = obj_surrogate = self.surrogate()
-            obj_surrogate.train(x_i, obj)
+            obj_surrogate.train(x_i_hat, obj)
             obj_surrogate.y = obj
 
             self.con_surrogate = con_surrogate = []
             for name, val in iteritems(cons):
                 con_surr = self.surrogate()
-                con_surr.train(x_i, val)
+                con_surr.train(x_i_hat, val)
                 con_surr.y = val
                 con_surr._name = name
                 con_surrogate.append(con_surr)
@@ -273,25 +276,28 @@ class Branch_and_Bound(Driver):
         # Calculate intermediate statistics. This stuff used to be stored in
         # the Modelinfo object, but more convenient to store it in the
         # Kriging surrogate.
-        #if obj_surrogate:
 
-            ##This value should always be 0.0
-            #obj_surrogate.mu = np.mean(obj_surrogate.Y)
+        n_train = obj_surrogate.X.shape[0]
+        one = np.ones([n_train,1])
+        if obj_surrogate:
 
-            ##This value should always be 1.0
-            #obj_surrogate.SigmaSqr = obj_surrogate.sigma2/np.square(obj_surrogate.Y_std)
+            # TODO: mvp in Kriging
+            R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
+                                                               obj_surrogate.S_inv,
+                                                               obj_surrogate.U.T))
+            obj_surrogate.R_inv = R_inv
 
-            ## TODO: mvp in Kriging
-            #obj_surrogate.R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
-                                                                   #obj_surrogate.S_inv,
-                                                                   #obj_surrogate.U.T))
-            ## TODO: norm type, should probably always be 2
-            #obj_surrogate.p = 2
+            obj_surrogate.mu = np.dot(one.T,np.dot(R_inv,obj_surrogate.Y))/np.dot(one.T,np.dot(R_inv,one))
 
-            #obj_surrogate.c_r = obj_surrogate.alpha
+            obj_surrogate.SigmaSqr = np.dot((obj_surrogate.Y - one*obj_surrogate.mu).T,np.dot(R_inv,(obj_surrogate.Y-one*obj_surrogate.mu)))/n_train
+
+            # TODO: norm type, should probably always be 2 (Yes for sure)
+            obj_surrogate.p = 2
+
+            obj_surrogate.c_r = np.dot(R_inv,(obj_surrogate.Y-one*obj_surrogate.mu))
 
             ## This is also done in Ameigo. TODO: just do it once.
-            #obj_surrogate.y_best = np.min(obj_surrogate.y)
+            obj_surrogate.y_best = np.min(obj_surrogate.Y)
 
             ## This is the rest of the interface that any "surrogate" needs to contain.
             ##obj_surrogate.X = surrogate.X
@@ -300,15 +306,17 @@ class Branch_and_Bound(Driver):
             ##obj_surrogate.X_std = obj_surrogate.X_std.reshape(num_xI,1)
             ##obj_surrogate.X_mean = obj_surrogate.X_mean.reshape(num_xI,1)
 
-        #for con_surr in con_surrogate:
+        for con_surr in con_surrogate:
 
-            #con_surr.mu = np.mean(con_surr.Y)
-            #con_surr.SigmaSqr = con_surr.sigma2/np.square(con_surr.Y_std)
-            #con_surr.R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
-                                                         #con_surr.S_inv,
-                                                         #con_surr.U.T))
-            #con_surr.p = 2
-            #con_surr.c_r = con_surr.alpha
+            R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
+                                                         con_surr.S_inv,
+                                                         con_surr.U.T))
+            con_surr.R_inv = R_inv
+            con_surr.mu = np.dot(one.T,np.dot(R_inv,con_surr.Y))/np.dot(one.T,np.dot(R_inv,one))
+            con_surr.SigmaSqr = np.dot((con_surr.y - one*con_surr.mu).T,np.dot(R_inv,(con_surr.y-one*con_surr.mu)))/n_train
+
+            con_surr.p = 2
+            con_surr.c_r = np.dot(R_inv,(con_surr.y-one*con_surr.mu))
 
         #----------------------------------------------------------------------
         # Step 1: Initialize
@@ -327,8 +335,9 @@ class Branch_and_Bound(Driver):
 
         # Initial optimal objective and solution
         # Randomly generate an integer point
+        # TODO Generate a different random number across each dim
         xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
-        xopt[:] = 2.0
+        # xopt[:] = 2.0
         fopt = self.objective_callback(xopt)
         self.eflag_MINLPBB = True
         UBD = fopt
@@ -1025,7 +1034,7 @@ def interval_analysis(lb_x, ub_x, surrogate):
     t2L = np.zeros([n, k]); t2U = np.zeros([n, k])
     t3L = np.zeros([n, k]); t3U = np.zeros([n, k])
     t4L = np.zeros([n, 1]); t4U = np.zeros([n, 1])
-    lb_r = np.zeros([n, 1]); ub_r = np.zeros([n, 1])
+    lb_r = np.zeros([n, 1]); ub_r = np.ones([n, 1])
 
     if p % 2 == 0:
         for i in range(n):

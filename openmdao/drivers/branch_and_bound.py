@@ -56,8 +56,8 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
     opt_prob.addObj('obj')
 
     # Fall back on SLSQP if SNOPT isn't there
-    _tmp = __import__('pyoptsparse', globals(), locals(), [optimizer], 0)
-    opt = getattr(_tmp, optimizer)()
+    _tmp = __import__('pyoptsparse', globals(), locals(), [OPTIMIZER], 0)
+    opt = getattr(_tmp, OPTIMIZER)()
 
 
     if options:
@@ -65,6 +65,7 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
             opt.setOption(name, value)
 
     opt.setOption('Major iterations limit', 100)
+    opt.setOption('Verify level', 3)
     opt.setOption('iSumm', 0)
     #opt.setOption('iPrint', 0)
 
@@ -158,6 +159,9 @@ class Branch_and_Bound(Driver):
 
         # When this is slotted into AMIEGO, this will be set to False.
         self.standalone = True
+
+        # Switch between pyoptsparse and scipy/slsqp
+        self.pyopt = True
 
     def _setup(self):
         """  Initialize whatever we need."""
@@ -660,42 +664,45 @@ class Branch_and_Bound(Driver):
                  'fun' : lambda x : -np.dot(Ain_hat[ii, :], x) + bin_hat[ii],
                  'jac' : lambda x : -Ain_hat[ii, :]} for ii in range(2*n)]
 
-        optResult = minimize(self.calc_SSqr_convex_old, x0,
-                             args=(x_comL, x_comU, xhat_comL, xhat_comU),
-                             method='SLSQP', constraints=cons, bounds=bnds,
-                             options={'ftol' : self.options['ftol'],
-                                      'maxiter' : 100})
+        if self.pyopt:
 
-        self.x_comL = x_comL
-        self.x_comU = x_comU
-        self.xhat_comL = xhat_comL
-        self.xhat_comU = xhat_comU
-        self.Ain_hat = Ain_hat
-        self.bin_hat = bin_hat
+            self.x_comL = x_comL
+            self.x_comU = x_comU
+            self.xhat_comL = xhat_comL
+            self.xhat_comU = xhat_comU
+            self.Ain_hat = Ain_hat
+            self.bin_hat = bin_hat
 
-        #opt_x, opt_f, succ_flag = snopt_opt(self.calc_SSqr_convex, x0, xhat_comL,
-                                            #xhat_comU, len(bin_hat),
-                                            #title='Maximize_S',
-                                            #options={'Major optimality tolerance' : self.options['ftol']},
-                                            #jac=Ain_hat,
-                                            #)#sens=self.calc_SSqr_convex_grad)
+            opt_x, opt_f, succ_flag = snopt_opt(self.calc_SSqr_convex, x0, xhat_comL,
+                                                xhat_comU, len(bin_hat),
+                                                title='Maximize_S',
+                                                options={'Major optimality tolerance' : self.options['ftol']},
+                                                jac=Ain_hat,
+                                                sens=self.calc_SSqr_convex_grad)
 
-        Neg_sU = optResult.fun
-        if not optResult.success:
-            eflag_sU = False
+            Neg_sU = opt_f
+            if not succ_flag:
+                eflag_sU = False
+            else:
+                eflag_sU = True
+
         else:
-            eflag_sU = True
-            tol = self.options['con_tol']
-            for ii in range(2*n):
-                if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + tol):
-                    eflag_sU = False
-                    break
+            optResult = minimize(self.calc_SSqr_convex_old, x0,
+                                 args=(x_comL, x_comU, xhat_comL, xhat_comU),
+                                 method='SLSQP', constraints=cons, bounds=bnds,
+                                 options={'ftol' : self.options['ftol'],
+                                          'maxiter' : 100})
 
-        #Neg_sU = opt_f
-        #if not succ_flag:
-            #eflag_sU = False
-        #else:
-            #eflag_sU = True
+            Neg_sU = optResult.fun
+            if not optResult.success:
+                eflag_sU = False
+            else:
+                eflag_sU = True
+                tol = self.options['con_tol']
+                for ii in range(2*n):
+                    if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + tol):
+                        eflag_sU = False
+                        break
 
         sU = - Neg_sU
         return sU, eflag_sU
@@ -861,11 +868,7 @@ class Branch_and_Bound(Driver):
                      'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
                      'jac': lambda x: -Ain_hat[ii, :]} for ii in range(2*n)]
 
-            optResult = minimize(self.calc_y_hat_convex_old, x0,
-                                 args=(x_comL, x_comU, surrogate), method='SLSQP',
-                                 constraints=cons, bounds=bnds,
-                                 options={'ftol' : self.options['ftol'],
-                                          'maxiter' : 100})
+        if self.pyopt:
 
             self.x_comL = x_comL
             self.x_comU = x_comU
@@ -873,11 +876,24 @@ class Branch_and_Bound(Driver):
             self.bin_hat = bin_hat
             self.surrogate = surrogate
 
-            #opt_x, opt_f, succ_flag = snopt_opt(self.calc_y_hat_convex, x0, xhat_comL,
-                                                #xhat_comU, len(bin_hat),
-                                                #title='minimize_y',
-                                                #options={'Major optimality tolerance' : self.options['ftol']},
-                                                #jac=Ain_hat)
+            opt_x, opt_f, succ_flag = snopt_opt(self.calc_y_hat_convex, x0, xhat_comL,
+                                                xhat_comU, len(bin_hat),
+                                                title='minimize_y',
+                                                options={'Major optimality tolerance' : self.options['ftol']},
+                                                jac=Ain_hat)
+
+            yL = opt_f
+            if not succ_flag:
+                eflag_yL = False
+            else:
+                eflag_yL = True
+
+        else:
+            optResult = minimize(self.calc_y_hat_convex_old, x0,
+                                 args=(x_comL, x_comU, surrogate), method='SLSQP',
+                                 constraints=cons, bounds=bnds,
+                                 options={'ftol' : self.options['ftol'],
+                                          'maxiter' : 100})
 
             yL = optResult.fun
             if not optResult.success:
@@ -889,12 +905,6 @@ class Branch_and_Bound(Driver):
                     if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + tol):
                         eflag_yL = False
                         break
-
-            #yL = opt_f
-            #if not succ_flag:
-                #eflag_yL = False
-            #else:
-                #eflag_yL = True
 
         return yL, eflag_yL
 

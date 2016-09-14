@@ -558,7 +558,7 @@ class Branch_and_Bound(Driver):
         # When run stanalone, the objective is the model objective.
         if self.standalone:
             if self.options['use_surrogate']:
-                f = obj_surrogate.predict(xI)[0]
+                f = obj_surrogate.predict(xI, normalize=False)[0]
 
             else:
                 system = self.root

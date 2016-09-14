@@ -206,6 +206,9 @@ class KrigingSurrogate(SurrogateModel):
             Point at which the surrogate is evaluated.
         eval_rmse : bool
             Flag indicating whether the Root Mean Squared Error (RMSE) should be computed.
+        normalize : bool
+            Normalize the training data to lie on [-1, 1]. Default is True, but
+            some applications like Branch and Bound require False.
         """
 
         super(KrigingSurrogate, self).predict(x)

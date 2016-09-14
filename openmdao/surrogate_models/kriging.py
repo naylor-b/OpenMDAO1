@@ -97,10 +97,10 @@ class KrigingSurrogate(SurrogateModel):
 
         def _calcll(thetas):
             """ Callback function"""
-            loglike = self._calculate_reduced_likelihood_params(np.exp(thetas))[0]
+            loglike = self._calculate_reduced_likelihood_params(10**thetas)[0]
             return -loglike
 
-        bounds = [(-5.0, 5.0) for _ in range(self.n_dims)]
+        bounds = [(-3.0, 2.0) for _ in range(self.n_dims)]
         x0 = -3.0*np.ones([self.n_dims,1]) + 0.5*(5.0*np.ones([self.n_dims,1]))
         optResult = minimize(_calcll, x0, method='slsqp',
                              options={'eps': 1e-3},
@@ -109,7 +109,7 @@ class KrigingSurrogate(SurrogateModel):
         if not optResult.success:
             raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
 
-        self.thetas = np.exp(optResult.x)
+        self.thetas = 10**optResult.x
         _, params = self._calculate_reduced_likelihood_params()
 
         self.c_r = params['c_r']
@@ -119,14 +119,12 @@ class KrigingSurrogate(SurrogateModel):
         self.mu = params['mu']
         self.SigmaSqr = params['SigmaSqr']
         self.R_inv = params['R_inv']
-        # print "kriging test"
-        # print self.thetas
-        # print self.U
-        # print self.Vh
-        # print self.S_inv
-        # print self.R_inv
-        # print params['R']
-        # exit()
+        print "kriging test"
+        print self.thetas
+        print self.R_inv
+        print self.SigmaSqr
+        print self.mu
+        exit()
 
     def _calculate_reduced_likelihood_params(self, thetas=None):
         """
@@ -243,7 +241,7 @@ class KrigingSurrogate(SurrogateModel):
             # mse = (1. - np.dot(np.dot(r, self.Vh.T), np.einsum('j,kj,lk->jl', self.S_inv, self.U, r))) * self.sigma2
             one = np.ones([self.n_samples,1])
             mse  = self.SigmaSqr*(1.0 - np.dot(r.T,np.dot(self.R_inv,r)) + \
-            ((1.0 - np.dot(one.T,np.dot(self.R_inv,r)))**2/np.dot(one.T,np.dot(R_inv,one))))
+            ((1.0 - np.dot(one.T,np.dot(self.R_inv,r)))**2/np.dot(one.T,np.dot(self.R_inv,one))))
             # Forcing negative RMSE to zero if negative due to machine precision
             mse[mse < 0.] = 0.
             return y, np.sqrt(mse)

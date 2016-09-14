@@ -50,7 +50,8 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
 
     ndv = len(desvar)
 
-    opt_prob.addVarGroup('x', ndv, type='c', value=desvar.flatten(), lower=lb.flatten(), upper=ub.flatten())
+    opt_prob.addVarGroup('x', ndv, type='c', value=desvar.flatten(), lower=lb.flatten(),
+                         upper=ub.flatten())
     opt_prob.addConGroup('con', ncon, upper=np.zeros((ncon)))#, linear=True, wrt='x',
                          #jac={'x' : jac})
     opt_prob.addObj('obj')

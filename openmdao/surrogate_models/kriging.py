@@ -109,7 +109,7 @@ class KrigingSurrogate(SurrogateModel):
         if not optResult.success:
             raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
 
-        self.thetas = np.exp(optResult.x)
+        self.thetas = np.exp(optResult.x.flatten())
         _, params = self._calculate_reduced_likelihood_params()
 
         self.c_r = params['c_r']
@@ -240,7 +240,7 @@ class KrigingSurrogate(SurrogateModel):
             r = r.T
 
         # Predictor
-        y = self.mu + np.dot(r.T,self.c_r)
+        y = self.mu + np.dot(r.T, self.c_r)
 
         if eval_rmse:
             # mse = (1. - np.dot(np.dot(r, self.Vh.T), np.einsum('j,kj,lk->jl', self.S_inv, self.U, r))) * self.sigma2

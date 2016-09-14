@@ -105,7 +105,9 @@ class AMIEGO_driver(Driver):
         cont_opt = self.cont_opt
         cont_opt._setup()
         cont_opt.record_name = self.record_name + ':' + cont_opt.record_name
-        cont_opt.options['disp'] = self.options['disp']
+
+        if 'disp' in cont_opt.options:
+            cont_opt.options['disp'] = self.options['disp']
 
         minlp = self.minlp
         minlp._setup()

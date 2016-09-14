@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from openmdao.api import IndepVarComp, Group, Problem, ExecComp
+from openmdao.api import IndepVarComp, Group, Problem, ExecComp, pyOptSparseDriver
 from openmdao.drivers.amiego_driver import AMIEGO_driver
 from openmdao.test.branin import BraninInteger
 from openmdao.test.griewank import Greiwank
@@ -59,6 +59,8 @@ class TestAMIEGOdriver(unittest.TestCase):
         prob.driver.cont_opt.options['tol'] = 1e-12
         #prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
+        prob.driver.cont_opt = pyOptSparseDriver()
+        prob.driver.cont_opt.options['optimizer'] = 'SNOPT'
 
         prob.driver.add_desvar('area1', lower=0.0005, upper=10.0)
         prob.driver.add_desvar('area2', lower=0.0005, upper=10.0)

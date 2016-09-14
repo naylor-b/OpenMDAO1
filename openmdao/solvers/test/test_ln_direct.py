@@ -344,6 +344,9 @@ class TestDirectSolver(unittest.TestCase):
 class TestDirectSolverAssemble(unittest.TestCase):
     """ Tests the DirectSolver using the method that assembles a Jacobian."""
 
+    def setUp(self):
+        self.direct_solver = DirectSolver()
+
     def test_simple_matvec(self):
         group = Group()
         group.add('x_param', IndepVarComp('x', 1.0), promotes=['*'])
@@ -351,7 +354,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = group
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -373,7 +376,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
         prob.root.add('x_param', IndepVarComp('x', 1.0), promotes=['*'])
         prob.root.add('sub', group, promotes=['*'])
 
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -393,7 +396,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = group
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -414,7 +417,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = group
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.root.ln_solver.options['solve_method'] = 'solve'
         prob.setup(check=False)
@@ -437,7 +440,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = group
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -457,7 +460,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = group
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -472,7 +475,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = FanOut()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -492,7 +495,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = FanOutGrouped()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -512,7 +515,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = FanIn()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -532,7 +535,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = FanInGrouped()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -552,7 +555,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = ConvergeDiverge()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -578,7 +581,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = ConvergeDivergeGroups()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -602,7 +605,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = SingleDiamond()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -622,7 +625,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = SingleDiamondGrouped()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
         prob.setup(check=False)
         prob.run()
@@ -646,7 +649,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         prob = Problem()
         prob.root = SellarStateConnection()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.root.ln_solver.options['jacobian_method'] = 'assemble'
 
         prob.root.nl_solver.options['atol'] = 1e-12
@@ -687,7 +690,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
         prob.root = Group()
         prob.root.ln_solver = LinearGaussSeidel()
         nest = prob.root.add('nest', SellarStateConnection())
-        nest.ln_solver = DirectSolver()
+        nest.ln_solver = self.direct_solver
         nest.ln_solver.options['jacobian_method'] = 'assemble'
 
         nest.nl_solver.options['atol'] = 1e-12
@@ -742,7 +745,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
         p.root.nl_solver = Newton()
         p.root.nl_solver.options['rtol'] = 1e-10
         p.root.nl_solver.options['atol'] = 1e-10
-        p.root.ln_solver = DirectSolver()
+        p.root.ln_solver = self.direct_solver
         p.root.ln_solver.options['jacobian_method'] = 'assemble'
 
         p.setup(check=False)
@@ -763,7 +766,7 @@ class TestDirectSolverAssemble(unittest.TestCase):
         p.driver.add_objective('comp.y1')
         p.driver.add_desvar('p.x')
 
-        p.root.ln_solver = DirectSolver()
+        p.root.ln_solver = self.direct_solver
         p.root.ln_solver.options['jacobian_method'] = 'assemble'
 
         p.setup(check=False)
@@ -771,6 +774,18 @@ class TestDirectSolverAssemble(unittest.TestCase):
 
         J = p.calc_gradient(['p.x'], ['comp.y1'], mode='fwd')
         assert_rel_error(self, J[0][0], 1.5, 1e-6)
+
+
+class TestDirectSolverAssembleSparse(TestDirectSolverAssemble):
+    """ Tests the DirectSolver using the method that assembles a
+    sparse Jacobian.  This will run all of the same tests as
+    TestDirectSolverAssemble.
+    """
+
+    def setUp(self):
+        self.direct_solver = DirectSolver()
+        self.direct_solver.options['jacobian_format'] = 'sparse'
+
 
 if __name__ == "__main__":
     unittest.main()

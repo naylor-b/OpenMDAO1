@@ -33,6 +33,8 @@ class DirectSolver(MultLinearSolver):
     options['solve_method'] : str('LU')
         Solution method, either 'solve' for linalg.solve, or 'LU' for
         linalg.lu_factor and linalg.lu_solve.
+    options['jacobian_format'] : str('dense')
+        Specifies whether the Jacobian will be dense or sparse.
     """
 
     def __init__(self):
@@ -54,6 +56,8 @@ class DirectSolver(MultLinearSolver):
         self.options.add_option('solve_method', 'LU', values=['LU', 'solve'],
                                 desc="Solution method, either 'solve' for linalg.solve, " +
                                 "or 'LU' for linalg.lu_factor and linalg.lu_solve.")
+        self.options.add_option('jacobian_format', 'dense', values=['dense', 'sparse'],
+                                desc='Specifies either a sparse or dense Jacobian.')
 
         self.jacobian = None
         self.lup = None
@@ -110,6 +114,11 @@ class DirectSolver(MultLinearSolver):
 
         sol_buf = OrderedDict()
 
+        if self.options['jacobian_format'] == 'sparse':
+            assemble = system.assemble_sparse_jacobian
+        else:
+            assemble = system.assemble_jacobian
+
         for voi, rhs in rhs_mat.items():
             self.voi = None
 
@@ -121,9 +130,9 @@ class DirectSolver(MultLinearSolver):
                     self.setup(system)
                 self.mode = mode
 
-                self.jacobian, _ = system.assemble_jacobian(mode=mode, method=method,
-                                                mult=self.mult,
-                                                solve_method=self.options['solve_method'])
+                self.jacobian, _ = assemble(mode=mode, method=method,
+                                            mult=self.mult,
+                                            solve_method=self.options['solve_method'])
                 system._jacobian_changed = False
 
                 if self.options['solve_method'] == 'LU':

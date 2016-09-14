@@ -1,13 +1,62 @@
 """ Surrogate model based on Kriging. """
 
+from six import iteritems
+
 import numpy as np
 import scipy.linalg as linalg
 from scipy.optimize import minimize
 from six.moves import zip, range
 
 from openmdao.surrogate_models.surrogate_model import SurrogateModel
+from openmdao.test.util import set_pyoptsparse_opt
 
 MACHINE_EPSILON = np.finfo(np.double).eps
+
+# check that pyoptsparse is installed
+# if it is, try to use SNOPT but fall back to SLSQP
+OPT, OPTIMIZER = set_pyoptsparse_opt('SNOPT')
+
+
+def snopt_opt(objfun, desvar, lb, ub, title=None, options=None,
+              sens=None, jac=None):
+    """ Wrapper function for running a SNOPT optimization through
+    pyoptsparse."""
+
+    if OPTIMIZER:
+        from pyoptsparse import Optimization
+    else:
+        raise(RuntimeError, 'Need pyoptsparse to run the SNOPT sub optimizer.')
+
+    opt_prob = Optimization(title, objfun)
+
+    ndv = len(desvar)
+
+    opt_prob.addVarGroup('thetas', ndv, type='c', value=desvar.flatten(), lower=lb.flatten(),
+                         upper=ub.flatten())
+    opt_prob.addObj('obj')
+
+    # Fall back on SLSQP if SNOPT isn't there
+    _tmp = __import__('pyoptsparse', globals(), locals(), [OPTIMIZER], 0)
+    opt = getattr(_tmp, OPTIMIZER)()
+
+
+    if options:
+        for name, value in iteritems(options):
+            opt.setOption(name, value)
+
+    opt.setOption('Major iterations limit', 100)
+    opt.setOption('Verify level', -1)
+    opt.setOption('iSumm', 0)
+    #opt.setOption('iPrint', 0)
+
+    sol = opt(opt_prob, sens=sens, sensStep=1.0e-6)
+    #print(sol)
+
+    x = sol.getDVs()['thetas']
+    f = sol.objectives['obj'].value
+    success_flag = sol.optInform['value'] < 2
+
+    return x, f, success_flag
 
 
 class KrigingSurrogate(SurrogateModel):
@@ -42,6 +91,8 @@ class KrigingSurrogate(SurrogateModel):
         self.X_std = np.zeros(0)
         self.Y_mean = np.zeros(0)
         self.Y_std = np.zeros(0)
+
+        self.use_snopt = False
 
     def train(self, x, y, normalize=True):
         """
@@ -95,21 +146,50 @@ class KrigingSurrogate(SurrogateModel):
         self.Y_mean, self.Y_std = Y_mean, Y_std
 
 
-        def _calcll(thetas):
-            """ Callback function"""
-            loglike = self._calculate_reduced_likelihood_params(10**thetas)[0]
-            return -loglike
+        x0 = -3.0*np.ones([self.n_dims, 1]) + 0.5*(5.0*np.ones([self.n_dims, 1]))
 
-        bounds = [(-3.0, 2.0) for _ in range(self.n_dims)]
-        x0 = -3.0*np.ones([self.n_dims,1]) + 0.5*(5.0*np.ones([self.n_dims,1]))
-        optResult = minimize(_calcll, x0, method='slsqp',
-                             options={'eps': 1e-3},
-                             bounds=bounds)
+        if self.use_snopt:
 
-        if not optResult.success:
-            raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
+            def _calcll(dv_dict):
+                """ Callback function"""
+                fail = 0
+                thetas = dv_dict['thetas']
 
-        self.thetas = 10**optResult.x
+                loglike = self._calculate_reduced_likelihood_params(10**thetas)[0]
+
+                # Objective
+                func_dict = {}
+                func_dict['obj'] = -loglike
+
+                return func_dict, fail
+
+            low = -3.0*np.ones([self.n_dims, 1])
+            high = 3.0*np.ones([self.n_dims, 1])
+            opt_x, opt_f, succ_flag = snopt_opt(_calcll, x0, low, high, title='kriging',
+                                                options={'Major optimality tolerance' : 1.0e-3})
+
+            if not succ_flag:
+                raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
+
+            self.thetas = 10**opt_x
+
+        else:
+
+            def _calcll(thetas):
+                """ Callback function"""
+                loglike = self._calculate_reduced_likelihood_params(10**thetas)[0]
+                return -loglike
+
+            bounds = [(-3.0, 3.0) for _ in range(self.n_dims)]
+            optResult = minimize(_calcll, x0, method='cobyla',
+                                 options={'eps': 1e-3},
+                                 bounds=bounds)
+
+            if not optResult.success:
+                raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
+
+            self.thetas = 10**optResult.x.flatten()
+
         _, params = self._calculate_reduced_likelihood_params()
 
         self.c_r = params['c_r']
@@ -119,12 +199,12 @@ class KrigingSurrogate(SurrogateModel):
         self.mu = params['mu']
         self.SigmaSqr = params['SigmaSqr']
         self.R_inv = params['R_inv']
-        print "kriging test"
-        print self.thetas
-        print self.R_inv
-        print self.SigmaSqr
-        print self.mu
-        exit()
+
+        #print "kriging test"
+        #print self.thetas
+        #print self.R_inv
+        #print self.SigmaSqr
+        #print self.mu
 
     def _calculate_reduced_likelihood_params(self, thetas=None):
         """

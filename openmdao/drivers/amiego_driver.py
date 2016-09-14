@@ -296,6 +296,7 @@ class AMIEGO_driver(Driver):
             # Step 3: Build the surrogate models
             #------------------------------------------------------------------
             obj_surrogate = self.surrogate()
+            obj_surrogate.use_snopt = True
             obj_surrogate.train(x_i_hat, obj, normalize=False)
 
             obj_surrogate.y = obj
@@ -307,6 +308,7 @@ class AMIEGO_driver(Driver):
                 val = np.array(val)
                 for j in range(val.shape[1]):
                     con_surr = self.surrogate()
+                    con_surr.use_snopt = True
                     con_surr.train(x_i_hat, val[:, j:j+1], normalize=False)
                     con_surr.y = val[:, j:j+1]
                     con_surr._name = name

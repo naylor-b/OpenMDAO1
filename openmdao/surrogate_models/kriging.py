@@ -164,7 +164,7 @@ class KrigingSurrogate(SurrogateModel):
                 return func_dict, fail
 
             low = -3.0*np.ones([self.n_dims, 1])
-            high = 3.0*np.ones([self.n_dims, 1])
+            high = 2.0*np.ones([self.n_dims, 1])
             opt_x, opt_f, succ_flag = snopt_opt(_calcll, x0, low, high, title='kriging',
                                                 options={'Major optimality tolerance' : 1.0e-6})
 

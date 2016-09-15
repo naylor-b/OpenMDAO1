@@ -299,13 +299,13 @@ class AMIEGO_driver(Driver):
             obj_surrogate.use_snopt = True
             obj_surrogate.train(x_i_hat, obj, normalize=False)
 
-            #print('obj surr')
-            #print('thetas', obj_surrogate.thetas)
-            #print('SigmaSqr', obj_surrogate.SigmaSqr)
-            #print('mu', obj_surrogate.mu)
-            #print('c_r', obj_surrogate.c_r)
-            #print('R_inv', obj_surrogate.R_inv)
-            #print('Y', obj_surrogate.Y)
+            print('obj surr')
+            print('thetas', obj_surrogate.thetas)
+            print('SigmaSqr', obj_surrogate.SigmaSqr)
+            print('mu', obj_surrogate.mu)
+            print('c_r', obj_surrogate.c_r)
+            print('R_inv', obj_surrogate.R_inv)
+            print('Y', obj_surrogate.Y)
 
             obj_surrogate.y = obj
             obj_surrogate.lb_org = xI_lb
@@ -319,13 +319,13 @@ class AMIEGO_driver(Driver):
                     con_surr.use_snopt = True
                     con_surr.train(x_i_hat, val[:, j:j+1], normalize=False)
 
-                    #print('con surr', name, j)
-                    #print('thetas', con_surr.thetas)
-                    #print('SigmaSqr', con_surr.SigmaSqr)
-                    #print('mu', con_surr.mu)
-                    #print('c_r', con_surr.c_r)
-                    #print('R_inv', con_surr.R_inv)
-                    #print('Y', con_surr.Y)
+                    print('con surr', name, j)
+                    print('thetas', con_surr.thetas)
+                    print('SigmaSqr', con_surr.SigmaSqr)
+                    print('mu', con_surr.mu)
+                    print('c_r', con_surr.c_r)
+                    print('R_inv', con_surr.R_inv)
+                    print('Y', con_surr.Y)
 
                     con_surr.y = val[:, j:j+1]
                     con_surr._name = name

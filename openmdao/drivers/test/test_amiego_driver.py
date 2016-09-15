@@ -75,8 +75,9 @@ class TestAMIEGOdriver(unittest.TestCase):
         samples = np.array([[1.0, 0.25, 0.75],
                             [0.0, 0.75, 0.0],
                             [0.75, 0.0, 0.25],
-                            [0.75, 1.0, 0.5],
-                            [0.25, 0.5, 1.0]])
+                            [0.75, 1.0, 0.49],
+                            [0.25, 0.49, 1.0]])
+
         prob.driver.sampling = {'mat1' : samples[:, 0].reshape((npt, 1)),
                                 'mat2' : samples[:, 1].reshape((npt, 1)),
                                 'mat3' : samples[:, 2].reshape((npt, 1))}

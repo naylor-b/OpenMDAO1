@@ -343,8 +343,8 @@ class Branch_and_Bound(Driver):
         # Randomly generate an integer point
         # TODO Generate a different random number across each dim
         #xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
-        xopt = np.round(xL_iter + np.random.random(num_des)*(xU_iter - xL_iter)).reshape(num_des)
-        #xopt = 2.0*np.ones((num_des))
+        #xopt = np.round(xL_iter + np.random.random(num_des)*(xU_iter - xL_iter)).reshape(num_des)
+        xopt = 2.0*np.ones((num_des))
         fopt = self.objective_callback(xopt)
         self.eflag_MINLPBB = True
         UBD = fopt

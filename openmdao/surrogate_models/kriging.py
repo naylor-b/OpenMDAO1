@@ -166,12 +166,12 @@ class KrigingSurrogate(SurrogateModel):
             low = -3.0*np.ones([self.n_dims, 1])
             high = 3.0*np.ones([self.n_dims, 1])
             opt_x, opt_f, succ_flag = snopt_opt(_calcll, x0, low, high, title='kriging',
-                                                options={'Major optimality tolerance' : 1.0e-3})
+                                                options={'Major optimality tolerance' : 1.0e-6})
 
             if not succ_flag:
                 raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
 
-            self.thetas = 10**opt_x
+            self.thetas = np.asarray(10**opt_x).reshape((self.n_dims, 1))
 
         else:
 
@@ -227,7 +227,7 @@ class KrigingSurrogate(SurrogateModel):
             distances[i, :, i+1:] = np.abs(X[i, ...] - X[i+1:, ...]).T
             distances[i+1:, :, i] = distances[i, :, i+1:].T
 
-        R = np.exp(-thetas.dot(np.square(distances)))
+        R = np.exp(-thetas.flatten().dot(np.square(distances)))
         R[np.diag_indices_from(R)] = 1. + self.nugget
 
         [U,S,Vh] = linalg.svd(R)

@@ -1,7 +1,7 @@
 
 import numpy as np
 from scipy.sparse import csc_matrix, csc_matrix, coo_matrix, eye as sp_eye
-from itertools import product
+from itertools import groupby
 
 from six.moves import range
 
@@ -24,6 +24,9 @@ class Jacobian(object):
             n : (i, acc.slice) for i, (n,acc) in enumerate(iteritems(unknowns))
                    if not acc.pbo
         }
+
+        # numpy views into data array keyed on (oname, iname)
+        self._views = {}
 
     def _sub_jac_iter(self, group, connections, prom_map):
         """
@@ -81,6 +84,9 @@ class DenseJacobian(Jacobian):
 
 
 class SparseJacobian(Jacobian):
+    # def __init__(self, unknowns):
+    #     super(SparseJacobian, self).__init__(unknowns)
+
     def assemble(self, group, connections, prom_map,
                  mode='fwd', solve_method='solve'):
         """ Assemble and return a sparse array containing the Jacobian for
@@ -110,38 +116,26 @@ class SparseJacobian(Jacobian):
 
         """
 
-        n_edge = uvec.vec.size
-
-        rows = []
-        cols = []
-        data = []
-        data_idxs = []
-
-        data_idx = 0
+        subJinfo = []
+        diags = []
         data_size = 0
 
-        subJinfo = []
-
         for ovar, ivar, subjac, idxs in self._sub_jac_iter(group, connections, prom_map):
-            data_size += subjac.size
 
-            irow, (o_start, o_end) = self._ordering[ovar]
-            icol, (i_start, i_end) = self._ordering[ivar]
-
-            sparse = issparse(subjac)
-            if sparse:
-                # make sure it's in COO format. This does nothing if it's
-                # already COO
-                subjac = subjac.tocoo()
+            irowblock, (o_start, o_end) = self._ordering[ovar]
+            icolblock, (i_start, i_end) = self._ordering[ivar]
 
             rows = np.empty(subjac.size, dtype=int)
             cols = np.empty(subjac.size, dtype=int)
 
-            # if the current input is only connected to certain entries
-            # in its source, we have to map the sub-jacobian to the
-            # appropriate rows of the big jacobian.
-            if idxs:
-                if sparse:
+            if issparse(subjac):
+                # make sure it's in COO format.
+                subjac = subjac.tocoo()
+
+                # if the current input is only connected to certain entries
+                # in its source, we have to map the sub-jacobian to the
+                # appropriate rows of the big jacobian.
+                if idxs:
                     cols[:] = subjac.col
                     cols += i_start
 
@@ -151,77 +145,57 @@ class SparseJacobian(Jacobian):
                         # note that if idxs are not in sorted order then row idxs
                         # won't be in sorted order
                         rows[i] = row + o_start + idxs[i]
-                else:  # not sparse
-                    colrange = np.arange(i_start, i_end, dtype=int)
-                    rowrange = np.array(idxs, dtype=int) + o_start
-                    ncols = colrange.size
-                    nrows = rowrange.size
-
-                    for i, row in enumerate(rowrange):
-                        rows[i*ncols:(i+1)*ncols] = np.full(ncols, row, dtype=int)
-                        cols[i*ncols:(i+1)*ncols] = colrange
-            else:
-                if sparse:
+                else:
                     rows[:] = subjac.row
                     rows += o_start
                     cols[:] = subjac.col
                     cols += i_start
-                else:
-                    colrange = np.arange(i_start, i_end, dtype=int)
-                    rowrange = np.arange(o_start, o_end, dtype=int)
-                    ncols = colrange.size
-                    nrows = rowrange.size
-
-                    for i, row in enumerate(rowrange):
-                        rows[i*ncols:(i+1)*ncols] = np.full(ncols, row, dtype=int)
-                        cols[i*ncols:(i+1)*ncols] = colrange
-
-            subJinfo.append((irow, icol), rows, cols, subjac, idxs)
-
-
-        diag_end = -1  # keep track of last index where diagonal is filled
-
-        # now iterate over the subjac info sorted in row major order
-        for (irow, icol), o_start, o_end, i_start, i_end, subjac, idxs in \
-                                          sorted(subJinfo, key=lambda x: x[0]):
-
-                idxs, jac = subJinfo[jpair]
-                # if the current input is only connected to certain entries
-                # in its source, we have to map the sub-jacobian to the
-                # appropriate rows of the big jacobian.
+            else:
                 if idxs:
-                    col_list = np.array(idxs)+i_start
+                    rowrange = np.array(idxs, dtype=int) + o_start
                 else:
-                    col_list = numpy.arange(i_start, i_end)
-                cols.append(col_list)
+                    rowrange = np.arange(o_start, o_end, dtype=int)
 
-                nidxs = col_list.size
-                for i in range(o_start, o_end):
-                    rows.append(np.full(nidxs, i))
+                colrange = np.arange(i_start, i_end, dtype=int)
+                ncols = colrange.size
 
-                if issparse(jac):
-                    if isinstance(jac, scipy.sparse.coo.coo_matrix):
-                        # error check that idxs match up?
-                        data.append(jac.data)
-                    elif isinstance(jac, scipy.sparse.csr.csr_matrix):
-                        pass
-                    else:
-                        raise TypeError("Sparse jacobian matrix of type '%s' is not supported." %
-                                         type(jac).__name__)
-                else:
-                    data.append(jac.flatten())
+                for i, row in enumerate(rowrange):
+                    rows[i*ncols:(i+1)*ncols] = np.full(ncols, row, dtype=int)
+                    cols[i*ncols:(i+1)*ncols] = colrange
 
-            # entry on diagonal we need to fill.  We can't just start with
-            # an identity matrix because if we end up with duplicate
-            # row,col data values, those values will be added together
-            # during sparse matrix creation, giving us an incorrect J.
-            elif iname == oname:
-                tmp = numpy.arange(o_start, o_end)
-                rows.extend(tmp)
-                cols.extend(tmp)
-                data.append(np.full(tmp.size, -1.0))
+            data_size += subjac.size
 
+            # same var for row and col, so a block diagonal entry
+            # (this only happens with states, and we don't have to worry
+            # about having src_indices with states.
+            if ivar == ovar:
+                diags.append(ivar)
 
+            subJinfo.append((irowblock, icolblock), rows, cols, subjac, idxs)
+
+        # add diagonal entries
+        eye_cache = {}
+        missing_diags = set(self._ordering).difference(diags)
+        for d in missing_diags:
+            iblock, (start, end) = self._ordering[d]
+            sz = end-start
+            if sz not in eye_cache:
+                eye_cache[sz] = sp_eye(sz, format='coo')
+
+            rows = numpy.arange(start, end, dtype=int)
+            cols = rows.copy()
+
+            data_size += sz
+
+            subJinfo.append((iblock, iblock), rows, cols, eye_cache[sz], None)
+
+        data = np.empty(data_size)
+
+        # now iterate over the subjacs sorted in row major order
+        for blockrow, blocks in groupby(sorted(subJinfo, key=lambda x: x[0],
+                                     key=lambda x: x[0][0]):
+            for (irowblock, icolblock), rows, cols, subjac, idxs in blocks:
+                # now iterate over subrows of these blocks...
 
         rows = np.array(rows)
         cols = np.array(cols)
@@ -245,6 +219,7 @@ class SparseJacobian(Jacobian):
 
     def __setitem__(self, key, value):
         pass
+
 
 
 if __name__ == '__main__':

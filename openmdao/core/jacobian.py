@@ -16,7 +16,6 @@ from six.moves import range
 # - for mismatches (sparse/dense or dense/sparse) we'll just have to do
 #   copying of data
 
-
 class Jacobian(object):
     def __init__(self, unknowns):
         # record block order and slice for each vector variable in unknowns
@@ -139,12 +138,12 @@ class SparseJacobian(Jacobian):
                     cols[:] = subjac.col
                     cols += i_start
 
-                    assert len(idxs) == subjac.shape[0]
-
-                    for i, row in enumerate(subjac.row):
+                    nrows = subjac.shape[0]
+                    for i in range(nrows):
+                        idxarray = np.nonzero(subjac.row==i)
                         # note that if idxs are not in sorted order then row idxs
                         # won't be in sorted order
-                        rows[i] = row + o_start + idxs[i]
+                        rows[idxarray] = i + o_start + idxs[i]
                 else:
                     rows[:] = subjac.row
                     rows += o_start
@@ -171,7 +170,8 @@ class SparseJacobian(Jacobian):
             if ivar == ovar:
                 diags.append(ivar)
 
-            subJinfo.append((irowblock, icolblock), rows, cols, subjac, idxs)
+            subJinfo.append((irowblock, icolblock), (ovar, ivar),
+                            rows, cols, subjac, idxs)
 
         # add diagonal entries
         eye_cache = {}
@@ -183,33 +183,80 @@ class SparseJacobian(Jacobian):
                 eye_cache[sz] = sp_eye(sz, format='coo')
 
             rows = numpy.arange(start, end, dtype=int)
-            cols = rows.copy()
+            # we don't modify rows or cols, so we can use the same array for both
+            cols = rows
 
             data_size += sz
 
-            subJinfo.append((iblock, iblock), rows, cols, eye_cache[sz], None)
+            subJinfo.append((iblock, iblock), (d,d), rows, cols, eye_cache[sz], None)
 
         data = np.empty(data_size)
 
-        # now iterate over the subjacs sorted in row major order
-        for blockrow, blocks in groupby(sorted(subJinfo, key=lambda x: x[0],
-                                     key=lambda x: x[0][0]):
-            for (irowblock, icolblock), rows, cols, subjac, idxs in blocks:
-                # now iterate over subrows of these blocks...
+        # dict for looking up idx array for a given (oval, ival) pair
+        self._idx_arrays = {}
 
-        rows = np.array(rows)
-        cols = np.array(cols)
-        data = np.hstack(data)
+        # sort blocks into row major order.  We sort them this way so that
+        # later we can subsort all blocks in a given block row by actual
+        # array row, and then use the fact that we started with them in
+        # sorted order to be able to back out the index arrays we're looking
+        # for.
+        sorted_blocks = sorted(subJinfo, key=lambda x: x[0]
 
-        partials = coo_matrix((data, (rows, cols)), shape=(n_edge, n_edge))
+        full_rows = []
+        full_cols = []
 
-        if mode == 'fwd' and solve_method == 'LU':
-            partials = partials.tocsc()  # CSC needed for efficient LU solve
-        else:
-            partials = partials.tocsr()
+        # now iterate over the sorted blocks and group them by block row
+        for blockrow, blocks in groupby(sorted_blocks, key=lambda x: x[0][0]):
+
+            # take the row and col arrays from our row blocks and create
+            # new arrays with all of them stacked together.
+            block_sub_rows = [t[2] for t in blocks]
+            block_sub_cols = [t[3] for t in blocks]
+
+            sub_rows = np.hstack(block_sub_rows)
+            sub_cols = np.hstack(block_sub_cols)
+
+            # calculate index array that sorts the stacked row and col arrays
+            # in row major order
+            sub_sorted = np.lexsort((sub_cols, sub_rows))
+
+            # now sort these back into ascending order (our original stacked order)
+            # so we can then just extract the individual index arrays that will
+            # map each block into the combined data array.
+            idx_arrays = np.argsort(sub_sorted)
+
+            # now iterate one more time in order through the blocks in this block row
+            # to extract the individual index arrays
+            start = end = 0
+            for _, key, rows, cols, subjac, _ in blocks:
+                end += rows.size
+                self._idx_arrays[key] = idx_arrays[start:end]
+                if issparse(subjac):
+                    data[start:end] = subjac.data
+                else:
+                    data[start:end] = subjac.flat
+                start = end
+
+            full_rows.append(sub_rows[sub_sorted])
+            full_cols.append(sub_cols[sub_sorted])
+
+        # these final row and col arrays (and data array as well) will be in
+        # sorted (row major) order.
+        final_rows = np.hstack(full_rows)
+        final_cols = np.hstack(full_cols)
+
+        n_edge = u_vec.vec.shape[0]
+        partials = coo_matrix((data, (final_rows, final_cols)),
+                              shape=(n_edge, n_edge))
+
+        # tocsr will not change the order of the data array from that of coo,
+        # but if later we add tocsc option, we'll have to revisit this since
+        # the order will change and our index arrays will then be wrong.
+        partials = partials.tocsr()
 
         if mode == 'rev':
-            partials = partials.T  # CSR.T -> CSC
+            # CSR.T results in CSC, but doesn't change the data array order
+            partials = partials.T
 
         return partials, cache
 

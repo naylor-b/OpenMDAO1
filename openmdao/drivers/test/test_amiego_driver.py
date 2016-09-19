@@ -56,7 +56,7 @@ class TestAMIEGOdriver(unittest.TestCase):
         root.add('comp', ThreeBarTruss(), promotes=['*'])
 
         prob.driver = AMIEGO_driver()
-        prob.driver.cont_opt.options['tol'] = 1e-12
+        #prob.driver.cont_opt.options['tol'] = 1e-12
         #prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
         prob.driver.cont_opt = pyOptSparseDriver()
@@ -75,8 +75,9 @@ class TestAMIEGOdriver(unittest.TestCase):
         samples = np.array([[1.0, 0.25, 0.75],
                             [0.0, 0.75, 0.0],
                             [0.75, 0.0, 0.25],
-                            [0.75, 1.0, 0.5],
-                            [0.25, 0.5, 1.0]])
+                            [0.75, 1.0, 0.49],
+                            [0.25, 0.49, 1.0]])
+
         prob.driver.sampling = {'mat1' : samples[:, 0].reshape((npt, 1)),
                                 'mat2' : samples[:, 1].reshape((npt, 1)),
                                 'mat3' : samples[:, 2].reshape((npt, 1))}
@@ -85,9 +86,10 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.run()
 
+        assert_rel_error(self, prob['mass'], 5.287, 1e-3)
         assert_rel_error(self, prob['mat1'], 3, 1e-5)
         assert_rel_error(self, prob['mat2'], 3, 1e-5)
-        assert_rel_error(self, prob['mat3'], 1, 1e-5)
+        #Material 3 can be anything
 
     def test_three_bar_truss_vector(self):
 
@@ -120,9 +122,10 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.run()
 
+        assert_rel_error(self, prob['mass'], 5.287, 1e-3)
         assert_rel_error(self, prob['mat'][0], 3, 1e-5)
         assert_rel_error(self, prob['mat'][1], 3, 1e-5)
-        assert_rel_error(self, prob['mat'][2], 1, 1e-5)
+        #Material 3 can be anything
 
     def test_simple_greiwank_opt(self):
 

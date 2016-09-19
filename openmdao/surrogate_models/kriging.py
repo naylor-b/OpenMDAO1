@@ -182,11 +182,12 @@ class KrigingSurrogate(SurrogateModel):
 
             bounds = [(-3.0, 3.0) for _ in range(self.n_dims)]
             optResult = minimize(_calcll, x0, method='cobyla',
-                                 options={'eps': 1e-3},
+                                 #options={'ftol': 1e-3},
                                  bounds=bounds)
 
             if not optResult.success:
-                raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
+                pass
+                #raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
 
             self.thetas = 10**optResult.x.flatten()
 

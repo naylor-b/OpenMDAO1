@@ -180,7 +180,7 @@ class KrigingSurrogate(SurrogateModel):
                 loglike = self._calculate_reduced_likelihood_params(10**thetas)[0]
                 return -loglike
 
-            bounds = [(-3.0, 3.0) for _ in range(self.n_dims)]
+            bounds = [(-3.0, 2.0) for _ in range(self.n_dims)]
             optResult = minimize(_calcll, x0, method='cobyla',
                                  #options={'ftol': 1e-3},
                                  bounds=bounds)
@@ -200,12 +200,6 @@ class KrigingSurrogate(SurrogateModel):
         self.mu = params['mu']
         self.SigmaSqr = params['SigmaSqr']
         self.R_inv = params['R_inv']
-
-        #print "kriging test"
-        #print self.thetas
-        #print self.R_inv
-        #print self.SigmaSqr
-        #print self.mu
 
     def _calculate_reduced_likelihood_params(self, thetas=None):
         """
@@ -241,10 +235,10 @@ class KrigingSurrogate(SurrogateModel):
         inv_factors = S / (S ** 2. + h ** 2.)
 
         # alpha = Vh.T.dot(np.einsum('j,kj,kl->jl', inv_factors, U, Y))
-        # logdet = -np.sum(np.log(inv_factors))
+        logdet = -np.sum(np.log(inv_factors))
         # sigma2 = np.dot(Y.T, alpha).sum(axis=0) / self.n_samples
         # reduced_likelihood = -(np.log(np.sum(sigma2)) + logdet / self.n_samples)
-
+        # print logdet
         # params['alpha'] = alpha
         # params['sigma2'] = sigma2 * np.square(self.Y_std)
         # params['S_inv'] = inv_factors
@@ -257,7 +251,6 @@ class KrigingSurrogate(SurrogateModel):
         R_inv = Vh.T.dot(np.einsum('i,ij->ij',
                                               inv_factors,
                                               U.T))
-        logdet = 2.0*np.sum(np.log(np.abs(inv_factors)))
         one = np.ones([self.n_samples,1])
         mu = np.dot(one.T,np.dot(R_inv,Y))/np.dot(one.T,np.dot(R_inv,one))
         c_r = np.dot(R_inv,(Y-one*mu))
@@ -271,7 +264,6 @@ class KrigingSurrogate(SurrogateModel):
         params['Vh'] = Vh
         params['c_r'] = c_r
         params['R_inv'] = R_inv
-
         return reduced_likelihood, params
 
     def predict(self, x, eval_rmse=True, normalize=True):

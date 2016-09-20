@@ -170,7 +170,8 @@ class KrigingSurrogate(SurrogateModel):
                                                      options={'Major optimality tolerance' : 1.0e-6})
 
             if not succ_flag:
-                raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(msg))
+                pass
+                #raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(msg))
 
             self.thetas = np.asarray(10**opt_x).reshape((self.n_dims, 1))
 

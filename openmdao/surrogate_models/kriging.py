@@ -55,8 +55,9 @@ def snopt_opt(objfun, desvar, lb, ub, title=None, options=None,
     x = sol.getDVs()['thetas']
     f = sol.objectives['obj'].value
     success_flag = sol.optInform['value'] < 2
+    msg = sol.optInform['text']
 
-    return x, f, success_flag
+    return x, f, success_flag, msg
 
 
 class KrigingSurrogate(SurrogateModel):
@@ -165,11 +166,11 @@ class KrigingSurrogate(SurrogateModel):
 
             low = -3.0*np.ones([self.n_dims, 1])
             high = 2.0*np.ones([self.n_dims, 1])
-            opt_x, opt_f, succ_flag = snopt_opt(_calcll, x0, low, high, title='kriging',
-                                                options={'Major optimality tolerance' : 1.0e-6})
+            opt_x, opt_f, succ_flag, msg = snopt_opt(_calcll, x0, low, high, title='kriging',
+                                                     options={'Major optimality tolerance' : 1.0e-6})
 
             if not succ_flag:
-                raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
+                raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(msg))
 
             self.thetas = np.asarray(10**opt_x).reshape((self.n_dims, 1))
 

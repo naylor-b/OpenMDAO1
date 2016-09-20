@@ -235,7 +235,11 @@ class SparseJacobian(Jacobian):
 
 
     def __setitem__(self, key, value):
-        pass
+        if issparse(value):
+            self.partials.data[self._idx_arrays[key]] = value.data
+        else:
+            self.partials.data[self._idx_arrays[key]] = value.flatten()
+            
 
 
 

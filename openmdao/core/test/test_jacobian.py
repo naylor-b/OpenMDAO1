@@ -56,7 +56,18 @@ class TestSparseJacobian(unittest.TestCase):
             np.testing.assert_array_equal(J[k].A, self.subjacs[k][0])
             
         np.testing.assert_array_equal(J['a3','z2'].A, np.array([[3,5],[0,0],[6,0]]))
-            
+        
+        newsub = np.array([[7,7],[6,5]])
+        J['b2','z2'] = newsub
+        np.testing.assert_array_equal(J['b2','z2'].A, newsub)
+
+        newsub = np.array([[7],[6],[5]])
+        J['a3','y1'] = newsub
+        np.testing.assert_array_equal(J['a3','y1'].A, newsub)
+        
+        J['a3','z2'] = np.array([[3,2],[9,9]])
+        np.testing.assert_array_equal(J['a3','z2'].A, np.array([[9,9],[0,0],[3,2]]))
+        
 
 
 if __name__ == '__main__':

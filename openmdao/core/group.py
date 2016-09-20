@@ -1684,6 +1684,50 @@ class Group(System):
 
         return umap
 
+    def _sub_jac_iter(self, connections, prom_map):
+        """
+        A generator of tuples of the form (ovar, ivar, jac, idxs) that
+        will iterate over all sub-jacobian entries for components contained
+        in the given group.
+        """
+
+        for sub in self.components(recurse=True):
+
+            jac = sub._jacobian_cache
+
+            # This method won't work on components where apply_linear
+            # is overridden.
+            if jac is None:
+                msg = "The 'assemble' jacobian_method is not supported when " + \
+                     "'apply_linear' is used on a component (%s)." % sub.pathname
+                raise RuntimeError(msg)
+
+            sub_u = sub.unknowns
+            sub_path = sub.pathname
+
+            for key in jac:
+                o_var, i_var = key
+
+                i_var_abs = '.'.join((sub_path, i_var))
+                i_var_prom = prom_map[i_var_abs]
+
+                # non-state inputs need to find their source.
+                if i_var not in sub.states and i_var_prom not in uvec:
+
+                    # Param is not connected, so it's not relevant
+                    if i_var_abs not in connections:
+                        continue
+
+                    i_var_src, idxs = connections[i_var_abs]
+                    i_var_prom = prom_map[i_var_src]
+                else:
+                    idxs = None
+
+                o_var_abs = '.'.join((sub_path, o_var))
+                o_var_prom = prom_map[o_var_abs]
+
+                yield o_var_prom, i_var_prom, jac[key], idxs
+
     def _dump_dist_idxs(self, stream=sys.stdout, recurse=True):  # pragma: no cover
         """For debugging.  prints out the distributed idxs along with the
         variables they correspond to for the u and p vectors, for example:

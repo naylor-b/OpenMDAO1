@@ -44,9 +44,8 @@ class TestSparseJacobian(unittest.TestCase):
         np.set_printoptions(precision=None, suppress=None)
         
     def test_mixed_subjacs(self):
-        J = SparseJacobian(iteritems(self.slices))
         subjac_iter = [(k[0],k[1],subJ,idxs) for k,(subJ, idxs) in iteritems(self.subjacs)]
-        J.assemble(subjac_iter, "fwd")
+        J = SparseJacobian(iteritems(self.slices), subjac_iter, "fwd")
         self.assertEqual(J.partials.data.size, 51)
         
         check = self.subjacs.copy()

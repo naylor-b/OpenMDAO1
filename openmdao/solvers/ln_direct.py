@@ -65,42 +65,7 @@ class DirectSolver(MultLinearSolver):
         self.lup = None
         self.mode = None
 
-    def setup(self, group):
-        """ Initialization. Allocate Jacobian and set up some helpers.
-
-        Args
-        ----
-        group: `Group`
-            Group that owns this solver.
-        """
-
-        if isinstance(self.jacobian, MVPJacobian):
-            # no need to recreate an MVPJacobian if we already have one
-            return
-
-        method = self.options['jacobian_method']
-
-        if method == 'MVP':
-            self.jacobian = MVPJacobian(group.unknowns.vec.size, self.mult)
-        #elif self.options['jacobian_format'] == 'sparse':
-        else:
-            self.jacobian = SparseJacobian(group.unknowns.slice_iter(),
-                                           group._sub_jac_iter(), mode)
-        # else:
-        #    self.jacobian = DenseJacobian(group.unknowns.slice_iter())
-
-        #self.jacobian, _ = assemble(mode=mode, method=method,
-                                    #mult=self.mult,
-                                    #solve_method=self.options['solve_method'])
-        system._jacobian_changed = False
-
-        if self.options['solve_method'] == 'LU':
-            if issparse(self.jacobian.partials):
-                self.lup = splu(self.jacobian.partials.tocsc())
-            else:
-                self.lup = lu_factor(self.jacobian.partials)
-
-    def solve(self, rhs_mat, system, mode):
+    def solve(self, rhs_mat, group, mode):
         """ Solves the linear system for the problem in self.system. The
         full solution vector is returned.
 
@@ -111,8 +76,8 @@ class DirectSolver(MultLinearSolver):
             interest. Each array contains the right-hand side for the linear
             solve.
 
-        system : `System`
-            Parent `System` object.
+        group : `Group`
+            Parent `Group` object.
 
         mode : string
             Derivative mode, can be 'fwd' or 'rev'.
@@ -122,19 +87,37 @@ class DirectSolver(MultLinearSolver):
         dict of ndarray : Solution vectors
         """
 
-        self.system = system
+        self.system = group
 
         if self.mode is None:
             self.mode = mode
 
         sol_buf = OrderedDict()
 
-        if system._jacobian_changed or mode != self.mode:
+        self.voi = None
+        
+        if group._jacobian_changed or mode != self.mode:
             self.mode = mode
-            self.setup(system)
+            method = self.options['jacobian_method']
+
+            if method == 'MVP':
+                self.jacobian = MVPJacobian(group.unknowns.vec.size, self.mult)
+            #elif self.options['jacobian_format'] == 'sparse':
+            else:
+                self.jacobian = SparseJacobian(group.unknowns.slice_iter(),
+                                               group._sub_jac_iter(), mode)
+            # else:
+            #    self.jacobian = DenseJacobian(group.unknowns.slice_iter())
+
+            group._jacobian_changed = False
+
+            if self.options['solve_method'] == 'LU':
+                if issparse(self.jacobian.partials):
+                    self.lup = splu(self.jacobian.partials.tocsc())
+                else:
+                    self.lup = lu_factor(self.jacobian.partials)
 
         for voi, rhs in rhs_mat.items():
-            self.voi = None
 
             if self.options['solve_method'] == 'LU':
                 if issparse(self.jacobian.partials):

@@ -90,7 +90,7 @@ class SparseJacobian(Jacobian):
 
     """
     def __init__(self, slices, subjac_iter, direction):
-        super(SparseJacobian, self).__init__(slices, subjac_iter, direction)
+        super(SparseJacobian, self).__init__(slices)
 
         # index arrays into data array keyed on (oname, iname)
         self._idx_arrays = {}
@@ -241,20 +241,16 @@ class SparseJacobian(Jacobian):
         final_cols = np.hstack(full_cols)
 
         partials = coo_matrix((data, (final_rows, final_cols)),
-                              shape=(self.jsize, self.jsize))
+                                      shape=(self.jsize, self.jsize))
 
         # tocsr will not change the order of the data array from that of coo,
         # but if later we add tocsc option, we'll have to revisit this since
         # the order will change and our index arrays will then be wrong.
-        partials = partials.tocsr()
+        self.partials = partials.tocsr()
 
         if direction == 'rev':
             # CSR.T results in CSC, but doesn't change the data array order
-            partials = partials.T
-
-        self.partials = partials
-
-        return partials
+            self.partials = self.partials.T
 
 
     def __setitem__(self, key, value):
@@ -262,10 +258,3 @@ class SparseJacobian(Jacobian):
             self.partials.data[self._idx_arrays[key]] = value.data
         else:
             self.partials.data[self._idx_arrays[key]] = value.flatten()
-
-
-
-
-if __name__ == '__main__':
-
-    J = DenseJacobian(unknowns)

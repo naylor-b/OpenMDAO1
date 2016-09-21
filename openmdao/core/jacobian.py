@@ -28,61 +28,81 @@ class Jacobian(object):
         self._slices = {
             n : slice(start, end) for n, (start, end) in ordered_slices
         }
-        
+
         # record block order and slice for each vector variable in unknowns
         self._ordering = {
             n : (i, slc) for i, (n, slc) in enumerate(ordered_slices)
         }
-        
+
         # number of rows (and columns) in J
         self.jsize = np.sum(s[1]-s[0] for _, s in itervalues(self._ordering))
 
     def __getitem__(self, key):
         return self.partials[self._slices[key[0]], self._slices[key[1]]]
 
-class DenseJacobian(Jacobian):
-    def assemble(self):
-        pass
 
-    def __setitem__(self, key, value):
-        pass
+class MVPJacobian(Jacobian):
+    """ Build a dense jacobian by obtaining matrix vector products from the
+    solver.
+
+    Args
+    ----
+    jsize : int
+        Number of rows (and also columns) in the jacobian.
+
+    mult : function
+        Solver mult function to coordinate the matrix vector product
+
+    """
+
+    def __init__(self, jsize, mult):
+        ident_vec = np.zeros(jsize)
+        self.partials = partials = np.empty((jsize, jsize))
+
+        for i in range(jsize):
+            ident_vec[i-1] = 0.0
+            ident_vec[i] = 1.0
+            partials[:, i] = mult(ident_vec)
+
+
+class DenseJacobian(Jacobian):
+    pass
 
 
 class SparseJacobian(Jacobian):
-    def __init__(self, slices):
-        super(SparseJacobian, self).__init__(slices)
+    """ Build a sparse jacobian made up of either sparse or dense sub-jacobians.
+
+    Args
+    ----
+    slices : iter over slices for each variable in the jacobian
+        Yields tuples of the form (name, (start_index, end_index)) for each
+        variable in the jacobian.
+
+    subjac_iter : iter over sub-jacobians
+        An iterator of sub-jacobians that make up the overall jacobian.
+        sub-jacobians can be numpy arrays, scalars, or scipy COO sparse
+        matrices. The iterator should return tuples of the form
+        (ovar, ivar, subjac, src_indices) where src_indices can be
+        None.
+
+    direction : string('fwd')
+        Derivative direction, can be 'fwd' or 'rev'.
+
+    """
+    def __init__(self, slices, subjac_iter, direction):
+        super(SparseJacobian, self).__init__(slices, subjac_iter, direction)
 
         # index arrays into data array keyed on (oname, iname)
         self._idx_arrays = {}
-
-
-    def assemble(self, subjac_iter, direction):
-        """ Assemble and return a sparse array containing the Jacobian for
-        the given group.
-
-        Args
-        ----
-        subjac_iter : iter over sub-jacobians
-            An iterator of sub-jacobians that make up the overall jacobian.
-            sub-jacobians can be numpy arrays, scalars, or scipy COO sparse
-            matrices.
-
-        direction : string('fwd')
-            Derivative direction, can be 'fwd' or 'rev'.
-
-        """
 
         subJinfo = []
         diags = []
         data_size = 0
 
-        for ovar, ivar, subjac, idxs in subjac_iter:  #self._sub_jac_iter(group, connections, prom_map):
+        for ovar, ivar, subjac, idxs in subjac_iter:
 
             irowblock, (o_start, o_end) = self._ordering[ovar]
             icolblock, (i_start, i_end) = self._ordering[ivar]
-
-            rows = np.empty(subjac.size, dtype=int)
-            cols = np.empty(subjac.size, dtype=int)
 
             if issparse(subjac):
                 # make sure it's in COO format.
@@ -92,33 +112,37 @@ class SparseJacobian(Jacobian):
                 # in its source, we have to map the sub-jacobian to the
                 # appropriate rows of the big jacobian.
                 if idxs:
-                    cols[:] = subjac.col
-                    cols += i_start
-
-                    nrows = subjac.shape[0]
-                    sorted_idxs = np.argsort(idxs)
-                    minidx = np.min(idxs)
-
-                    for i in range(nrows):
-                        idxarray = np.nonzero(subjac.row==sorted_idxs[i]-minidx)
-                        rows[idxarray] = i + o_start + idxs[sorted_idxs[i]]
+                    idxs = idxs.copy()
+                    idxs.sort()
+                    cols = []
+                    rows = []
+                    for idx in idxs:
+                        idxarray = np.nonzero(subjac.col==idx)
+                        cols.append(subjac.col[idxarray]+i_start)
+                        rows.append(subjac.row[idxarray]+o_start)
+                    rows = np.hstack(rows)
+                    cols = np.hstack(cols)
                 else:
-                    rows[:] = subjac.row
+                    rows = subjac.row.copy()
                     rows += o_start
-                    cols[:] = subjac.col
+                    cols = subjac.col.copy()
                     cols += i_start
             else:
-                if idxs:
-                    rowrange = np.array(idxs, dtype=int) + o_start
-                else:
-                    rowrange = np.arange(o_start, o_end, dtype=int)
+                rowrange = np.arange(o_start, o_end, dtype=int)
 
-                colrange = np.arange(i_start, i_end, dtype=int)
+                if idxs:
+                    colrange = np.array(idxs, dtype=int) + i_start
+                else:
+                    colrange = np.arange(i_start, i_end, dtype=int)
+
                 ncols = colrange.size
 
+                rows = np.empty(rowrange.size*colrange.size, dtype=int)
+                cols = np.empty(rowrange.size*colrange.size, dtype=int)
+
                 for i, row in enumerate(rowrange):
-                    rows[i*ncols:(i+1)*ncols] = np.full(ncols, row, dtype=int)
-                    cols[i*ncols:(i+1)*ncols] = colrange
+                    rows[i*ncols: (i+1)*ncols] = np.full(ncols, row, dtype=int)
+                    cols[i*ncols: (i+1)*ncols] = colrange
 
             data_size += subjac.size
 
@@ -138,14 +162,14 @@ class SparseJacobian(Jacobian):
             iblock, (start, end) = self._ordering[d]
             sz = end-start
             if sz not in eye_cache:
-                eye_cache[sz] = sp_eye(sz, format='coo')
+                eye_cache[sz] = -sp_eye(sz, format='coo')
 
             rows = np.arange(start, end, dtype=int)
             # we don't modify rows or cols, so we can use the same array for both
             cols = rows
 
             subJ = eye_cache[sz]
-            
+
             data_size += subJ.size
 
             subJinfo.append(((iblock, iblock), (d,d), rows, cols, subJ, None))
@@ -166,14 +190,14 @@ class SparseJacobian(Jacobian):
         full_cols = []
 
         start = end = 0
-        
+
         # now iterate over the sorted blocks and group them by block row
         for blockrow, blockiter in groupby(sorted_blocks, key=lambda x: x[0][0]):
 
             blockrow_offset = end # offset into the data array of this block row
-            
+
             blocks = list(blockiter) # need to do this since blocks is an iterator
-            
+
             # take the row and col arrays from our row blocks and create
             # new arrays with all of them stacked together.
             block_sub_rows = [t[2] for t in blocks]
@@ -192,10 +216,9 @@ class SparseJacobian(Jacobian):
             idx_arrays = np.argsort(sub_sorted)
 
             rowstart = rowend = 0
-            
+
             # now iterate one more time in order through the blocks in this block row
             # to extract the individual index arrays
-            offset = self._ordering[blocks[0][1][0]][1][0]
             for _, key, rows, cols, subjac, _ in blocks:
                 end += rows.size
                 rowend += rows.size
@@ -239,7 +262,7 @@ class SparseJacobian(Jacobian):
             self.partials.data[self._idx_arrays[key]] = value.data
         else:
             self.partials.data[self._idx_arrays[key]] = value.flatten()
-            
+
 
 
 

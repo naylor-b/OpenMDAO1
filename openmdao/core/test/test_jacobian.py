@@ -28,16 +28,16 @@ class TestSparseJacobian(unittest.TestCase):
         
         # in this J, a,b,c are outputs and x,y,z are inputs.  b is also a state
         self.subjacs = {
-            ('a3','x3') : (np.array([[1,0,6],[5,5,9],[0,0,3]], dtype=dtype), None),
-            ('a3','y1') : (np.array([[1],[7],[0]], dtype=dtype), None),
-            ('a3','z2') : (np.array([[6,0],[3,5]], dtype=dtype), [2,0]),
+            ('x3','a3') : (np.array([[1,0,6],[5,5,9],[0,0,3]], dtype=dtype), None),
+            ('y1','a3') : (np.array([[1,7,0]], dtype=dtype), None),
+            ('z2','a3') : (np.array([[6,0],[3,5]], dtype=dtype), [2,0]),
             ('b2','b2') : (np.array([[0,8],[9,7]], dtype=dtype), None),
-            ('b2','x3') : (np.array([[9,9,0],[8,0,8]], dtype=dtype), None),
-            ('b2','y1') : (np.array([[9],[3]], dtype=dtype), None),
-            ('b2','z2') : (np.array([[5,0],[0,8]], dtype=dtype), None),
-            ('c1','x3') : (np.array([[7,7,2]], dtype=dtype), None),
-            ('c1','y1') : (np.array([[6]], dtype=dtype), None),
-            ('c1','z2') : (np.array([[4,1]], dtype=dtype), None),
+            ('x3','b2') : (np.array([[9,9],[0,8],[5,4]], dtype=dtype), None),
+            ('y1','b2') : (np.array([[9,3]], dtype=dtype), None),
+            ('z2','b2') : (np.array([[5,0],[0,2]], dtype=dtype), None),
+            ('x3','c1') : (np.array([[7],[7],[2]], dtype=dtype), None),
+            ('y1','c1') : (np.array([[6]], dtype=dtype), None),
+            ('z2','c1') : (np.array([[4],[1]], dtype=dtype), None),
         }
 
     def tearDown(self):
@@ -50,23 +50,23 @@ class TestSparseJacobian(unittest.TestCase):
         self.assertEqual(J.partials.data.size, 51)
         
         check = self.subjacs.copy()
-        del check['a3','z2'] # this uses idxs so won't equal the original subjac
+        del check['z2','a3'] # this uses idxs so won't equal the original subjac, so test separately
 
         for k in check:
             np.testing.assert_array_equal(J[k].A, self.subjacs[k][0])
             
-        np.testing.assert_array_equal(J['a3','z2'].A, np.array([[3,5],[0,0],[6,0]]))
+        np.testing.assert_array_equal(J['z2','a3'].A, np.array([[0,0,6],[5,0,3]]))
         
         newsub = np.array([[7,7],[6,5]])
-        J['b2','z2'] = newsub
-        np.testing.assert_array_equal(J['b2','z2'].A, newsub)
+        J['z2','b2'] = newsub
+        np.testing.assert_array_equal(J['z2','b2'].A, newsub)
 
-        newsub = np.array([[7],[6],[5]])
-        J['a3','y1'] = newsub
-        np.testing.assert_array_equal(J['a3','y1'].A, newsub)
+        newsub = np.array([[7,6,5]])
+        J['y1','a3'] = newsub
+        np.testing.assert_array_equal(J['y1','a3'].A, newsub)
         
-        J['a3','z2'] = np.array([[3,2],[9,9]])
-        np.testing.assert_array_equal(J['a3','z2'].A, np.array([[9,9],[0,0],[3,2]]))
+        J['z2','a3'] = np.array([[3,2],[9,9]])
+        np.testing.assert_array_equal(J['z2','a3'].A, np.array([[2,0,3],[9,0,9]]))
         
 
 

@@ -9,7 +9,9 @@ from scipy.linalg import lu_factor, lu_solve
 from scipy.sparse import issparse
 from scipy.sparse.linalg import spsolve, splu
 from openmdao.solvers.solver_base import MultLinearSolver
+from openmdao.core.jacobian import SparseJacobian, DenseJacobian, MVPJacobian
 
+from six import iteritems
 
 class DirectSolver(MultLinearSolver):
     """ OpenMDAO LinearSolver that explicitly solves the linear system using
@@ -63,27 +65,40 @@ class DirectSolver(MultLinearSolver):
         self.lup = None
         self.mode = None
 
-    def setup(self, system):
+    def setup(self, group):
         """ Initialization. Allocate Jacobian and set up some helpers.
 
         Args
         ----
-        system: `System`
-            System that owns this solver.
+        group: `Group`
+            Group that owns this solver.
         """
 
-        # Only need to setup if we are assembling the whole jacobian
-        if self.options['jacobian_method'] == 'MVP':
+        if isinstance(self.jacobian, MVPJacobian):
+            # no need to recreate an MVPJacobian if we already have one
             return
 
-        # Note, we solve a slightly modified version of the unified
-        # derivatives equations in OpenMDAO.
-        # (dR/du) * (du/dr) = -I
-        u_vec = system.unknowns
-        self.jacobian = -np.eye(u_vec.vec.size)
+        method = self.options['jacobian_method']
 
-        # Clear the index cache
-        system._icache = {}
+        if method == 'MVP':
+            self.jacobian = MVPJacobian(group.unknowns.vec.size, self.mult)
+        #elif self.options['jacobian_format'] == 'sparse':
+        else:
+            self.jacobian = SparseJacobian(group.unknowns.slice_iter(),
+                                           group._sub_jac_iter(), mode)
+        # else:
+        #    self.jacobian = DenseJacobian(group.unknowns.slice_iter())
+
+        #self.jacobian, _ = assemble(mode=mode, method=method,
+                                    #mult=self.mult,
+                                    #solve_method=self.options['solve_method'])
+        system._jacobian_changed = False
+
+        if self.options['solve_method'] == 'LU':
+            if issparse(self.jacobian.partials):
+                self.lup = splu(self.jacobian.partials.tocsc())
+            else:
+                self.lup = lu_factor(self.jacobian.partials)
 
     def solve(self, rhs_mat, system, mode):
         """ Solves the linear system for the problem in self.system. The
@@ -114,43 +129,23 @@ class DirectSolver(MultLinearSolver):
 
         sol_buf = OrderedDict()
 
-        if self.options['jacobian_format'] == 'sparse':
-            assemble = system.assemble_sparse_jacobian
-        else:
-            assemble = system.assemble_jacobian
+        if system._jacobian_changed or mode != self.mode:
+            self.mode = mode
+            self.setup(system)
 
         for voi, rhs in rhs_mat.items():
             self.voi = None
 
-            if system._jacobian_changed:
-                method = self.options['jacobian_method']
-
-                # Must clear the jacobian if we switch modes
-                if method == 'assemble' and self.mode != mode:
-                    self.setup(system)
-                self.mode = mode
-
-                self.jacobian, _ = assemble(mode=mode, method=method,
-                                            mult=self.mult,
-                                            solve_method=self.options['solve_method'])
-                system._jacobian_changed = False
-
-                if self.options['solve_method'] == 'LU':
-                    if issparse(self.jacobian):
-                        self.lup = splu(self.jacobian)
-                    else:
-                        self.lup = lu_factor(self.jacobian)
-
             if self.options['solve_method'] == 'LU':
-                if issparse(self.jacobian):
+                if issparse(self.jacobian.partials):
                     deriv = self.lup.solve(rhs)
                 else:
                     deriv = lu_solve(self.lup, rhs)
             else:
-                if issparse(self.jacobian):
-                    deriv = spsolve(self.jacobian, rhs)
+                if issparse(self.jacobian.partials):
+                    deriv = spsolve(self.jacobian.partials, rhs)
                 else:
-                    deriv = np.linalg.solve(self.jacobian, rhs)
+                    deriv = np.linalg.solve(self.jacobian.partials, rhs)
             self.system = None
             sol_buf[voi] = deriv
 

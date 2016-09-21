@@ -1684,13 +1684,17 @@ class Group(System):
 
         return umap
 
-    def _sub_jac_iter(self, connections, prom_map):
+    def _sub_jac_iter(self):
         """
         A generator of tuples of the form (ovar, ivar, jac, idxs) that
         will iterate over all sub-jacobian entries for components contained
         in the given group.
         """
 
+        connections = self._probdata.connections
+        prom_map = self._sysdata.to_prom_name
+        uvec = self.unknowns
+        
         for sub in self.components(recurse=True):
 
             jac = sub._jacobian_cache

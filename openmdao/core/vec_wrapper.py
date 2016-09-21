@@ -469,6 +469,17 @@ class VecWrapper(object):
         return ((n, acc.val) for n, acc in iteritems(self._dat)
                        if not acc.pbo)
 
+    def slice_iter(self):
+        """
+        Returns
+        -------
+            An iterator over tuples of the form (name, (start, end)) for each
+            vector variable.
+        """
+        for name, acc in iteritems(self._dat):
+            if not acc.pbo:
+                yield name, acc.slice
+            
     def keys(self):
         """
         Returns

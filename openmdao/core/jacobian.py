@@ -100,6 +100,8 @@ class DenseJacobian(Jacobian):
             self.partials = partials.T
 
     def __setitem__(self, key, value):
+        oname, iname = key
+        
         if issparse(value):
             value = value.A
 
@@ -107,12 +109,12 @@ class DenseJacobian(Jacobian):
         
         if idxs is None:
             if self._fwd:
-                self.partials[self._slices[key[0]], self._slices[key[1]]] = value
+                self.partials[self._slices[oname], self._slices[iname]] = value
             else:
-                self.partials[self._slices[key[1]], self._slices[key[0]]] = value.T
+                self.partials[self._slices[iname], self._slices[oname]] = value.T
         else:
-            rslice = self._slices[key[0]]
-            cstart = self._slices[key[1]].start
+            rslice = self._slices[oname]
+            cstart = self._slices[iname].start
             partials = self.partials
             if self._fwd:
                 for count, j in enumerate(idxs):

@@ -15,7 +15,7 @@ July, 2016
 Implemented in OpenMDAO, Aug 2016, Kenneth T. Moore
 """
 
-from __future__ import print_function
+# from __future__ import print_function
 
 from collections import OrderedDict
 from six import iteritems
@@ -50,14 +50,15 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
 
     ndv = len(desvar)
 
-    opt_prob.addVarGroup('x', ndv, type='c', value=desvar.flatten(), lower=lb.flatten(), upper=ub.flatten())
+    opt_prob.addVarGroup('x', ndv, type='c', value=desvar.flatten(), lower=lb.flatten(),
+                         upper=ub.flatten())
     opt_prob.addConGroup('con', ncon, upper=np.zeros((ncon)))#, linear=True, wrt='x',
                          #jac={'x' : jac})
     opt_prob.addObj('obj')
 
     # Fall back on SLSQP if SNOPT isn't there
-    _tmp = __import__('pyoptsparse', globals(), locals(), [optimizer], 0)
-    opt = getattr(_tmp, optimizer)()
+    _tmp = __import__('pyoptsparse', globals(), locals(), [OPTIMIZER], 0)
+    opt = getattr(_tmp, OPTIMIZER)()
 
 
     if options:
@@ -65,6 +66,7 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
             opt.setOption(name, value)
 
     opt.setOption('Major iterations limit', 100)
+    opt.setOption('Verify level', -1)
     opt.setOption('iSumm', 0)
     #opt.setOption('iPrint', 0)
 
@@ -127,7 +129,7 @@ class Branch_and_Bound(Driver):
         opt.add_option('disp', True,
                        desc='Set to False to prevent printing of iteration '
                        'messages.')
-        opt.add_option('ftol', 1.0e-3, lower=0.0,
+        opt.add_option('ftol', 1.0e-4, lower=0.0,
                        desc='Absolute tolerance for sub-optimizations.')
         opt.add_option('integer_tol', 1.0e-6, lower=0.0,
                        desc='Integer Rounding Tolerance.')
@@ -158,6 +160,12 @@ class Branch_and_Bound(Driver):
 
         # When this is slotted into AMIEGO, this will be set to False.
         self.standalone = True
+
+        # Switch between pyoptsparse and scipy/slsqp
+        self.pyopt = True
+
+        # Declare stuff we need to pass to objective callback functions
+        self.current_surr = None
 
     def _setup(self):
         """  Initialize whatever we need."""
@@ -238,6 +246,7 @@ class Branch_and_Bound(Driver):
 
             n_train = self.sampling[self.dvs[0]].shape[0]
             x_i = []
+            x_i_hat = []
             obj = []
             cons = {}
             for con in self.get_constraint_metadata():
@@ -249,6 +258,7 @@ class Branch_and_Bound(Driver):
             for i_train in range(n_train):
 
                 xx_i = np.empty((self.size, ))
+                xx_i_hat = np.empty((self.size, ))
                 for var in self.dvs:
                     lower = self._desvars[var]['lower']
                     upper = self._desvars[var]['upper']
@@ -256,8 +266,10 @@ class Branch_and_Bound(Driver):
                     x_i_0 = self.sampling[var][i_train, :]
 
                     xx_i[i:j] = np.round(lower + x_i_0 * (upper - lower))
+                    xx_i_hat[i:j] = (xx_i[i:j] - lower)/(upper - lower)
 
                 x_i.append(xx_i)
+                x_i_hat.append(xx_i_hat)
 
             # Run each case and extract obj/con
             cons = {}
@@ -280,39 +292,46 @@ class Branch_and_Bound(Driver):
                     cons[name].append(value.copy())
 
             self.obj_surrogate = obj_surrogate = self.surrogate()
-            obj_surrogate.train(x_i, obj)
+            obj_surrogate.train(x_i_hat, obj, normalize=False)
             obj_surrogate.y = obj
+            obj_surrogate.lb_org = self.xI_lb
+            obj_surrogate.ub_org = self.xI_ub
 
             self.con_surrogate = con_surrogate = []
             for name, val in iteritems(cons):
                 con_surr = self.surrogate()
-                con_surr.train(x_i, val)
+                con_surr.train(x_i_hat, val, normalize=False)
                 con_surr.y = val
                 con_surr._name = name
+                con_surr.lb_org = self.xI_lb
+                con_surr.ub_org = self.xI_ub
                 con_surrogate.append(con_surr)
 
         # Calculate intermediate statistics. This stuff used to be stored in
         # the Modelinfo object, but more convenient to store it in the
         # Kriging surrogate.
-        #if obj_surrogate:
 
-            ##This value should always be 0.0
-            #obj_surrogate.mu = np.mean(obj_surrogate.Y)
+        n_train = obj_surrogate.X.shape[0]
+        one = np.ones([n_train,1])
+        if obj_surrogate:
 
-            ##This value should always be 1.0
-            #obj_surrogate.SigmaSqr = obj_surrogate.sigma2/np.square(obj_surrogate.Y_std)
+            # TODO: mvp in Kriging
+            # R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
+                                                            #    obj_surrogate.S_inv,
+                                                            #    obj_surrogate.U.T))
+            # obj_surrogate.R_inv = R_inv
 
-            ## TODO: mvp in Kriging
-            #obj_surrogate.R_inv = obj_surrogate.Vh.T.dot(np.einsum('i,ij->ij',
-                                                                   #obj_surrogate.S_inv,
-                                                                   #obj_surrogate.U.T))
-            ## TODO: norm type, should probably always be 2
-            #obj_surrogate.p = 2
+            # obj_surrogate.mu = np.dot(one.T,np.dot(R_inv,obj_surrogate.Y))/np.dot(one.T,np.dot(R_inv,one))
+            #
+            # obj_surrogate.SigmaSqr = np.dot((obj_surrogate.Y - one*obj_surrogate.mu).T,np.dot(R_inv,(obj_surrogate.Y-one*obj_surrogate.mu)))/n_train
 
-            #obj_surrogate.c_r = obj_surrogate.alpha
+            # TODO: norm type, should probably always be 2 (Yes for sure)
+            obj_surrogate.p = 2
+
+            # obj_surrogate.c_r = np.dot(R_inv,(obj_surrogate.Y-one*obj_surrogate.mu))
 
             ## This is also done in Ameigo. TODO: just do it once.
-            #obj_surrogate.y_best = np.min(obj_surrogate.y)
+            obj_surrogate.y_best = np.min(obj_surrogate.Y)
 
             ## This is the rest of the interface that any "surrogate" needs to contain.
             ##obj_surrogate.X = surrogate.X
@@ -321,15 +340,17 @@ class Branch_and_Bound(Driver):
             ##obj_surrogate.X_std = obj_surrogate.X_std.reshape(num_xI,1)
             ##obj_surrogate.X_mean = obj_surrogate.X_mean.reshape(num_xI,1)
 
-        #for con_surr in con_surrogate:
+        for con_surr in con_surrogate:
 
-            #con_surr.mu = np.mean(con_surr.Y)
-            #con_surr.SigmaSqr = con_surr.sigma2/np.square(con_surr.Y_std)
-            #con_surr.R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
-                                                         #con_surr.S_inv,
-                                                         #con_surr.U.T))
-            #con_surr.p = 2
-            #con_surr.c_r = con_surr.alpha
+            # R_inv = con_surr.Vh.T.dot(np.einsum('i,ij->ij',
+            #                                              con_surr.S_inv,
+            #                                              con_surr.U.T))
+            # con_surr.R_inv = R_inv
+            # con_surr.mu = np.dot(one.T,np.dot(R_inv,con_surr.Y))/np.dot(one.T,np.dot(R_inv,one))
+            # con_surr.SigmaSqr = np.dot((con_surr.y - one*con_surr.mu).T,np.dot(R_inv,(con_surr.y-one*con_surr.mu)))/n_train
+            #
+            con_surr.p = 2
+            # con_surr.c_r = np.dot(R_inv,(con_surr.y-one*con_surr.mu))
 
         #----------------------------------------------------------------------
         # Step 1: Initialize
@@ -350,8 +371,10 @@ class Branch_and_Bound(Driver):
 
         # Initial optimal objective and solution
         # Randomly generate an integer point
-        xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
-        xopt[:] = 2.0
+        # TODO Generate a different random number across each dim
+        #xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
+        #xopt = np.round(xL_iter + np.random.random(num_des)*(xU_iter - xL_iter)).reshape(num_des)
+        xopt = 2.0*np.ones((num_des))
         fopt = self.objective_callback(xopt)
         self.eflag_MINLPBB = True
         UBD = fopt
@@ -369,9 +392,28 @@ class Branch_and_Bound(Driver):
             floc_iter = self.objective_callback(xloc_iter)
             efloc_iter = True
             if local_search:
-                floc_iter, xloc_iter, efloc_iter = \
-                         self._do_local_search(xL_iter, xU_iter, floc_iter,
-                                               xloc_iter, active_tol)
+                if np.abs(floc_iter) > active_tol: #Perform at non-flat starting point
+                    #--------------------------------------------------------------
+                    #Step 2: Obtain a local solution
+                    #--------------------------------------------------------------
+                    # Using a gradient-based method here.
+                    # TODO: Make it more pluggable.
+                    # TODO: Use SNOPT [Not a priority-Not going to use local search anytime soon]
+                    xC_iter = xloc_iter
+                    bnds = [(xL_iter[ii], xU_iter[ii]) for ii in range(num_des)]
+
+                    optResult = minimize(self.objective_callback, xC_iter,
+                                         method='SLSQP', bounds=bnds,
+                                         options={'ftol' : ftol})
+
+                    xloc_iter = np.round(optResult.x.reshape(num_des))
+                    floc_iter = self.objective_callback(xloc_iter)
+
+                    if not optResult.success:
+                        efloc_iter = False
+                        floc_iter = np.inf
+                    else:
+                        efloc_iter = True
 
             #--------------------------------------------------------------
             # Step 3: Partition the current rectangle as per the new
@@ -548,7 +590,7 @@ class Branch_and_Bound(Driver):
         # When run stanalone, the objective is the model objective.
         if self.standalone:
             if self.options['use_surrogate']:
-                f = obj_surrogate.predict(xI)[0]
+                f = obj_surrogate.predict(xI, normalize=False)[0]
 
             else:
                 system = self.root
@@ -582,8 +624,8 @@ class Branch_and_Bound(Driver):
 
             X = obj_surrogate.X
             k = np.shape(X)[1]
-            lb = self.xI_lb
-            ub = self.xI_ub
+            lb = obj_surrogate.lb
+            ub = obj_surrogate.ub
 
             # Normalized as per the convention in Kriging of openmdao
             #xval = (xI - obj_surrogate.X_mean)/obj_surrogate.X_std
@@ -610,13 +652,13 @@ class Branch_and_Bound(Driver):
         #print(xI, f)
         return f
 
-    def maximize_S(self, x_comL, x_comU, Ain_hat, bin_hat, surogate):
+    def maximize_S(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):
         """This method finds an upper bound to the SigmaSqr Error, and scales
         up 'r' to provide a smooth design space for gradient-based approach.
         """
-        R_inv = surogate.R_inv
-        SigmaSqr = surogate.SigmaSqr
-        X = surogate.X
+        R_inv = surrogate.R_inv
+        SigmaSqr = surrogate.SigmaSqr
+        X = surrogate.X
 
         n, k = X.shape
         one = np.ones([n, 1])
@@ -657,7 +699,7 @@ class Branch_and_Bound(Driver):
         alpha = np.max(np.array([0.0, -0.5*eig_min]))
 
         # Just storing it here to pull it out in the callback?
-        surogate._alpha = alpha
+        surrogate._alpha = alpha
 
         # Maximize S
         x0 = 0.5*(xhat_comL + xhat_comU)
@@ -668,42 +710,46 @@ class Branch_and_Bound(Driver):
                  #'fun' : lambda x : -np.dot(Ain_hat[ii, :], x) + bin_hat[ii],
                  #'jac' : lambda x : -Ain_hat[ii, :]} for ii in range(2*n)]
 
-        optResult = minimize(self.calc_SSqr_convex_old, x0,
-                             args=(x_comL, x_comU, xhat_comL, xhat_comU),
-                             method='SLSQP', constraints=cons, bounds=bnds,
-                             options={'ftol' : self.options['ftol'],
-                                      'maxiter' : 100})
+        if self.pyopt:
 
-        self.x_comL = x_comL
-        self.x_comU = x_comU
-        self.xhat_comL = xhat_comL
-        self.xhat_comU = xhat_comU
-        self.Ain_hat = Ain_hat
-        self.bin_hat = bin_hat
+            self.x_comL = x_comL
+            self.x_comU = x_comU
+            self.xhat_comL = xhat_comL
+            self.xhat_comU = xhat_comU
+            self.Ain_hat = Ain_hat
+            self.bin_hat = bin_hat
+            self.current_surr = surrogate
 
-        #opt_x, opt_f, succ_flag = snopt_opt(self.calc_SSqr_convex, x0, xhat_comL,
-                                            #xhat_comU, len(bin_hat),
-                                            #title='Maximize_S',
-                                            #options={'Major optimality tolerance' : self.options['ftol']},
-                                            #jac=Ain_hat,
-                                            #)#sens=self.calc_SSqr_convex_grad)
+            opt_x, opt_f, succ_flag = snopt_opt(self.calc_SSqr_convex, x0, xhat_comL,
+                                                xhat_comU, len(bin_hat),
+                                                title='Maximize_S',
+                                                options={'Major optimality tolerance' : self.options['ftol']},
+                                                jac=Ain_hat,
+                                                )#sens=self.calc_SSqr_convex_grad)
 
-        Neg_sU = optResult.fun
-        if not optResult.success:
-            eflag_sU = False
+            Neg_sU = opt_f
+            if not succ_flag:
+                eflag_sU = False
+            else:
+                eflag_sU = True
+
         else:
-            eflag_sU = True
-            tol = self.options['con_tol']
-            for ii in range(2*n):
-                if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + tol):
-                    eflag_sU = False
-                    break
+            optResult = minimize(self.calc_SSqr_convex_old, x0,
+                                 args=(x_comL, x_comU, xhat_comL, xhat_comU, surrogate),
+                                 method='SLSQP', constraints=cons, bounds=bnds,
+                                 options={'ftol' : self.options['ftol'],
+                                          'maxiter' : 100})
 
-        #Neg_sU = opt_f
-        #if not succ_flag:
-            #eflag_sU = False
-        #else:
-            #eflag_sU = True
+            Neg_sU = optResult.fun
+            if not optResult.success:
+                eflag_sU = False
+            else:
+                eflag_sU = True
+                tol = self.options['con_tol']
+                for ii in range(2*n):
+                    if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii ,0] + tol):
+                        eflag_sU = False
+                        break
 
         sU = - Neg_sU
         return sU, eflag_sU
@@ -711,16 +757,16 @@ class Branch_and_Bound(Driver):
     def calc_SSqr_convex_old(self, x_com, *param):
         """ Callback function for minimization of mean squared error."""
 
-        obj_surrogate = self.obj_surrogate
         x_comL = param[0]
         x_comU = param[1]
         xhat_comL = param[2]
         xhat_comU = param[3]
+        surrogate = self.param[4]
 
-        X = obj_surrogate.X
-        R_inv = obj_surrogate.R_inv
-        SigmaSqr = obj_surrogate.SigmaSqr
-        alpha = obj_surrogate._alpha
+        X = surrogate.X
+        R_inv = surrogate.R_inv
+        SigmaSqr = surrogate.SigmaSqr
+        alpha = surrogate._alpha
 
         n, k = X.shape
 
@@ -750,16 +796,16 @@ class Branch_and_Bound(Driver):
         fail = 0
 
         x_com = dv_dict['x']
-        obj_surrogate = self.obj_surrogate
+        surrogate = self.current_surr
         x_comL = self.x_comL
         x_comU = self.x_comU
         xhat_comL = self.xhat_comL
         xhat_comU = self.xhat_comU
 
-        X = obj_surrogate.X
-        R_inv = obj_surrogate.R_inv
-        SigmaSqr = obj_surrogate.SigmaSqr
-        alpha = obj_surrogate._alpha
+        X = surrogate.X
+        R_inv = surrogate.R_inv
+        SigmaSqr = surrogate.SigmaSqr
+        alpha = surrogate._alpha
 
         n, k = X.shape
 
@@ -869,23 +915,32 @@ class Branch_and_Bound(Driver):
                      #'fun' : lambda x : -np.dot(Ain_hat[ii, :],x) + bin_hat[ii],
                      #'jac': lambda x: -Ain_hat[ii, :]} for ii in range(2*n)]
 
-            optResult = minimize(self.calc_y_hat_convex_old, x0,
-                                 args=(x_comL, x_comU, surrogate), method='SLSQP',
-                                 constraints=cons, bounds=bnds,
-                                 options={'ftol' : self.options['ftol'],
-                                          'maxiter' : 100})
+        if self.pyopt:
 
             self.x_comL = x_comL
             self.x_comU = x_comU
             self.Ain_hat = Ain_hat
             self.bin_hat = bin_hat
-            self.surrogate = surrogate
+            self.current_surr = surrogate
 
-            #opt_x, opt_f, succ_flag = snopt_opt(self.calc_y_hat_convex, x0, xhat_comL,
-                                                #xhat_comU, len(bin_hat),
-                                                #title='minimize_y',
-                                                #options={'Major optimality tolerance' : self.options['ftol']},
-                                                #jac=Ain_hat)
+            opt_x, opt_f, succ_flag = snopt_opt(self.calc_y_hat_convex, x0, xhat_comL,
+                                                xhat_comU, len(bin_hat),
+                                                title='minimize_y',
+                                                options={'Major optimality tolerance' : self.options['ftol']},
+                                                jac=Ain_hat)
+
+            yL = opt_f
+            if not succ_flag:
+                eflag_yL = False
+            else:
+                eflag_yL = True
+
+        else:
+            optResult = minimize(self.calc_y_hat_convex_old, x0,
+                                 args=(x_comL, x_comU, surrogate), method='SLSQP',
+                                 constraints=cons, bounds=bnds,
+                                 options={'ftol' : self.options['ftol'],
+                                          'maxiter' : 100})
 
             yL = optResult.fun
             if not optResult.success:
@@ -897,12 +952,6 @@ class Branch_and_Bound(Driver):
                     if np.dot(Ain_hat[ii, :], optResult.x) > (bin_hat[ii, 0] + tol):
                         eflag_yL = False
                         break
-
-            #yL = opt_f
-            #if not succ_flag:
-                #eflag_yL = False
-            #else:
-                #eflag_yL = True
 
         return yL, eflag_yL
 
@@ -928,7 +977,7 @@ class Branch_and_Bound(Driver):
         fail = 0
 
         x_com = dv_dict['x']
-        surrogate = self.surrogate
+        surrogate = self.current_surr
         x_comL = self.x_comL
         x_comU = self.x_comU
 
@@ -1023,7 +1072,7 @@ def interval_analysis(lb_x, ub_x, surrogate):
     t2L = np.zeros([n, k]); t2U = np.zeros([n, k])
     t3L = np.zeros([n, k]); t3U = np.zeros([n, k])
     t4L = np.zeros([n, 1]); t4U = np.zeros([n, 1])
-    lb_r = np.zeros([n, 1]); ub_r = np.zeros([n, 1])
+    lb_r = np.zeros([n, 1]); ub_r = np.ones([n, 1])
 
     if p % 2 == 0:
         for i in range(n):
@@ -1159,10 +1208,11 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
         SSqr = SigmaSqr*(1.0 - r.T.dot(term0) + \
         ((1.0 - one.T.dot(term0))**2)/(one.T.dot(np.dot(R_inv, one))))
 
-    if SSqr <= 0.0:
+    if SSqr == 0.0:
         NegEI = 0.0
     else:
         dy = y_min - y_hat
+        SSqr = abs(SSqr)
         ei1 = dy*(0.5+0.5*erf((1/np.sqrt(2))*(dy/np.sqrt(SSqr))))
         ei2 = np.sqrt(SSqr)*(1.0/np.sqrt(2.0*np.pi))*np.exp(-0.5*(dy**2/SSqr))
         NegEI = -(ei1 + ei2)
@@ -1194,11 +1244,12 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
         gSSqr = SigmaSqr*(1.0 - r.T.dot(term0) + \
                           ((1.0 - one.T.dot(term0))**2)/(one.T.dot(np.dot(R_inv, one))))
 
-    if gSSqr <= 0:
+    if gSSqr == 0:
         EV = 0.0
     else:
         # Calculate expected violation
         dg = g_hat - g_min
+        gSSqr = abs(gSSqr)
         ei1 = dg*(0.5 + 0.5*erf((1.0/np.sqrt(2.0))*(dg/np.sqrt(gSSqr))))
         ei2 = np.sqrt(gSSqr)*(1.0/np.sqrt(2.0*np.pi))*np.exp(-0.5*(dg**2/gSSqr))
         EV = (ei1 + ei2)

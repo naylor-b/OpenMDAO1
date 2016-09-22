@@ -66,6 +66,9 @@ class TestSparseJacobian(unittest.TestCase):
             
         np.testing.assert_array_equal(J['z2','a3'].A, np.array([[0,0,6],[5,0,3]]))
         
+        # NOTE: when setting a sub-jacobian into J, new array must be of the same general form as
+        # the array used to build J.partials, i.e. if the subjac was sparse with 0's in certain locations,
+        # the new array must also be sparse with 0's in the same locations.
         newsub = np.array([[7,0],[0,3]])
         J['z2','b2'] = convert(newsub)
         np.testing.assert_array_equal(J['z2','b2'].A, newsub)
@@ -100,6 +103,9 @@ class TestSparseJacobian(unittest.TestCase):
             
         np.testing.assert_array_equal(J['z2','a3'].A, np.array([[0,0,6],[5,0,3]]).T)
         
+        # NOTE: when setting a sub-jacobian into J, new array must be of the same general form as
+        # the array used to build J.partials, i.e. if the subjac was sparse with 0's in certain locations,
+        # the new array must also be sparse with 0's in the same locations.
         newsub = np.array([[7,0],[0,5]])
         J['z2','b2'] = convert(newsub)
         np.testing.assert_array_equal(J['z2','b2'].A, newsub.T)

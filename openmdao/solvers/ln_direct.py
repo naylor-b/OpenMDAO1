@@ -95,19 +95,19 @@ class DirectSolver(MultLinearSolver):
         sol_buf = OrderedDict()
 
         self.voi = None
-        
+
         if group._jacobian_changed or mode != self.mode:
             self.mode = mode
             method = self.options['jacobian_method']
 
             if method == 'MVP':
                 self.jacobian = MVPJacobian(group.unknowns.vec.size, self.mult)
-            #elif self.options['jacobian_format'] == 'sparse':
-            else:
+            elif self.options['jacobian_format'] == 'sparse':
                 self.jacobian = SparseJacobian(group.unknowns.slice_iter(),
                                                group._sub_jac_iter(), mode)
-            # else:
-            #    self.jacobian = DenseJacobian(group.unknowns.slice_iter())
+            else:
+               self.jacobian = DenseJacobian(group.unknowns.slice_iter(),
+                                             group._sub_jac_iter(), mode)
 
             group._jacobian_changed = False
 

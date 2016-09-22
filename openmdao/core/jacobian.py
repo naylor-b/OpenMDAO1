@@ -167,18 +167,19 @@ class SparseJacobian(Jacobian):
 
                 # if the current input is only connected to certain entries
                 # in its source, we have to map the sub-jacobian to the
-                # appropriate rows of the big jacobian.
+                # appropriate cols of the big jacobian.
                 if idxs:
                     cols = []
                     rows = []
                     
                     for count, idx in enumerate(idxs):
                         idxarray = np.nonzero(subjac.col==count)[0]
-                        #cols.append(subjac.col[idxarray]+i_start)
                         cols.append(np.array([idx]*idxarray.size)+i_start)
                         rows.append(subjac.row[idxarray]+o_start)
+                        
                     rows = np.hstack(rows)
                     cols = np.hstack(cols)
+                    
                     # keep track of how we have to transform our local data array
                     # based on the columns we changed
                     lex = np.lexsort((cols, rows))
@@ -220,24 +221,24 @@ class SparseJacobian(Jacobian):
             subJinfo.append(((irowblock, icolblock), (ovar, ivar),
                             rows, cols, subjac, idxs))
 
-        # add diagonal entries
+        # add diagonal entries.  We have to handle diagonal entries specially for a sparse
+        # jacobian, because when constructing a sparse matrix, data with duplicated row and col
+        # indices will be added together, and we don't want that.
         eye_cache = {}
         missing_diags = set(self._ordering).difference(diags)
-        for d in missing_diags:
-            iblock, (start, end) = self._ordering[d]
-            sz = end-start
-            if sz not in eye_cache:
-                eye_cache[sz] = -sp_eye(sz, format='coo')
-
-            rows = np.arange(start, end, dtype=int)
-            # we don't modify rows or cols, so we can use the same array for both
-            cols = rows
-
-            subJ = eye_cache[sz]
-
-            data_size += subJ.size
-
-            subJinfo.append(((iblock, iblock), (d,d), rows, cols, subJ, None))
+        for d in self._ordering:
+            if d not in diags:
+                iblock, (start, end) = self._ordering[d]
+                sz = end-start
+                if sz not in eye_cache:
+                    eye_cache[sz] = -sp_eye(sz, format='coo')
+    
+                rows = np.arange(start, end, dtype=int)
+                # we don't modify rows or cols, so we can use the same array for both
+                cols = rows
+                data_size += sz
+    
+                subJinfo.append(((iblock, iblock), (d,d), rows, cols, eye_cache[sz], None))
 
         data = np.empty(data_size)
 
@@ -248,7 +249,9 @@ class SparseJacobian(Jacobian):
         # later we can subsort all blocks in a given block row by actual
         # array row, and then use the fact that we started with them in
         # sorted order to be able to back out the index arrays we're looking
-        # for.
+        # for. Later, when a component sets its sub-jacobian's values into the
+        # big jacobian, we can use the index arrays to write the sub-jacobian
+        # data values into the correct locations in the big jacobian's data array.
         sorted_blocks = sorted(subJinfo, key=lambda x: x[0])
 
         full_rows = []

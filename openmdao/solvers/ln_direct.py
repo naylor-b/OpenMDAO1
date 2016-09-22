@@ -106,8 +106,8 @@ class DirectSolver(MultLinearSolver):
                 self.jacobian = SparseJacobian(group.unknowns.slice_iter(),
                                                group._sub_jac_iter(), mode)
             else:
-               self.jacobian = DenseJacobian(group.unknowns.slice_iter(),
-                                             group._sub_jac_iter(), mode)
+                self.jacobian = DenseJacobian(group.unknowns.slice_iter(),
+                                              group._sub_jac_iter(), mode)
 
             group._jacobian_changed = False
 

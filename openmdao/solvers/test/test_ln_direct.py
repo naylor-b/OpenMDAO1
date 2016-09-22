@@ -16,41 +16,8 @@ from openmdao.test.util import assert_rel_error
 
 class TestDirectSolver(unittest.TestCase):
 
-    def test_simple_matvec(self):
-        group = Group()
-        group.add('x_param', IndepVarComp('x', 1.0), promotes=['*'])
-        group.add('mycomp', SimpleCompDerivMatVec(), promotes=['x', 'y'])
-
-        prob = Problem()
-        prob.root = group
-        prob.root.ln_solver = DirectSolver()
-        prob.setup(check=False)
-        prob.run()
-
-        J = prob.calc_gradient(['x'], ['y'], mode='fwd', return_format='dict')
-        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
-
-        J = prob.calc_gradient(['x'], ['y'], mode='rev', return_format='dict')
-        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
-
-    def test_simple_matvec_subbed(self):
-        group = Group()
-        group.add('mycomp', SimpleCompDerivMatVec(), promotes=['x', 'y'])
-
-        prob = Problem()
-        prob.root = Group()
-        prob.root.add('x_param', IndepVarComp('x', 1.0), promotes=['*'])
-        prob.root.add('sub', group, promotes=['*'])
-
-        prob.root.ln_solver = DirectSolver()
-        prob.setup(check=False)
-        prob.run()
-
-        J = prob.calc_gradient(['x'], ['y'], mode='fwd', return_format='dict')
-        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
-
-        J = prob.calc_gradient(['x'], ['y'], mode='rev', return_format='dict')
-        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
+    def setUp(self):
+        self.direct_solver = DirectSolver()
 
     def test_array2D(self):
         group = Group()
@@ -59,7 +26,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = group
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -72,24 +39,6 @@ class TestDirectSolver(unittest.TestCase):
         diff = np.linalg.norm(J['y']['x'] - Jbase['y', 'x'])
         assert_rel_error(self, diff, 0.0, 1e-8)
 
-    def test_simple_in_group_matvec(self):
-        group = Group()
-        sub = group.add('sub', Group(), promotes=['x', 'y'])
-        group.add('x_param', IndepVarComp('x', 1.0), promotes=['*'])
-        sub.add('mycomp', SimpleCompDerivMatVec(), promotes=['x', 'y'])
-
-        prob = Problem()
-        prob.root = group
-        prob.root.ln_solver = DirectSolver()
-        prob.setup(check=False)
-        prob.run()
-
-        J = prob.calc_gradient(['x'], ['y'], mode='fwd', return_format='dict')
-        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
-
-        J = prob.calc_gradient(['x'], ['y'], mode='rev', return_format='dict')
-        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
-
     def test_simple_jac(self):
         group = Group()
         group.add('x_param', IndepVarComp('x', 1.0), promotes=['*'])
@@ -97,7 +46,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = group
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -111,7 +60,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = FanOut()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -130,7 +79,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = FanOutGrouped()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -149,7 +98,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = FanIn()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -168,7 +117,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = FanInGrouped()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -187,7 +136,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = ConvergeDiverge()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -212,7 +161,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = ConvergeDivergeGroups()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -235,7 +184,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = SingleDiamond()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -254,7 +203,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = SingleDiamondGrouped()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
         prob.setup(check=False)
         prob.run()
 
@@ -277,7 +226,7 @@ class TestDirectSolver(unittest.TestCase):
 
         prob = Problem()
         prob.root = SellarStateConnection()
-        prob.root.ln_solver = DirectSolver()
+        prob.root.ln_solver = self.direct_solver
 
         prob.root.nl_solver.options['atol'] = 1e-12
         prob.setup(check=False)
@@ -331,7 +280,7 @@ class TestDirectSolver(unittest.TestCase):
         p.root.nl_solver = Newton()
         p.root.nl_solver.options['rtol'] = 1e-10
         p.root.nl_solver.options['atol'] = 1e-10
-        p.root.ln_solver = DirectSolver()
+        p.root.ln_solver = self.direct_solver
 
         p.setup(check=False)
         p['x'] = np.array([1.5, 2.])
@@ -339,6 +288,64 @@ class TestDirectSolver(unittest.TestCase):
         p.run()
         J = p.calc_gradient(['a'], ['f'], mode='rev')
         assert_rel_error(self, J[0][0], 1.57735, 1e-6)
+
+class TestDirectSolverMatVec(unittest.TestCase):
+    def setUp(self):
+        self.direct_solver = DirectSolver()
+        
+    def test_simple_in_group_matvec(self):
+        group = Group()
+        sub = group.add('sub', Group(), promotes=['x', 'y'])
+        group.add('x_param', IndepVarComp('x', 1.0), promotes=['*'])
+        sub.add('mycomp', SimpleCompDerivMatVec(), promotes=['x', 'y'])
+
+        prob = Problem()
+        prob.root = group
+        prob.root.ln_solver = self.direct_solver
+        prob.setup(check=False)
+        prob.run()
+
+        J = prob.calc_gradient(['x'], ['y'], mode='fwd', return_format='dict')
+        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
+
+        J = prob.calc_gradient(['x'], ['y'], mode='rev', return_format='dict')
+        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
+
+    def test_simple_matvec(self):
+        group = Group()
+        group.add('x_param', IndepVarComp('x', 1.0), promotes=['*'])
+        group.add('mycomp', SimpleCompDerivMatVec(), promotes=['x', 'y'])
+
+        prob = Problem()
+        prob.root = group
+        prob.root.ln_solver = self.direct_solver
+        prob.setup(check=False)
+        prob.run()
+
+        J = prob.calc_gradient(['x'], ['y'], mode='fwd', return_format='dict')
+        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
+
+        J = prob.calc_gradient(['x'], ['y'], mode='rev', return_format='dict')
+        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
+
+    def test_simple_matvec_subbed(self):
+        group = Group()
+        group.add('mycomp', SimpleCompDerivMatVec(), promotes=['x', 'y'])
+
+        prob = Problem()
+        prob.root = Group()
+        prob.root.add('x_param', IndepVarComp('x', 1.0), promotes=['*'])
+        prob.root.add('sub', group, promotes=['*'])
+
+        prob.root.ln_solver = self.direct_solver
+        prob.setup(check=False)
+        prob.run()
+
+        J = prob.calc_gradient(['x'], ['y'], mode='fwd', return_format='dict')
+        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
+
+        J = prob.calc_gradient(['x'], ['y'], mode='rev', return_format='dict')
+        assert_rel_error(self, J['y']['x'][0][0], 2.0, 1e-6)
 
 
 class TestDirectSolverAssemble(unittest.TestCase):
@@ -783,9 +790,16 @@ class TestDirectSolverAssembleSparse(TestDirectSolverAssemble):
     """
 
     def setUp(self):
-        self.direct_solver = DirectSolver()
+        super(TestDirectSolverAssembleSparse, self).setUp()
         self.direct_solver.options['jacobian_format'] = 'sparse'
+        self.direct_solver.options['jacobian_method'] = 'assemble'
 
+class TestDirectSolverSparse(TestDirectSolver):
+    def setUp(self):
+        super(TestDirectSolverSparse, self).setUp()
+        self.direct_solver.options['jacobian_format'] = 'sparse'
+        self.direct_solver.options['jacobian_method'] = 'assemble'
 
+        
 if __name__ == "__main__":
     unittest.main()

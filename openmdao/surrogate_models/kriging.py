@@ -154,7 +154,7 @@ class KrigingSurrogate(SurrogateModel):
                 fail = 0
                 thetas = dv_dict['thetas']
 
-                loglike = self._calculate_reduced_likelihood_params(10**thetas)[0]
+                loglike = self._calculate_reduced_likelihood_params(10**thetas, normalize=normalize)[0]
 
                 # Objective
                 func_dict = {}
@@ -177,7 +177,7 @@ class KrigingSurrogate(SurrogateModel):
 
             def _calcll(thetas):
                 """ Callback function"""
-                loglike = self._calculate_reduced_likelihood_params(10**thetas)[0]
+                loglike = self._calculate_reduced_likelihood_params(10**thetas, normalize=normalize)[0]
                 return -loglike
 
             bounds = [(-3.0, 2.0) for _ in range(self.n_dims)]
@@ -191,7 +191,7 @@ class KrigingSurrogate(SurrogateModel):
 
             self.thetas = 10**optResult.x.flatten()
 
-        _, params = self._calculate_reduced_likelihood_params()
+        _, params = self._calculate_reduced_likelihood_params(normalize=normalize)
 
         self.c_r = params['c_r']
         self.U = params['U']

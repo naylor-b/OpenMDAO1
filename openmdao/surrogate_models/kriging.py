@@ -55,8 +55,9 @@ def snopt_opt(objfun, desvar, lb, ub, title=None, options=None,
     x = sol.getDVs()['thetas']
     f = sol.objectives['obj'].value
     success_flag = sol.optInform['value'] < 2
+    msg = sol.optInform['text']
 
-    return x, f, success_flag
+    return x, f, success_flag, msg
 
 
 class KrigingSurrogate(SurrogateModel):
@@ -80,9 +81,9 @@ class KrigingSurrogate(SurrogateModel):
         self.thetas = np.zeros(0)
         self.nugget = nugget     # nugget smoothing parameter from [Sasena, 2002]
 
-        self.alpha = np.zeros(0)
+        self.c_r = np.zeros(0)
         self.L = np.zeros(0)
-        self.sigma2 = np.zeros(0)
+        self.SigmaSqr = np.zeros(0)
 
         # Normalized Training Values
         self.X = np.zeros(0)
@@ -122,28 +123,26 @@ class KrigingSurrogate(SurrogateModel):
                 'KrigingSurrogate require at least 2 training points.'
             )
 
-        X_mean = np.mean(x, axis=0)
-        X_std = np.std(x, axis=0)
-        Y_mean = np.mean(y, axis=0)
-        Y_std = np.std(y, axis=0)
-
-        X_std[X_std == 0.] = 1.
-        Y_std[Y_std == 0.] = 1.
-
         # Normalize the data
         if normalize:
+            X_mean = np.mean(x, axis=0)
+            X_std = np.std(x, axis=0)
+            Y_mean = np.mean(y, axis=0)
+            Y_std = np.std(y, axis=0)
+
+            X_std[X_std == 0.] = 1.
+            Y_std[Y_std == 0.] = 1.
+
             X = (x - X_mean) / X_std
             Y = (y - Y_mean) / Y_std
 
             self.X = X
             self.Y = Y
-
+            self.X_mean, self.X_std = X_mean, X_std
+            self.Y_mean, self.Y_std = Y_mean, Y_std
         else:
             self.X = x
             self.Y = y
-
-        self.X_mean, self.X_std = X_mean, X_std
-        self.Y_mean, self.Y_std = Y_mean, Y_std
 
 
         x0 = -3.0*np.ones([self.n_dims, 1]) + 0.5*(5.0*np.ones([self.n_dims, 1]))
@@ -165,11 +164,12 @@ class KrigingSurrogate(SurrogateModel):
 
             low = -3.0*np.ones([self.n_dims, 1])
             high = 2.0*np.ones([self.n_dims, 1])
-            opt_x, opt_f, succ_flag = snopt_opt(_calcll, x0, low, high, title='kriging',
-                                                options={'Major optimality tolerance' : 1.0e-6})
+            opt_x, opt_f, succ_flag, msg = snopt_opt(_calcll, x0, low, high, title='kriging',
+                                                     options={'Major optimality tolerance' : 1.0e-6})
 
             if not succ_flag:
-                raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
+                pass
+                #raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(msg))
 
             self.thetas = np.asarray(10**opt_x).reshape((self.n_dims, 1))
 
@@ -180,7 +180,7 @@ class KrigingSurrogate(SurrogateModel):
                 loglike = self._calculate_reduced_likelihood_params(10**thetas)[0]
                 return -loglike
 
-            bounds = [(-3.0, 3.0) for _ in range(self.n_dims)]
+            bounds = [(-3.0, 2.0) for _ in range(self.n_dims)]
             optResult = minimize(_calcll, x0, method='cobyla',
                                  #options={'ftol': 1e-3},
                                  bounds=bounds)
@@ -201,13 +201,7 @@ class KrigingSurrogate(SurrogateModel):
         self.SigmaSqr = params['SigmaSqr']
         self.R_inv = params['R_inv']
 
-        #print "kriging test"
-        #print self.thetas
-        #print self.R_inv
-        #print self.SigmaSqr
-        #print self.mu
-
-    def _calculate_reduced_likelihood_params(self, thetas=None):
+    def _calculate_reduced_likelihood_params(self, thetas=None, normalize=True):
         """
         Calculates a quantity with the same maximum location as the log-likelihood for a given theta.
 
@@ -240,37 +234,29 @@ class KrigingSurrogate(SurrogateModel):
         h = 1e-8 * S[0]
         inv_factors = S / (S ** 2. + h ** 2.)
 
-        # alpha = Vh.T.dot(np.einsum('j,kj,kl->jl', inv_factors, U, Y))
-        # logdet = -np.sum(np.log(inv_factors))
-        # sigma2 = np.dot(Y.T, alpha).sum(axis=0) / self.n_samples
-        # reduced_likelihood = -(np.log(np.sum(sigma2)) + logdet / self.n_samples)
-
-        # params['alpha'] = alpha
-        # params['sigma2'] = sigma2 * np.square(self.Y_std)
-        # params['S_inv'] = inv_factors
-        # params['U'] = U
-        # params['Vh'] = Vh
-
         # Using the approach suggested on 1. EGO by D.R.Jones et.al and
         # 2. Engineering Deisgn via Surrogate Modeling-A practical guide
         # by Alexander Forrester, Dr. Andras Sobester, Andy Keane
+        one = np.ones([self.n_samples,1])
         R_inv = Vh.T.dot(np.einsum('i,ij->ij',
                                               inv_factors,
                                               U.T))
-        logdet = 2.0*np.sum(np.log(np.abs(inv_factors)))
-        one = np.ones([self.n_samples,1])
         mu = np.dot(one.T,np.dot(R_inv,Y))/np.dot(one.T,np.dot(R_inv,one))
-        c_r = np.dot(R_inv,(Y-one*mu))
-        SigmaSqr = np.dot((Y - one*mu).T,c_r)/self.n_samples
-        reduced_likelihood = 1.0*(-(self.n_samples/2.0)*np.log(SigmaSqr) - 0.5*logdet)
+        c_r = Vh.T.dot(np.einsum('j,kj,kl->jl', inv_factors, U, (Y - mu*one)))
+        logdet = -np.sum(np.log(inv_factors))
+        SigmaSqr = np.dot((Y - mu*one).T, c_r).sum(axis=0) / self.n_samples
+        reduced_likelihood = -(np.log(np.sum(SigmaSqr)) + logdet / self.n_samples)
 
-        params['mu'] = mu
-        params['SigmaSqr'] = SigmaSqr
+        params['c_r'] = c_r
         params['S_inv'] = inv_factors
         params['U'] = U
         params['Vh'] = Vh
-        params['c_r'] = c_r
         params['R_inv'] = R_inv
+        params['mu'] = mu
+        if normalize:
+            params['SigmaSqr'] = SigmaSqr * np.square(self.Y_std)
+        else:
+            params['SigmaSqr'] = SigmaSqr
 
         return reduced_likelihood, params
 
@@ -309,20 +295,17 @@ class KrigingSurrogate(SurrogateModel):
         for r_i, x_i in zip(r, x_n):
             r_i[:] = np.exp(-thetas.dot(np.square((x_i - X).T)))
 
-        # # Scaled Predictor
-        # y_t = np.dot(r, self.alpha)
-        #
-        # # Predictor
-        # y = self.Y_mean + self.Y_std * y_t
-
         if r.shape[1] > 1: #Ensure r is always a column vector
             r = r.T
 
         # Predictor
-        y = self.mu + np.dot(r.T, self.c_r)
+        y_t = self.mu + np.dot(r.T, self.c_r)
+        if normalize:
+            y = self.Y_mean + self.Y_std * y_t
+        else:
+            y = y_t
 
         if eval_rmse:
-            # mse = (1. - np.dot(np.dot(r, self.Vh.T), np.einsum('j,kj,lk->jl', self.S_inv, self.U, r))) * self.sigma2
             one = np.ones([self.n_samples,1])
             mse  = self.SigmaSqr*(1.0 - np.dot(r.T,np.dot(self.R_inv,r)) + \
             ((1.0 - np.dot(one.T,np.dot(self.R_inv,r)))**2/np.dot(one.T,np.dot(self.R_inv,one))))
@@ -353,7 +336,7 @@ class KrigingSurrogate(SurrogateModel):
         # memory efficient than, diag(X).dot(Y) for vector X and 2D array Y.
         # I.e. Z[i,j] = X[i]*Y[i,j]
         gradr = r * -2 * np.einsum('i,ij->ij', thetas, (x_n - self.X).T)
-        jac = np.einsum('i,j,ij->ij', self.Y_std, 1./self.X_std, gradr.dot(self.alpha).T)
+        jac = np.einsum('i,j,ij->ij', self.Y_std, 1./self.X_std, gradr.dot(self.c_r).T)
         return jac
 
 

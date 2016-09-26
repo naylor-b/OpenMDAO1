@@ -180,10 +180,10 @@ class KrigingSurrogate(SurrogateModel):
                 loglike = self._calculate_reduced_likelihood_params(10**thetas, normalize=normalize)[0]
                 return -loglike
 
-            bounds = [(-3.0, 2.0) for _ in range(self.n_dims)]
-            optResult = minimize(_calcll, x0, method='cobyla',
+            #bounds = [(-3.0, 2.0) for _ in range(self.n_dims)]
+            optResult = minimize(_calcll, x0, method='cobyla')
                                  #options={'ftol': 1e-3},
-                                 bounds=bounds)
+                                 #bounds=bounds)
 
             if not optResult.success:
                 pass

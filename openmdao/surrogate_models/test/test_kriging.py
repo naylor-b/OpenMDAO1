@@ -45,7 +45,7 @@ class TestKrigingSurrogate(unittest.TestCase):
         mu, sigma = surrogate.predict(new_x)
 
         assert_rel_error(self, mu, branin_1d(new_x), 1e-1)
-        assert_rel_error(self, sigma, 0.07101449, 1e-2)
+        assert_rel_error(self, sigma, 0.0762264, 1e-2)
 
     def test_1d_ill_conditioned(self):
         # Test for least squares solver utilization when ill-conditioned
@@ -74,8 +74,8 @@ class TestKrigingSurrogate(unittest.TestCase):
 
         mu, sigma = surrogate.predict([5., 5.])
 
-        assert_rel_error(self, mu, 16.72, 1e-1)
-        assert_rel_error(self, sigma, 15.27, 1e-2)
+        assert_rel_error(self, mu, 18.75249496, 1e-1)
+        assert_rel_error(self, sigma, 14.51844129, 1e-2)
 
     def test_no_training_data(self):
         surrogate = KrigingSurrogate()

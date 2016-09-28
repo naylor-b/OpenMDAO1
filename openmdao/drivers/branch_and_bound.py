@@ -565,7 +565,7 @@ class Branch_and_Bound(Driver):
         # When run stanalone, the objective is the model objective.
         if self.standalone:
             if self.options['use_surrogate']:
-                f = obj_surrogate.predict(xI, normalize=False)[0]
+                f = obj_surrogate.predict(xI.reshape((len(xI), 1)), normalize=False)[0]
 
             else:
                 system = self.root
@@ -624,7 +624,7 @@ class Branch_and_Bound(Driver):
 
             f = conNegEI + P
 
-        #print(xI, f)
+        print(xI, f)
         return f
 
     def maximize_S(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):

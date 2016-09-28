@@ -267,6 +267,7 @@ class Branch_and_Bound(Driver):
                     cons[name].append(value.copy())
 
             self.obj_surrogate = obj_surrogate = self.surrogate()
+            obj_surrogate.use_snopt = True
             obj_surrogate.train(x_i_hat, obj, normalize=False)
             obj_surrogate.y = obj
             obj_surrogate.lb_org = self.xI_lb
@@ -275,6 +276,7 @@ class Branch_and_Bound(Driver):
             self.con_surrogate = con_surrogate = []
             for name, val in iteritems(cons):
                 con_surr = self.surrogate()
+                con_surrogate.use_snopt = True
                 con_surr.train(x_i_hat, val, normalize=False)
                 con_surr.y = val
                 con_surr._name = name

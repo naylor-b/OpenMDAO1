@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from openmdao.api import IndepVarComp, Group, Problem, ExecComp
+from openmdao.api import IndepVarComp, Group, Problem, ExecComp, KrigingSurrogate
 from openmdao.drivers.branch_and_bound import Branch_and_Bound
 from openmdao.test.branin import BraninInteger
 from openmdao.test.three_bar_truss import ThreeBarTruss
@@ -28,8 +28,10 @@ class TestBranchAndBounddriver(unittest.TestCase):
         prob.driver.add_desvar('xI', lower=-5, upper=10)
         prob.driver.add_objective('f')
 
-        npt = 15
-        prob.driver.sampling = {'xI' : np.linspace(0.0, 1.0, num=npt).reshape(npt, 1)}
+        prob.driver.sampling = {'xI' : np.array([[0.0], [.33], [.66], [1.0]])}
+        #npt = 15
+        #prob.driver.sampling = {'xI' : np.linspace(0.0, 1.0, num=npt).reshape(npt, 1)}
+        prob.driver.options['disp'] = True
 
         prob.setup(check=False)
 

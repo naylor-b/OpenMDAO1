@@ -27,6 +27,8 @@ class TestAMIEGOdriver(unittest.TestCase):
         prob.driver.cont_opt.options['tol'] = 1e-12
         #prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
+        prob.driver.cont_opt = pyOptSparseDriver()
+        prob.driver.cont_opt.options['optimizer'] = 'SNOPT'
 
         prob.driver.add_desvar('xI', lower=-5, upper=10)
         prob.driver.add_desvar('xC', lower=0.0, upper=15.0)
@@ -104,6 +106,8 @@ class TestAMIEGOdriver(unittest.TestCase):
         prob.driver.cont_opt.options['tol'] = 1e-12
         #prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
+        prob.driver.cont_opt = pyOptSparseDriver()
+        prob.driver.cont_opt.options['optimizer'] = 'SNOPT'
 
         prob.driver.add_desvar('area', lower=0.0005, upper=10.0)
         prob.driver.add_desvar('mat', lower=1, upper=4)

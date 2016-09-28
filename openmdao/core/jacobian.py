@@ -20,8 +20,11 @@ class Jacobian(object):
     Args
     ----
 
-    slices : iter of (varname, (start, end)) for all variables that will make
-    up the jacobian.
+    slices : iter of tuples
+        (varname, (start, end)) for all variables that will make up the jacobian.
+
+    direction : str
+        Indicates the derivative direction.  Allowed values are ['fwd', 'rev'].
 
     """
     def __init__(self, slices, direction):
@@ -76,7 +79,7 @@ class DenseJacobian(Jacobian):
         super(DenseJacobian, self).__init__(slices, direction)
 
         partials = -np.eye(self.jsize)
-        
+
         self._src_indices = {}
 
         for ovar, ivar, subjac, idxs in subjac_iter:
@@ -101,12 +104,12 @@ class DenseJacobian(Jacobian):
 
     def __setitem__(self, key, value):
         oname, iname = key
-        
+
         if issparse(value):
             value = value.A
 
         idxs = self._src_indices[key]
-        
+
         if idxs is None:
             if self._fwd:
                 self.partials[self._slices[oname], self._slices[iname]] = value
@@ -123,7 +126,7 @@ class DenseJacobian(Jacobian):
                 value = value.T
                 for count, j in enumerate(idxs):
                     partials[cstart+j, rslice] = value[count, :]
-                
+
 
 
 class SparseJacobian(Jacobian):
@@ -151,7 +154,7 @@ class SparseJacobian(Jacobian):
 
         # index arrays into data array keyed on (oname, iname)
         self._idx_arrays = {}
-        
+
         self.sub_idxs = {} # accounts for reordering of cols due to src_indices
 
         subJinfo = []
@@ -173,15 +176,15 @@ class SparseJacobian(Jacobian):
                 if idxs:
                     cols = []
                     rows = []
-                    
+
                     for count, idx in enumerate(idxs):
                         idxarray = np.nonzero(subjac.col==count)[0]
                         cols.append(np.array([idx]*idxarray.size)+i_start)
                         rows.append(subjac.row[idxarray]+o_start)
-                        
+
                     rows = np.hstack(rows)
                     cols = np.hstack(cols)
-                    
+
                     # keep track of how we have to transform our local data array
                     # based on the columns we changed
                     lex = np.lexsort((cols, rows))
@@ -193,7 +196,7 @@ class SparseJacobian(Jacobian):
                     rows += o_start
                     cols = subjac.col.copy()
                     cols += i_start
-                    
+
                 data_size += rows.size
             else:
                 rowrange = np.arange(o_start, o_end, dtype=int)
@@ -234,12 +237,12 @@ class SparseJacobian(Jacobian):
                 sz = end-start
                 if sz not in eye_cache:
                     eye_cache[sz] = -sp_eye(sz, format='coo')
-    
+
                 rows = np.arange(start, end, dtype=int)
                 # we don't modify rows or cols, so we can use the same array for both
                 cols = rows
                 data_size += sz
-    
+
                 subJinfo.append(((iblock, iblock), (d,d), rows, cols, eye_cache[sz], None))
 
         data = np.empty(data_size)

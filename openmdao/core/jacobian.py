@@ -85,22 +85,7 @@ class DenseJacobian(Jacobian):
         for ovar, ivar, subjac, idxs in subjac_iter:
             self._src_indices[(ovar, ivar)] = idxs
 
-            irowblock, (o_start, o_end) = self._ordering[ovar]
-            icolblock, (i_start, i_end) = self._ordering[ivar]
-
-            if issparse(subjac):
-                subjac = subjac.A
-
-            if idxs:
-                for count, j in enumerate(idxs):
-                    partials[o_start:o_end, i_start+j] = subjac[:,count]
-            else:
-                partials[o_start:o_end, i_start:i_end] = subjac
-
-        if self._fwd:
-            self.partials = partials
-        else:
-            self.partials = partials.T
+        self.partials = partials
 
     def __setitem__(self, key, value):
         oname, iname = key
@@ -166,10 +151,10 @@ class SparseJacobian(Jacobian):
             irowblock, (o_start, o_end) = self._ordering[ovar]
             icolblock, (i_start, i_end) = self._ordering[ivar]
 
-            if issparse(subjac):
-                # make sure it's in COO format.
-                subjac = subjac.tocoo()
+            if subjac is not None:  # assume sparse,  (rows, cols)
 
+                sjrows, sjcols = subjac
+                
                 # if the current input is only connected to certain entries
                 # in its source, we have to map the sub-jacobian to the
                 # appropriate cols of the big jacobian.
@@ -178,9 +163,9 @@ class SparseJacobian(Jacobian):
                     rows = []
 
                     for count, idx in enumerate(idxs):
-                        idxarray = np.nonzero(subjac.col==count)[0]
+                        idxarray = np.nonzero(sjcols==count)[0]
                         cols.append(np.array([idx]*idxarray.size)+i_start)
-                        rows.append(subjac.row[idxarray]+o_start)
+                        rows.append(sjrows[idxarray]+o_start)
 
                     rows = np.hstack(rows)
                     cols = np.hstack(cols)
@@ -192,13 +177,13 @@ class SparseJacobian(Jacobian):
                     rows = rows[lex]
                     cols = cols[lex]
                 else:
-                    rows = subjac.row.copy()
+                    rows = sjrows.copy()
                     rows += o_start
-                    cols = subjac.col.copy()
+                    cols = sjcols.copy()
                     cols += i_start
 
                 data_size += rows.size
-            else:
+            else:  # dense subjac
                 rowrange = np.arange(o_start, o_end, dtype=int)
 
                 if idxs:
@@ -215,7 +200,7 @@ class SparseJacobian(Jacobian):
                     rows[i*ncols: (i+1)*ncols] = np.full(ncols, row, dtype=int)
                     cols[i*ncols: (i+1)*ncols] = colrange
 
-                data_size += subjac.size
+                data_size += rows.size
 
             # same var for row and col, so a block diagonal entry
             # (this only happens with states, and we don't have to worry
@@ -296,13 +281,13 @@ class SparseJacobian(Jacobian):
                 end += rows.size
                 rowend += rows.size
                 self._idx_arrays[key] = idxs = idx_arrays[rowstart:rowend]+blockrow_offset
-                if issparse(subjac):
+                if issparse(subjac): # this is only true for our sub-identity jacs
                     if key in self.sub_idxs:
                         data[idxs] = subjac.data[self.sub_idxs[key]]
                     else:
                         data[idxs] = subjac.data
-                else:
-                    data[idxs] = subjac.flat
+                #else:
+                    #data[idxs] = 0
                 start = end
                 rowstart = rowend
 

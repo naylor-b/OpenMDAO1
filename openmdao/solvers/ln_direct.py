@@ -103,12 +103,19 @@ class DirectSolver(MultLinearSolver):
             if method == 'MVP':
                 self.jacobian = MVPJacobian(group.unknowns.vec.size, self.mult)
             elif self.options['jacobian_format'] == 'sparse':
+                subjac_iter = list(group._sub_jac_iter())
                 self.jacobian = SparseJacobian(group.unknowns.slice_iter(),
-                                               group._sub_jac_iter(), mode)
+                                               _shape_iter(subjac_iter), mode)
             else:
+                subjac_iter = list(group._sub_jac_iter())
                 self.jacobian = DenseJacobian(group.unknowns.slice_iter(),
-                                              group._sub_jac_iter(), mode)
+                                              _shape_iter(subjac_iter), mode)
 
+            # now set values into our newly built jacobian object
+            if method != 'MVP':
+                for ovar, ivar, subjac, idxs in subjac_iter:
+                    self.jacobian[(ovar, ivar)] = subjac
+                    
             group._jacobian_changed = False
 
             if self.options['solve_method'] == 'LU':
@@ -133,3 +140,14 @@ class DirectSolver(MultLinearSolver):
             sol_buf[voi] = deriv
 
         return sol_buf
+
+
+def _shape_iter(subjac_iter):
+    """An iterator that returns (row,col) for sparse jacobians in subjac_iter and
+    None for dense jacobians.
+    """
+    for ovar, ivar, subjac, idxs in subjac_iter:
+        if issparse(subjac):
+            yield ovar, ivar, (subjac.row, subjac.col), idxs
+        else:
+            yield ovar, ivar, None, idxs

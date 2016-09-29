@@ -12,7 +12,7 @@ from itertools import chain
 
 import numpy as np
 import networkx as nx
-from scipy.sparse import csc_matrix, csc_matrix, coo_matrix
+from scipy.sparse import issparse, csc_matrix, csc_matrix, coo_matrix
 
 from openmdao.components.indep_var_comp import IndepVarComp
 from openmdao.core.component import Component
@@ -1686,15 +1686,16 @@ class Group(System):
 
     def _sub_jac_iter(self):
         """
-        A generator of tuples of the form (ovar, ivar, jac, idxs) that
-        will iterate over all sub-jacobian entries for components contained
-        in the given group.
+        A generator of tuples of the form (ovar, ivar, jac, src_indices),
+        where jac is either None for dense sub-jacobians or (rows,cols) for
+        sparse sub-jacobians, that will iterate over all sub-jacobian entries
+        for components contained in the given group.
         """
 
         connections = self._probdata.connections
         prom_map = self._sysdata.to_prom_name
         uvec = self.unknowns
-        
+
         for sub in self.components(recurse=True):
 
             jac = sub._jacobian_cache

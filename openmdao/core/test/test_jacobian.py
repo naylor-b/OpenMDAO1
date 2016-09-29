@@ -46,15 +46,27 @@ class TestSparseJacobian(unittest.TestCase):
         }
         
     def _check_sparse_jacobian_fwd(self, subjacs):
-        subjac_iter = [(k[0],k[1],subJ,idxs) for k,(subJ, idxs) in iteritems(subjacs)]
+        subjac_iter = []
+        sparse = False
+        for k,(subJ, idxs) in iteritems(subjacs):
+            if issparse(subJ):
+                subjac_iter.append((k[0],k[1],(subJ.row,subJ.col),idxs))
+                sparse = True
+            else:
+                subjac_iter.append((k[0], k[1], None, idxs))
+
         J = SparseJacobian(iteritems(self.slices), subjac_iter, 'fwd')
-        if issparse(subjac_iter[0][2]):
+        if sparse:
             self.assertEqual(J.partials.data.size, 42)
             convert = coo_matrix
         else:
             self.assertEqual(J.partials.data.size, 51)
             convert = lambda x: x
-        
+
+        # now set all of the subjac values
+        for k, (subJ, idxs) in iteritems(subjacs):
+            J[k] = subJ
+
         check = subjacs.copy()
         del check['z2','a3'] # this uses idxs so won't equal the original subjac, so test separately
 
@@ -83,15 +95,27 @@ class TestSparseJacobian(unittest.TestCase):
         return J
     
     def _check_sparse_jacobian_rev(self, subjacs):
-        subjac_iter = [(k[0],k[1],subJ,idxs) for k,(subJ, idxs) in iteritems(subjacs)]
+        subjac_iter = []
+        sparse = False
+        for k,(subJ, idxs) in iteritems(subjacs):
+            if issparse(subJ):
+                subjac_iter.append((k[0],k[1],(subJ.row,subJ.col),idxs))
+                sparse = True
+            else:
+                subjac_iter.append((k[0], k[1], None, idxs))
+
         J = SparseJacobian(iteritems(self.slices), subjac_iter, 'rev')
-        if issparse(subjac_iter[0][2]):
+        if sparse:
             self.assertEqual(J.partials.data.size, 42)
             convert = coo_matrix
         else:
             self.assertEqual(J.partials.data.size, 51)
             convert = lambda x: x
-        
+
+        # now set all of the subjac values
+        for k, (subJ, idxs) in iteritems(subjacs):
+            J[k] = subJ
+
         check = subjacs.copy()
         del check['z2','a3'] # this uses idxs so won't equal the original subjac, so test separately
 
@@ -120,9 +144,13 @@ class TestSparseJacobian(unittest.TestCase):
         return J
 
     def _check_dense_jacobian_fwd(self, subjacs):
-        subjac_iter = [(k[0],k[1],subJ,idxs) for k,(subJ, idxs) in iteritems(subjacs)]
+        subjac_iter = [(k[0],k[1],None,idxs) for k,(subJ, idxs) in iteritems(subjacs)]
         J = DenseJacobian(iteritems(self.slices), subjac_iter, "fwd")
         self.assertEqual(J.partials.size, 15*15)
+        
+        # now set all of the subjac values
+        for k, (subJ, idxs) in iteritems(subjacs):
+            J[k] = subJ
         
         check = subjacs.copy()
         del check['z2','a3'] # this uses idxs so won't equal the original subjac, so test separately
@@ -147,9 +175,13 @@ class TestSparseJacobian(unittest.TestCase):
         np.testing.assert_array_equal(J['z2','a3'], np.array([[2,0,3],[9,0,9]]))
         
     def _check_dense_jacobian_rev(self, subjacs):
-        subjac_iter = [(k[0],k[1],subJ,idxs) for k,(subJ, idxs) in iteritems(subjacs)]
+        subjac_iter = [(k[0],k[1],None,idxs) for k,(subJ, idxs) in iteritems(subjacs)]
         J = DenseJacobian(iteritems(self.slices), subjac_iter, "rev")
         self.assertEqual(J.partials.size, 15*15)
+        
+        # now set all of the subjac values
+        for k, (subJ, idxs) in iteritems(subjacs):
+            J[k] = subJ
         
         check = subjacs.copy()
         del check['z2','a3'] # this uses idxs so won't equal the original subjac, so test separately

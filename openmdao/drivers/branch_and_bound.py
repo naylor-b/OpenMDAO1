@@ -614,7 +614,7 @@ class Branch_and_Bound(Driver):
 
             f = conNegEI + P
 
-        print(xI, f)
+        #print(xI, f)
         return f
 
     def maximize_S(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):

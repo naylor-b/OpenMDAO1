@@ -28,10 +28,8 @@ class TestBranchAndBounddriver(unittest.TestCase):
         prob.driver.add_desvar('xI', lower=-5, upper=10)
         prob.driver.add_objective('f')
 
-        prob.driver.sampling = {'xI' : np.array([[0.0], [.33], [.66], [1.0]])}
-        #npt = 15
-        #prob.driver.sampling = {'xI' : np.linspace(0.0, 1.0, num=npt).reshape(npt, 1)}
-        prob.driver.options['disp'] = True
+        npt = 15
+        prob.driver.sampling = {'xI' : np.linspace(0.0, 1.0, num=npt).reshape(npt, 1)}
 
         prob.setup(check=False)
 
@@ -58,19 +56,20 @@ class TestBranchAndBounddriver(unittest.TestCase):
         prob.driver = Branch_and_Bound()
         prob.driver.options['use_surrogate'] = True
         #prob.driver.options['disp'] = False
-        prob.driver.options['local_search'] = True
+        #prob.driver.options['local_search'] = True
 
         prob.driver.add_desvar('mat1', lower=1, upper=4)
         prob.driver.add_desvar('mat2', lower=1, upper=4)
         prob.driver.add_desvar('mat3', lower=1, upper=4)
         prob.driver.add_objective('mass')
+        prob.driver.add_constraint('stress', upper=1.0)
 
-        npt = 5
-        samples = np.array([[1.0, 0.25, 0.75],
-                            [0.0, 0.75, 0.0],
-                            [0.75, 0.0, 0.25],
-                            [0.75, 1.0, 0.5],
-                            [0.25, 0.5, 1.0]])
+        samples = np.array([[1.0, 0.33, 0.66],
+                            [0.0, 0.66, 0.0],
+                            [0.66, 0.0, 0.33],
+                            [0.66, 1.0, 0.66],
+                            [0.33, 0.66, 1.0]])
+        npt = samples.shape[0]
         prob.driver.sampling = {'mat1' : samples[:, 0].reshape((npt, 1)),
                                 'mat2' : samples[:, 1].reshape((npt, 1)),
                                 'mat3' : samples[:, 2].reshape((npt, 1))}

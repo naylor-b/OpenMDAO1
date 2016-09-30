@@ -24,7 +24,6 @@ class TestAMIEGOdriver(unittest.TestCase):
         root.add('comp', BraninInteger(), promotes=['*'])
 
         prob.driver = AMIEGO_driver()
-        prob.driver.cont_opt.options['tol'] = 1e-12
         #prob.driver.options['disp'] = False
         root.deriv_options['type'] = 'fd'
         prob.driver.cont_opt = pyOptSparseDriver()

@@ -202,6 +202,7 @@ class Branch_and_Bound(Driver):
         """
         obj_surrogate = self.obj_surrogate
         con_surrogate = self.con_surrogate
+        n_i = self.size
         atol = self.options['atol']
         active_tol = self.options['active_tol']
         ftol = self.options['ftol']
@@ -247,7 +248,6 @@ class Branch_and_Bound(Driver):
                 x_i_hat.append(xx_i_hat)
 
             # Run each case and extract obj/con
-            cons = {}
             for i_run in range(len(x_i)):
 
                 # Set design variables
@@ -272,17 +272,24 @@ class Branch_and_Bound(Driver):
             obj_surrogate.y = obj
             obj_surrogate.lb_org = self.xI_lb
             obj_surrogate.ub_org = self.xI_ub
+            obj_surrogate.lb = np.zeros((n_i))
+            obj_surrogate.ub = np.zeros((n_i))
 
             self.con_surrogate = con_surrogate = []
             for name, val in iteritems(cons):
-                con_surr = self.surrogate()
-                con_surrogate.use_snopt = True
-                con_surr.train(x_i_hat, val, normalize=False)
-                con_surr.y = val
-                con_surr._name = name
-                con_surr.lb_org = self.xI_lb
-                con_surr.ub_org = self.xI_ub
-                con_surrogate.append(con_surr)
+                val = np.array(val)
+                for j in range(val.shape[1]):
+                    con_surr = self.surrogate()
+                    con_surr.use_snopt = True
+                    con_surr.train(x_i_hat, val[:, j:j+1], normalize=False)
+
+                    con_surr.y = val[:, j:j+1]
+                    con_surr._name = name
+                    con_surr.lb_org = self.xI_lb
+                    con_surr.ub_org = self.xI_ub
+                    con_surr.lb = np.zeros((n_i))
+                    con_surr.ub = np.zeros((n_i))
+                    con_surrogate.append(con_surr)
 
         # Calculate intermediate statistics. This stuff used to be stored in
         # the Modelinfo object, but more convenient to store it in the
@@ -348,8 +355,9 @@ class Branch_and_Bound(Driver):
         # Randomly generate an integer point
         # TODO Generate a different random number across each dim
         #xopt = np.round(xL_iter + uniform(0,1)*(xU_iter - xL_iter)).reshape(num_des)
-        #xopt = np.round(xL_iter + np.random.random(num_des)*(xU_iter - xL_iter)).reshape(num_des)
-        xopt = 2.0*np.ones((num_des))
+        xopt = np.round(xL_iter + np.random.random(num_des)*(xU_iter - xL_iter)).reshape(num_des)
+        # Use this one for verification against matlab
+        #xopt = 2.0*np.ones((num_des))
         fopt = self.objective_callback(xopt)
         self.eflag_MINLPBB = True
         UBD = fopt
@@ -565,32 +573,13 @@ class Branch_and_Bound(Driver):
         # When run stanalone, the objective is the model objective.
         if self.standalone:
             if self.options['use_surrogate']:
-                f = obj_surrogate.predict(xI.reshape((len(xI), 1)), normalize=False)[0]
+
+                x0I_hat = (xI - self.xI_lb)/(self.xI_ub - self.xI_lb).reshape((len(xI), 1))
+
+                f = obj_surrogate.predict(x0I_hat, normalize=False)[0]
 
             else:
-                system = self.root
-                metadata = self.metadata
-
-                # Pass in new parameters
-                for var in self.dvs:
-                    i, j = self.idx_cache[var]
-                    self.set_desvar(var, xI[i:j])
-
-                update_local_meta(metadata, (self.iter_count, ))
-
-                with system._dircontext:
-                    system.solve_nonlinear(metadata=metadata)
-
-                # Get the objective function evaluations
-                for name, obj in self.get_objectives().items():
-                    f = obj
-                    break
-
-                self.con_cache = self.get_constraints()
-
-                # Record after getting obj and constraints to assure it has been
-                # gathered in MPI.
-                self.recorders.record_iteration(system, metadata)
+                raise NotImplementedError()
 
         # When run under AMEIGO, objecitve is the expected improvment
         # function with modifications to make it concave.
@@ -736,7 +725,7 @@ class Branch_and_Bound(Driver):
         x_comU = param[1]
         xhat_comL = param[2]
         xhat_comU = param[3]
-        surrogate = self.param[4]
+        surrogate = param[4]
 
         X = surrogate.X
         R_inv = surrogate.R_inv

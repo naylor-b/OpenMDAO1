@@ -45,6 +45,8 @@ class TestBranchAndBounddriver(unittest.TestCase):
 
     def test_three_bar_truss_just_integer(self):
 
+        raise unittest.SkipTest("Standalone B&B not yet supported with constraints.")
+
         prob = Problem()
         root = prob.root = Group()
 

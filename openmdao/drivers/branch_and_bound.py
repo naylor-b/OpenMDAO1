@@ -595,6 +595,7 @@ class Branch_and_Bound(Driver):
             #xval = (xI - obj_surrogate.X_mean)/obj_surrogate.X_std
             xval = (xI - obj_surrogate.lb_org.flatten())/(obj_surrogate.ub_org.flatten() - obj_surrogate.lb_org.flatten())
 
+
             NegEI = calc_conEI_norm(xval, obj_surrogate)
 
             con_surrogate = self.con_surrogate

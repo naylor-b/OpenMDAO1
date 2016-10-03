@@ -614,7 +614,7 @@ class Branch_and_Bound(Driver):
 
             f = conNegEI + P
 
-        print(xI, f)
+        # print(xI, f)
         return f
 
     def maximize_S(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):
@@ -1173,7 +1173,7 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
         SSqr = SigmaSqr*(1.0 - r.T.dot(term0) + \
         ((1.0 - one.T.dot(term0))**2)/(one.T.dot(np.dot(R_inv, one))))
 
-    if SSqr == 0.0:
+    if abs(SSqr) <= 1.0e-6:
         NegEI = 0.0
     else:
         dy = y_min - y_hat
@@ -1181,7 +1181,6 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
         ei1 = dy*(0.5+0.5*erf((1/np.sqrt(2))*(dy/np.sqrt(SSqr))))
         ei2 = np.sqrt(SSqr)*(1.0/np.sqrt(2.0*np.pi))*np.exp(-0.5*(dy**2/SSqr))
         NegEI = -(ei1 + ei2)
-
     return NegEI
 
 
@@ -1209,7 +1208,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
         gSSqr = SigmaSqr*(1.0 - r.T.dot(term0) + \
                           ((1.0 - one.T.dot(term0))**2)/(one.T.dot(np.dot(R_inv, one))))
 
-    if gSSqr == 0:
+    if abs(gSSqr) <= 1.0e-6:
         EV = 0.0
     else:
         # Calculate expected violation

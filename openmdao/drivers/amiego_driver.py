@@ -331,6 +331,7 @@ class AMIEGO_driver(Driver):
 
             if disp:
                 print("EGOLF-Iter: %d" % self.iter_count)
+                print("The best solution so far: yopt = %0.4f" % best_obj)
 
             tot_newpt_added += c_end - c_start
             if tot_newpt_added != tot_pt_prev:

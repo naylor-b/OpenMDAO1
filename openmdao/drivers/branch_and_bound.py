@@ -470,7 +470,7 @@ class Branch_and_Bound(Driver):
                             LBD_NegConEI = np.inf
                         dis_flag[ii] = 'F'
                     else:
-                        LBD_NegConEI = (NegEI/(1.0 + np.sum(EV)))
+                        LBD_NegConEI = max(NegEI/(1.0 + np.sum(EV)),LBD_prev)
 
                     #--------------------------------------------------------------
                     # Step 5: Store any new node inside the active set that has LBD
@@ -495,7 +495,7 @@ class Branch_and_Bound(Driver):
                 #Update the active set whenever better solution found
                 if floc_iter < UBD:
                     UBD = floc_iter
-                    fopt = UBD
+                    fopt = floc_iter
                     xopt = xloc_iter.copy().reshape(num_des)
 
                     # Update active set: Removes the current node
@@ -549,6 +549,7 @@ class Branch_and_Bound(Driver):
                 if disp:
                     print("="*85)
                     print("Terminating! No new node to explore.")
+                    print "Max Node", node_num
 
         # Finalize by putting optimal value back into openMDAO
         if self.standalone:
@@ -606,6 +607,7 @@ class Branch_and_Bound(Driver):
                     EV[mm] = calc_conEV_norm(xval, con_surrogate[mm])
 
             conNegEI = NegEI/(1.0+np.sum(EV))
+
             P = 0.0
 
             if self.options['concave_EI']: #Locally makes ei concave to get rid of flat objective space
@@ -693,10 +695,16 @@ class Branch_and_Bound(Driver):
                                                 )#sens=self.calc_SSqr_convex_grad)
 
             Neg_sU = opt_f
-            if not succ_flag:
-                eflag_sU = False
-            else:
-                eflag_sU = True
+            # if not succ_flag:
+            #     eflag_sU = False
+            # else:
+            #     eflag_sU = True
+            eflag_sU = True
+            tol = self.options['con_tol']
+            for ii in range(2*n):
+                if np.dot(Ain_hat[ii, :], opt_x) > (bin_hat[ii ,0] + tol):
+                    eflag_sU = False
+                    break
 
         else:
             optResult = minimize(self.calc_SSqr_convex_old, x0,
@@ -833,21 +841,28 @@ class Branch_and_Bound(Driver):
         rhat_L = xhat_comL[k:]
         rhat_U = xhat_comU[k:]
 
-        term0 = np.dot(R_inv, r)
+        dr_drhat = np.zeros([n, n])
+        for ii in range(n):
+            dr_drhat[ii, ii] = rU[ii, 0] - rL[ii, 0] #This is nxn matrix
 
-        dterm1a = (rhat.T.dot(R_inv) + rhat.T.dot(R_inv.T))
-        dterm1b = 2.0*((1.0 - one.T.dot(term0))*np.sum(R_inv, 0)/(one.T.dot(np.dot(R_inv, one))))
-        dterm1 = SigmaSqr*(dterm1a + dterm1b)
+        term0 = np.dot(R_inv, r) #This should be nx1 vector
+        term1 = ((1.0 - one.T.dot(term0))/(one.T.dot(np.dot(R_inv, one))))*np.dot(R_inv,one) #This should be nx1 vector
+        term = 2.0*SigmaSqr*(term0 + term1) #This should be nx1 vector
+        # dterm1a = (rhat.T.dot(R_inv) + rhat.T.dot(R_inv.T))
+        # dterm1b = 2.0*((1.0 - one.T.dot(term0))*np.sum(R_inv, 0)/(one.T.dot(np.dot(R_inv, one))))
+        # dterm1 = SigmaSqr*(dterm1a + dterm1b)
 
-        dterm2 = alpha*(2.0*rhat - rhat_L - rhat_U)
+        dterm1 = np.dot(dr_drhat,term) #This should be nx1 vector
+        dterm2 = alpha*(2.0*rhat - rhat_L - rhat_U) #This should be nx1 vector
 
-        dobj_dr = dterm1 + dterm2.T
+        dobj_dr = (dterm1 + dterm2).T #This should be 1xn vector
 
         # Objectives
         sens_dict = OrderedDict()
         sens_dict['obj'] = OrderedDict()
         sens_dict['obj']['x'] = np.zeros((1, nn))
-        sens_dict['obj']['x'][:, k:] = dobj_dr*(rU - rL).T
+        # sens_dict['obj']['x'][:, k:] = dobj_dr*(rU - rL).T
+        sens_dict['obj']['x'][:, k:] = dobj_dr
 
         # Constraints
         Ain_hat = self.Ain_hat
@@ -895,10 +910,16 @@ class Branch_and_Bound(Driver):
                                                 jac=Ain_hat)
 
             yL = opt_f
-            if not succ_flag:
-                eflag_yL = False
-            else:
-                eflag_yL = True
+            # if not succ_flag:
+            #     eflag_yL = False
+            # else:
+            #     eflag_yL = True
+            eflag_yL = True
+            tol = self.options['con_tol']
+            for ii in range(2*n):
+                if np.dot(Ain_hat[ii, :], opt_x) > (bin_hat[ii, 0] + tol):
+                    eflag_yL = False
+                    break
 
         else:
             optResult = minimize(self.calc_y_hat_convex_old, x0,
@@ -1085,41 +1106,21 @@ def lin_underestimator(lb, ub, surrogate):
 
     for i in range(n):
         #T1: Linearize under-estimator of ln[r_i] = a1[i,i]*r[i] + b1[i]
-        if ub_r[i] < 1.0e-323 or (ub_r[i] - lb_r[i]) < 1.0e-308:
-            # a1[i,i] = 0.
-            # b1[i] = -np.inf
-            a1_hat[i,i] = 0.0 #a1[i,i]*(ub_r[i]-lb_r[i])
-            b1_hat[i] = -np.inf #a1[i,i]*lb_r[i] + b1[i]
-        elif ub_r[i] <= lb_r[i]:
-            # a1[i,i] = 0.0
-            # b1[i] = np.log(ub_r[i])
-            a1_hat[i,i] = 0.0 #a1[i,i]*(ub_r[i]-lb_r[i])
-            b1_hat[i] = np.log(ub_r[i]) #a1[i,i]*lb_r[i] + b1[i]
-        elif lb_r[i] < 1.0e-323:
-            # a1[i,i] = np.inf
-            # b1[i] = -np.inf
-            a1_hat[i,i] = np.inf #a1[i,i]*(ub_r[i]-lb_r[i])
-            b1_hat[i] = -np.inf #b1[i]
+        if ub_r[i] <= lb_r[i]:
+            a1[i,i] = 0.0
         else:
             a1[i,i] = ((np.log(ub_r[i]) - np.log(lb_r[i]))/(ub_r[i] - lb_r[i]))
-            b1[i] = np.log(ub_r[i]) - a1[i,i]*ub_r[i]
-            a1_hat[i,i] = a1[i,i]*(ub_r[i]-lb_r[i])
-            b1_hat[i] = a1[i,i]*lb_r[i] + b1[i]
+
+        b1[i] = np.log(ub_r[i]) - a1[i,i]*ub_r[i]
+        a1_hat[i,i] = a1[i,i]*(ub_r[i]-lb_r[i])
+        b1_hat[i] = a1[i,i]*lb_r[i] + b1[i]
 
         #T3: Linearize under-estimator of -ln[r_i] = a3[i,i]*r[i] + b3[i]
-        if ub_r[i] < 1.0e-323:
-            a3_hat[i,i] = 0.0
-            b3_hat[i] = np.inf
-        else:
-            r_m_i = (lb_r[i] + ub_r[i])/2.0
-            if r_m_i < 1e-308:
-                a3_hat[i,i] = -np.inf
-                b3_hat[i] = np.inf
-            else:
-                a3[i,i] = -1.0/r_m_i
-                b3[i] = -np.log(r_m_i) - a3[i,i]*r_m_i
-                a3_hat[i,i] = a3[i,i]*(ub_r[i] - lb_r[i])
-                b3_hat[i] = a3[i,i]*lb_r[i] + b3[i]
+        r_m_i = (lb_r[i] + ub_r[i])/2.0
+        a3[i,i] = -1.0/r_m_i
+        b3[i] = -np.log(r_m_i) - a3[i,i]*r_m_i
+        a3_hat[i,i] = a3[i,i]*(ub_r[i] - lb_r[i])
+        b3_hat[i] = a3[i,i]*lb_r[i] + b3[i]
 
         for h in range(k):
             #T2: Linearize under-estimator of thetas_h*(x_h - X_h_i)^2 = a4[i,h]*x_h[h] + b4[i,h]
@@ -1173,7 +1174,7 @@ def calc_conEI_norm(xval, obj_surrogate, SSqr=None, y_hat=None):
         SSqr = SigmaSqr*(1.0 - r.T.dot(term0) + \
         ((1.0 - one.T.dot(term0))**2)/(one.T.dot(np.dot(R_inv, one))))
 
-    if abs(SSqr) <= 1.0e-6:
+    if abs(SSqr) == 0.0:
         NegEI = 0.0
     else:
         dy = y_min - y_hat
@@ -1208,7 +1209,7 @@ def calc_conEV_norm(xval, con_surrogate, gSSqr=None, g_hat=None):
         gSSqr = SigmaSqr*(1.0 - r.T.dot(term0) + \
                           ((1.0 - one.T.dot(term0))**2)/(one.T.dot(np.dot(R_inv, one))))
 
-    if abs(gSSqr) <= 1.0e-6:
+    if abs(gSSqr) == 0.0:
         EV = 0.0
     else:
         # Calculate expected violation

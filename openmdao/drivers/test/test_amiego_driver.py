@@ -34,7 +34,7 @@ class TestAMIEGOdriver(unittest.TestCase):
 
         prob.driver.add_objective('f')
 
-        prob.driver.sampling = {'xI' : np.array([[0.0], [.33], [.66], [1.0]])}
+        prob.driver.sampling = {'xI' : np.array([[0.0], [.33], [.66]])}
 
         prob.setup(check=False)
         prob.run()

@@ -368,7 +368,6 @@ class AMIEGO_driver(Driver):
                     # point allowed within the pescribed hypersphere of any
                     # existing point
                     rad = 0.5
-                    cc = 0
                     for ii in range(len(x_i)):
                         dist = np.sum((x_i[ii] - x0I)**2)**0.5
                         if dist <= rad:

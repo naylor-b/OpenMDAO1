@@ -131,8 +131,6 @@ class Branch_and_Bound(Driver):
                        'messages.')
         opt.add_option('ftol', 1.0e-4, lower=0.0,
                        desc='Absolute tolerance for sub-optimizations.')
-        opt.add_option('integer_tol', 1.0e-6, lower=0.0,
-                       desc='Integer Rounding Tolerance.')
         opt.add_option('use_surrogate', False,
                        desc='Use surrogate model for the optimization. Training '
                        'data must be supplied.')
@@ -150,11 +148,11 @@ class Branch_and_Bound(Driver):
         self.obj_surrogate = None
         self.con_surrogate = []
         self.record_name = 'B&B'
-        self.con_cache = None
 
-        # Set to True if we have found a minimum.
+        # Amiego will set this to True if we have found a minimum.
         self.eflag_MINLPBB = False
 
+        # Amiego retrieves optimal design and optimum upon completion.
         self.xopt = None
         self.fopt = None
 
@@ -206,7 +204,6 @@ class Branch_and_Bound(Driver):
         atol = self.options['atol']
         active_tol = self.options['active_tol']
         ftol = self.options['ftol']
-        integer_tol = self.options['integer_tol']
         disp = self.options['disp']
         local_search = self.options['local_search']
 
@@ -284,7 +281,6 @@ class Branch_and_Bound(Driver):
                     con_surr.train(x_i_hat, val[:, j:j+1], normalize=False)
 
                     con_surr.y = val[:, j:j+1]
-                    con_surr._name = name
                     con_surr.lb_org = self.xI_lb
                     con_surr.ub_org = self.xI_ub
                     con_surr.lb = np.zeros((n_i))

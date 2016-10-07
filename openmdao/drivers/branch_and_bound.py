@@ -29,6 +29,7 @@ from scipy.special import erf
 from openmdao.core.driver import Driver
 from openmdao.surrogate_models.kriging import KrigingSurrogate
 from openmdao.test.util import set_pyoptsparse_opt
+from openmdao.util.concurrent import concurrent_eval_lb
 from openmdao.util.record_util import create_local_meta, update_local_meta
 
 # check that pyoptsparse is installed
@@ -202,10 +203,8 @@ class Branch_and_Bound(Driver):
         con_surrogate = self.con_surrogate
         n_i = self.size
         atol = self.options['atol']
-        active_tol = self.options['active_tol']
         ftol = self.options['ftol']
         disp = self.options['disp']
-        local_search = self.options['local_search']
 
         # Metadata Setup
         self.metadata = create_local_meta(None, self.record_name)
@@ -368,153 +367,16 @@ class Branch_and_Bound(Driver):
 
         while not terminate:
 
-            # --- Start function
+            args = (xL_iter, xU_iter, par_node, LBD_prev, LBD, UBD, fopt,
+                    xopt, node_num)
+            cases = [(args, None)]
+            results = concurrent_eval_lb(self.evaluate_node, cases,
+                                         None, broadcast=True)
+            result = results[0][0]
+            UBD, fopt, xopt, new_nodes = result
 
-            xloc_iter = np.round(xL_iter + 0.49*(xU_iter - xL_iter)) #Keep this to 0.49 to always round towards bottom-left
-            floc_iter = self.objective_callback(xloc_iter)
-            efloc_iter = True
-            if local_search:
-                if np.abs(floc_iter) > active_tol: #Perform at non-flat starting point
-                    #--------------------------------------------------------------
-                    #Step 2: Obtain a local solution
-                    #--------------------------------------------------------------
-                    # Using a gradient-based method here.
-                    # TODO: Make it more pluggable.
-                    # TODO: Use SNOPT [Not a priority-Not going to use local search anytime soon]
-                    xC_iter = xloc_iter
-                    bnds = [(xL_iter[ii], xU_iter[ii]) for ii in range(num_des)]
-
-                    optResult = minimize(self.objective_callback, xC_iter,
-                                         method='SLSQP', bounds=bnds,
-                                         options={'ftol' : ftol})
-
-                    xloc_iter = np.round(optResult.x.reshape(num_des))
-                    floc_iter = self.objective_callback(xloc_iter)
-
-                    if not optResult.success:
-                        efloc_iter = False
-                        floc_iter = np.inf
-                    else:
-                        efloc_iter = True
-
-            #--------------------------------------------------------------
-            # Step 3: Partition the current rectangle as per the new
-            # branching scheme.
-            #--------------------------------------------------------------
-            child_info = np.zeros([2, 3])
-            dis_flag = [' ', ' ']
-
-            # Choose
-            l_iter = (xU_iter - xL_iter).argmax()
-
-            if xloc_iter[l_iter]<xU_iter[l_iter]:
-                delta = 0.5 #0<delta<1
-            else:
-                delta = -0.5 #-1<delta<0
-            for ii in range(2):
-                lb = xL_iter.copy()
-                ub = xU_iter.copy()
-                if ii == 0:
-                    ub[l_iter] = np.floor(xloc_iter[l_iter]+delta)
-                elif ii == 1:
-                    lb[l_iter] = np.ceil(xloc_iter[l_iter]+delta)
-
-                if np.linalg.norm(ub - lb) > active_tol: #Not a point
-                    #--------------------------------------------------------------
-                    # Step 4: Obtain an LBD of f in the newly created node
-                    #--------------------------------------------------------------
-                    S4_fail = False
-                    x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, obj_surrogate)
-                    sU, eflag_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat,
-                                                   obj_surrogate)
-
-                    if eflag_sU:
-                        yL, eflag_yL = self.minimize_y(x_comL, x_comU, Ain_hat, bin_hat,
-                                                       obj_surrogate)
-
-                        if eflag_yL:
-                            NegEI = calc_conEI_norm([], obj_surrogate, SSqr=sU, y_hat=yL)
-
-                            M = len(self.con_surrogate)
-                            EV = np.zeros([M, 1])
-
-                            # Expected constraint violation
-                            for mm in range(M):
-                                x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, con_surrogate[mm])
-                                sU_g, eflag_sU_g = self.maximize_S(x_comL, x_comU, Ain_hat,
-                                                                   bin_hat, con_surrogate[mm])
-
-                                if eflag_sU_g:
-                                    yL_g, eflag_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
-                                                                       bin_hat, con_surrogate[mm])
-                                    if eflag_yL_g:
-                                        EV[mm] = calc_conEV_norm([],
-                                                                 con_surrogate[mm],
-                                                                 gSSqr=-sU_g,
-                                                                 g_hat=yL_g)
-                                    else:
-                                        S4_fail = True
-                                        break
-                                else:
-                                    S4_fail = True
-                                    break
-
-                        else:
-                            S4_fail = True
-                    else:
-                        S4_fail = True
-
-                    # Convex approximation failed!
-                    if S4_fail:
-                        if efloc_iter:
-                            LBD_NegConEI = LBD_prev
-                        else:
-                            LBD_NegConEI = np.inf
-                        dis_flag[ii] = 'F'
-                    else:
-                        LBD_NegConEI = max(NegEI/(1.0 + np.sum(EV)), LBD_prev)
-
-                    #--------------------------------------------------------------
-                    # Step 5: Store any new node inside the active set that has LBD
-                    # lower than the UBD.
-                    #--------------------------------------------------------------
-
-                    if LBD_NegConEI < UBD - 1.0e-6:
-                        node_num += 1
-                        new_node = [node_num, lb, ub, LBD_NegConEI, floc_iter]
-                        active_set.append(new_node)
-                        child_info[ii] = np.array([node_num, LBD_NegConEI, floc_iter])
-                    else:
-                        child_info[ii] = np.array([par_node, LBD_NegConEI, floc_iter])
-                        dis_flag[ii] = 'X' #Flag for child created but not added to active set (fathomed)
-                else:
-                    if ii == 1:
-                        xloc_iter = ub
-                        floc_iter = self.objective_callback(xloc_iter)
-                    child_info[ii] = np.array([par_node, np.inf, floc_iter])
-                    dis_flag[ii] = 'x' #Flag for No child created
-
-                #Update the active set whenever better solution found
-                if floc_iter < UBD:
-                    UBD = floc_iter
-                    fopt = floc_iter
-                    xopt = xloc_iter.copy().reshape(num_des)
-
-            if disp:
-                if (self.iter_count-1) % 25 == 0:
-                    # Display output in a tabular format
-                    print("="*85)
-                    print("%19s%12s%14s%21s" % ("Global", "Parent", "Child1", "Child2"))
-                    template = "%s%8s%10s%8s%9s%11s%10s%11s%11s"
-                    print(template % ("Iter", "LBD", "UBD", "Node", "Node1", "LBD1",
-                                      "Node2", "LBD2", "Flocal"))
-                    print("="*85)
-                template = "%3d%10.2f%10.2f%6d%8d%1s%13.2f%8d%1s%13.2f%9.2f"
-                print(template % (self.iter_count, LBD, UBD, par_node, child_info[0, 0],
-                                  dis_flag[0], child_info[0, 1], child_info[1, 0],
-                                  dis_flag[1], child_info[1, 1], child_info[1, 2]))
-
-            # --- End function
+            active_set.extend(new_nodes)
+            node_num += len(new_nodes)
 
             # Update active set: Removes all nodes worse than the best new node.
             if len(active_set) >= 1:
@@ -569,6 +431,166 @@ class Branch_and_Bound(Driver):
         else:
             self.xopt = xopt
             self.fopt = fopt
+
+    def evaluate_node(self, xL_iter, xU_iter, par_node, LBD_prev, LBD, UBD, fopt, xopt, node_num):
+        """ Branch and Bound step on a single node. This function
+        encapsulates the portion of the code that runs in parallel."""
+
+        active_tol = self.options['active_tol']
+        local_search = self.options['local_search']
+        disp = self.options['disp']
+        obj_surrogate = self.obj_surrogate
+        con_surrogate = self.con_surrogate
+        num_des = len(self.xI_lb)
+
+        new_nodes = []
+
+        #Keep this to 0.49 to always round towards bottom-left
+        xloc_iter = np.round(xL_iter + 0.49*(xU_iter - xL_iter))
+        floc_iter = self.objective_callback(xloc_iter)
+
+        efloc_iter = True
+        if local_search:
+            if np.abs(floc_iter) > active_tol: #Perform at non-flat starting point
+                #--------------------------------------------------------------
+                #Step 2: Obtain a local solution
+                #--------------------------------------------------------------
+                # Using a gradient-based method here.
+                # TODO: Make it more pluggable.
+                # TODO: Use SNOPT [Not a priority-Not going to use local search anytime soon]
+                xC_iter = xloc_iter
+                bnds = [(xL_iter[ii], xU_iter[ii]) for ii in range(num_des)]
+
+                optResult = minimize(self.objective_callback, xC_iter,
+                                     method='SLSQP', bounds=bnds,
+                                     options={'ftol' : ftol})
+
+                xloc_iter = np.round(optResult.x.reshape(num_des))
+                floc_iter = self.objective_callback(xloc_iter)
+
+                if not optResult.success:
+                    efloc_iter = False
+                    floc_iter = np.inf
+                else:
+                    efloc_iter = True
+
+        #--------------------------------------------------------------
+        # Step 3: Partition the current rectangle as per the new
+        # branching scheme.
+        #--------------------------------------------------------------
+        child_info = np.zeros([2, 3])
+        dis_flag = [' ', ' ']
+
+        # Choose
+        l_iter = (xU_iter - xL_iter).argmax()
+
+        if xloc_iter[l_iter]<xU_iter[l_iter]:
+            delta = 0.5 #0<delta<1
+        else:
+            delta = -0.5 #-1<delta<0
+        for ii in range(2):
+            lb = xL_iter.copy()
+            ub = xU_iter.copy()
+            if ii == 0:
+                ub[l_iter] = np.floor(xloc_iter[l_iter]+delta)
+            elif ii == 1:
+                lb[l_iter] = np.ceil(xloc_iter[l_iter]+delta)
+
+            if np.linalg.norm(ub - lb) > active_tol: #Not a point
+                #--------------------------------------------------------------
+                # Step 4: Obtain an LBD of f in the newly created node
+                #--------------------------------------------------------------
+                S4_fail = False
+                x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, obj_surrogate)
+                sU, eflag_sU = self.maximize_S(x_comL, x_comU, Ain_hat, bin_hat,
+                                               obj_surrogate)
+
+                if eflag_sU:
+                    yL, eflag_yL = self.minimize_y(x_comL, x_comU, Ain_hat, bin_hat,
+                                                   obj_surrogate)
+
+                    if eflag_yL:
+                        NegEI = calc_conEI_norm([], obj_surrogate, SSqr=sU, y_hat=yL)
+
+                        M = len(self.con_surrogate)
+                        EV = np.zeros([M, 1])
+
+                        # Expected constraint violation
+                        for mm in range(M):
+                            x_comL, x_comU, Ain_hat, bin_hat = gen_coeff_bound(lb, ub, con_surrogate[mm])
+                            sU_g, eflag_sU_g = self.maximize_S(x_comL, x_comU, Ain_hat,
+                                                               bin_hat, con_surrogate[mm])
+
+                            if eflag_sU_g:
+                                yL_g, eflag_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
+                                                                   bin_hat, con_surrogate[mm])
+                                if eflag_yL_g:
+                                    EV[mm] = calc_conEV_norm([],
+                                                             con_surrogate[mm],
+                                                             gSSqr=-sU_g,
+                                                             g_hat=yL_g)
+                                else:
+                                    S4_fail = True
+                                    break
+                            else:
+                                S4_fail = True
+                                break
+
+                    else:
+                        S4_fail = True
+                else:
+                    S4_fail = True
+
+                # Convex approximation failed!
+                if S4_fail:
+                    if efloc_iter:
+                        LBD_NegConEI = LBD_prev
+                    else:
+                        LBD_NegConEI = np.inf
+                    dis_flag[ii] = 'F'
+                else:
+                    LBD_NegConEI = max(NegEI/(1.0 + np.sum(EV)), LBD_prev)
+
+                #--------------------------------------------------------------
+                # Step 5: Store any new node inside the active set that has LBD
+                # lower than the UBD.
+                #--------------------------------------------------------------
+
+                if LBD_NegConEI < UBD - 1.0e-6:
+                    new_node = [node_num, lb, ub, LBD_NegConEI, floc_iter]
+                    new_nodes.append(new_node)
+                    child_info[ii] = np.array([node_num, LBD_NegConEI, floc_iter])
+                else:
+                    child_info[ii] = np.array([par_node, LBD_NegConEI, floc_iter])
+                    dis_flag[ii] = 'X' #Flag for child created but not added to active set (fathomed)
+            else:
+                if ii == 1:
+                    xloc_iter = ub
+                    floc_iter = self.objective_callback(xloc_iter)
+                child_info[ii] = np.array([par_node, np.inf, floc_iter])
+                dis_flag[ii] = 'x' #Flag for No child created
+
+            #Update the active set whenever better solution found
+            if floc_iter < UBD:
+                UBD = floc_iter
+                fopt = floc_iter
+                xopt = xloc_iter.copy().reshape(num_des)
+
+        if disp:
+            if (self.iter_count-1) % 25 == 0:
+                # Display output in a tabular format
+                print("="*85)
+                print("%19s%12s%14s%21s" % ("Global", "Parent", "Child1", "Child2"))
+                template = "%s%8s%10s%8s%9s%11s%10s%11s%11s"
+                print(template % ("Iter", "LBD", "UBD", "Node", "Node1", "LBD1",
+                                  "Node2", "LBD2", "Flocal"))
+                print("="*85)
+            template = "%3d%10.2f%10.2f%6d%8d%1s%13.2f%8d%1s%13.2f%9.2f"
+            print(template % (self.iter_count, LBD, UBD, par_node, child_info[0, 0],
+                              dis_flag[0], child_info[0, 1], child_info[1, 0],
+                              dis_flag[1], child_info[1, 1], child_info[1, 2]))
+
+        return UBD, fopt, xopt, new_nodes
 
     def objective_callback(self, xI):
         """ Callback for main problem evaluation."""

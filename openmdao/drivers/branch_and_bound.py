@@ -367,6 +367,9 @@ class Branch_and_Bound(Driver):
         active_set = []
 
         while not terminate:
+
+            # --- Start function
+
             xloc_iter = np.round(xL_iter + 0.49*(xU_iter - xL_iter)) #Keep this to 0.49 to always round towards bottom-left
             floc_iter = self.objective_callback(xloc_iter)
             efloc_iter = True
@@ -398,9 +401,12 @@ class Branch_and_Bound(Driver):
             # Step 3: Partition the current rectangle as per the new
             # branching scheme.
             #--------------------------------------------------------------
-            child_info = np.zeros([2,3])
-            dis_flag = [' ',' ']
+            child_info = np.zeros([2, 3])
+            dis_flag = [' ', ' ']
+
+            # Choose
             l_iter = (xU_iter - xL_iter).argmax()
+
             if xloc_iter[l_iter]<xU_iter[l_iter]:
                 delta = 0.5 #0<delta<1
             else:
@@ -466,7 +472,7 @@ class Branch_and_Bound(Driver):
                             LBD_NegConEI = np.inf
                         dis_flag[ii] = 'F'
                     else:
-                        LBD_NegConEI = max(NegEI/(1.0 + np.sum(EV)),LBD_prev)
+                        LBD_NegConEI = max(NegEI/(1.0 + np.sum(EV)), LBD_prev)
 
                     #--------------------------------------------------------------
                     # Step 5: Store any new node inside the active set that has LBD
@@ -494,11 +500,6 @@ class Branch_and_Bound(Driver):
                     fopt = floc_iter
                     xopt = xloc_iter.copy().reshape(num_des)
 
-                    # Update active set: Removes the current node
-                    if len(active_set) >= 1:
-                        active_set = update_active_set(active_set, UBD)
-
-
             if disp:
                 if (self.iter_count-1) % 25 == 0:
                     # Display output in a tabular format
@@ -512,6 +513,12 @@ class Branch_and_Bound(Driver):
                 print(template % (self.iter_count, LBD, UBD, par_node, child_info[0, 0],
                                   dis_flag[0], child_info[0, 1], child_info[1, 0],
                                   dis_flag[1], child_info[1, 1], child_info[1, 2]))
+
+            # --- End function
+
+            # Update active set: Removes all nodes worse than the best new node.
+            if len(active_set) >= 1:
+                active_set = update_active_set(active_set, UBD)
 
             # Termination
             if len(active_set) >= 1:

@@ -367,6 +367,8 @@ class Branch_and_Bound(Driver):
 
         while not terminate:
 
+            # Branch and Bound evaluation of a set of nodes, starting with the initial one.
+            # When executed in serial, only a single node is evaluted.
             args = (xL_iter, xU_iter, par_node, LBD_prev, LBD, UBD, fopt,
                     xopt, node_num)
             cases = [(args, None)]

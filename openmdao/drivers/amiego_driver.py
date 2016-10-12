@@ -166,6 +166,16 @@ class AMIEGO_driver(Driver):
         self.cont_opt.set_root(pathname, root)
         self.minlp.set_root(pathname, root)
 
+    def get_req_procs(self):
+        """
+        Returns
+        -------
+        tuple
+            A tuple of the form (min_procs, max_procs), indicating the
+            min and max processors usable by this `Driver`.
+        """
+        return self.minlp.get_req_procs()
+
     def run(self, problem):
         """Execute the AMIEGO driver.
 

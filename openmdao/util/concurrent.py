@@ -1,5 +1,11 @@
 
+import os
 import traceback
+
+trace = os.environ.get('OPENMDAO_TRACE')
+if trace:
+    from openmdao.core.mpi_wrap import debug
+
 
 def concurrent_eval_lb(func, cases, comm, broadcast=False):
     """
@@ -28,9 +34,17 @@ def concurrent_eval_lb(func, cases, comm, broadcast=False):
     """
     if comm is not None:
         if comm.rank == 0:  # master rank
+            if trace:
+                debug('Running Master Rank')
             results = _concurrent_eval_lb_master(cases, comm)
+            if trace:
+                debug('Master Rank Complete')
         else:
+            if trace:
+                debug('Running Worker Rank')
             results = _concurrent_eval_lb_worker(func, comm)
+            if trace:
+                debug('Running Worker Complete')
 
         if broadcast:
             results = comm.bcast(results, root=0)
@@ -71,7 +85,11 @@ def _concurrent_eval_lb_master(cases, comm):
         except StopIteration:
             break
 
+        if trace:
+            debug('Master sending case', i)
         comm.send(case, i, tag=1)
+        if trace:
+            debug('Master sent case', i)
         sent += 1
 
     # send the rest of the cases
@@ -108,7 +126,11 @@ def _concurrent_eval_lb_master(cases, comm):
 def _concurrent_eval_lb_worker(func, comm):
     while True:
         # wait on a case from the master
+        if trace:
+            debug('Worker Waiting on Case')
         args, kwargs = comm.recv(source=0, tag=1)
+        if trace:
+            debug('Worker Case Received')
 
         if args is None: # we're done
             break

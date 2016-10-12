@@ -27,6 +27,7 @@ from scipy.optimize import minimize
 from scipy.special import erf
 
 from openmdao.core.driver import Driver
+from openmdao.core.mpi_wrap import debug
 from openmdao.surrogate_models.kriging import KrigingSurrogate
 from openmdao.test.util import set_pyoptsparse_opt
 from openmdao.util.concurrent import concurrent_eval_lb
@@ -36,6 +37,23 @@ from openmdao.util.record_util import create_local_meta, update_local_meta
 # if it is, try to use SNOPT but fall back to SLSQP
 OPT, OPTIMIZER = set_pyoptsparse_opt('SNOPT')
 
+class DummyComm(object):
+    """ Do-nothing communicator for pyoptsparse so that we can run it
+    independently on each process."""
+
+    rank = 0
+
+    def gather(self, name, root=None):
+        """ Signature for gather"""
+        return name
+
+    def bcast(self, name, root=None):
+        """ Signature for bcast"""
+        return name
+
+    def recv(self, name, tag=None):
+        """ Signature for recv"""
+        return name
 
 def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
               sens=None, jac=None):
@@ -47,7 +65,7 @@ def snopt_opt(objfun, desvar, lb, ub, ncon, title=None, options=None,
     else:
         raise(RuntimeError, 'Need pyoptsparse to run the SNOPT sub optimizer.')
 
-    opt_prob = Optimization(title, objfun)
+    opt_prob = Optimization(title, objfun, comm=DummyComm())
 
     ndv = len(desvar)
 
@@ -190,6 +208,16 @@ class Branch_and_Bound(Driver):
             i, j = self.idx_cache[var]
             self.xI_lb[i:j] = dv_dict[var]['lower']
             self.xI_ub[i:j] = dv_dict[var]['upper']
+
+    def get_req_procs(self):
+        """
+        Returns
+        -------
+        tuple
+            A tuple of the form (min_procs, max_procs), indicating the
+            min and max processors usable by this `Driver`.
+        """
+        return (1, 10000)
 
     def run(self, problem):
         """Execute the Branch_and_Bound method.
@@ -365,20 +393,40 @@ class Branch_and_Bound(Driver):
         # Each node is a list.
         active_set = []
 
+        # Number of nodes to evaluate concurrently
+        comm = problem.root.comm
+        n_proc = comm.size - 1
+        if n_proc < 2:
+            comm = None
+            n_proc = 1
+
+        # Initial node. This is the data structure we pass into the
+        # concurrent evaluator. TODO: wonder if we can clean this up.
+        args = [(xL_iter, xU_iter, par_node, LBD_prev, LBD, UBD, fopt,
+                xopt, node_num)]
+
         while not terminate:
 
             # Branch and Bound evaluation of a set of nodes, starting with the initial one.
             # When executed in serial, only a single node is evaluted.
-            args = (xL_iter, xU_iter, par_node, LBD_prev, LBD, UBD, fopt,
-                    xopt, node_num)
-            cases = [(args, None)]
+            cases = [(arg, None) for arg in args]
             results = concurrent_eval_lb(self.evaluate_node, cases,
-                                         None, broadcast=True)
-            result = results[0][0]
-            UBD, fopt, xopt, new_nodes = result
+                                         comm, broadcast=True)
 
-            active_set.extend(new_nodes)
-            node_num += len(new_nodes)
+            # Put all the new nodes into active set.
+            for result in results:
+                new_UBD, new_fopt, new_xopt, new_nodes = result[0]
+
+                # Save stats for the best case.
+                if new_UBD < UBD:
+                    UBD = new_UBD
+                    fopt = new_fopt
+                    xopt = new_xopt
+
+                # TODO: Should we extend the active set with all the cases we
+                # ran, or just the best one. All for now.
+                active_set.extend(new_nodes)
+                node_num += len(new_nodes)
 
             # Update active set: Removes all nodes worse than the best new node.
             if len(active_set) >= 1:
@@ -388,29 +436,39 @@ class Branch_and_Bound(Driver):
             if len(active_set) >= 1:
                 # Update LBD and select the current rectangle
 
-                # a. Set LBD as lowest in the active set
-                all_LBD = [item[3] for item in active_set]
-                LBD = min(all_LBD)
-                ind_LBD = all_LBD.index(LBD)
-                LBD_prev = LBD
+                args = []
 
-                # b. Select the lowest LBD node as the current node
-                par_node, xL_iter, xU_iter, _, _ = active_set[ind_LBD]
-                self.iter_count += 1
+                # Grab the best nodes, as many as we have processors.
+                n_nodes = np.min((n_proc, len(active_set)))
+                for j in range(n_nodes):
 
-                # c. Delete the selected node from the Active set of nodes
-                del active_set[ind_LBD]
+                    # a. Set LBD as lowest in the active set
+                    all_LBD = [item[3] for item in active_set]
+                    LBD = min(all_LBD)
 
-                #--------------------------------------------------------------
-                #Step 7: Check for convergence
-                #--------------------------------------------------------------
-                diff = np.abs(UBD - LBD)
-                if diff < atol:
-                    terminate = True
-                    if disp:
-                        print("="*85)
-                        print("Terminating! Absolute difference between the upper " + \
-                              "and lower bound is below the tolerence limit.")
+                    ind_LBD = all_LBD.index(LBD)
+                    LBD_prev = LBD
+
+                    # b. Select the lowest LBD node as the current node
+                    par_node, xL_iter, xU_iter, _, _ = active_set[ind_LBD]
+                    self.iter_count += 1
+
+                    args.append((xL_iter, xU_iter, par_node, LBD_prev, LBD, UBD, fopt,
+                                 xopt, node_num))
+
+                    # c. Delete the selected node from the Active set of nodes
+                    del active_set[ind_LBD]
+
+                    #--------------------------------------------------------------
+                    #Step 7: Check for convergence
+                    #--------------------------------------------------------------
+                    diff = np.abs(UBD - LBD)
+                    if diff < atol:
+                        terminate = True
+                        if disp:
+                            print("="*85)
+                            print("Terminating! Absolute difference between the upper " + \
+                                  "and lower bound is below the tolerence limit.")
             else:
                 terminate = True
                 if disp:
@@ -490,6 +548,7 @@ class Branch_and_Bound(Driver):
             delta = 0.5 #0<delta<1
         else:
             delta = -0.5 #-1<delta<0
+
         for ii in range(2):
             lb = xL_iter.copy()
             ub = xU_iter.copy()

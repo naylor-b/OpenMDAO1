@@ -15,7 +15,7 @@ July, 2016
 Implemented in OpenMDAO, Aug 2016, Kenneth T. Moore
 """
 
-# from __future__ import print_function
+from __future__ import print_function
 
 from collections import OrderedDict
 from six import iteritems
@@ -474,7 +474,7 @@ class Branch_and_Bound(Driver):
                 if disp:
                     print("="*85)
                     print("Terminating! No new node to explore.")
-                    print "Max Node", node_num
+                    print("Max Node", node_num)
 
         # Finalize by putting optimal value back into openMDAO
         if self.standalone:
@@ -813,43 +813,6 @@ class Branch_and_Bound(Driver):
         sU = - Neg_sU
         return sU, eflag_sU
 
-    def calc_SSqr_convex_old(self, x_com, *param):
-        """ Callback function for minimization of mean squared error."""
-
-        x_comL = param[0]
-        x_comU = param[1]
-        xhat_comL = param[2]
-        xhat_comU = param[3]
-        surrogate = param[4]
-
-        X = surrogate.X
-        R_inv = surrogate.R_inv
-        SigmaSqr = surrogate.SigmaSqr
-        alpha = surrogate._alpha
-
-        n, k = X.shape
-
-        one = np.ones([n, 1])
-
-        rL = x_comL[k:]
-        rU = x_comU[k:]
-        rhat = x_com[k:].reshape(n, 1)
-
-        r = rL + rhat*(rU - rL)
-        rhat_L = xhat_comL[k:]
-        rhat_U = xhat_comU[k:]
-
-        term0 = np.dot(R_inv, r)
-        term1 = -SigmaSqr*(1.0 - r.T.dot(term0) + \
-        ((1.0 - one.T.dot(term0))**2/(one.T.dot(np.dot(R_inv, one)))))
-
-        term2 = alpha*(rhat-rhat_L).T.dot(rhat-rhat_U)
-        S2 = term1 + term2
-
-        #print('x', x_com)
-        #print('obj', S2[0, 0])
-        return S2[0, 0]
-
     def calc_SSqr_convex(self, dv_dict):
         """ Callback function for minimization of mean squared error."""
         fail = 0
@@ -903,16 +866,16 @@ class Branch_and_Bound(Driver):
         fail = 0
 
         x_com = dv_dict['x']
-        obj_surrogate = self.obj_surrogate
+        surrogate = self.current_surr
         x_comL = self.x_comL
         x_comU = self.x_comU
         xhat_comL = self.xhat_comL
         xhat_comU = self.xhat_comU
 
-        X = obj_surrogate.X
-        R_inv = obj_surrogate.R_inv
-        SigmaSqr = obj_surrogate.SigmaSqr
-        alpha = obj_surrogate._alpha
+        X = surrogate.X
+        R_inv = surrogate.R_inv
+        SigmaSqr = surrogate.SigmaSqr
+        alpha = surrogate._alpha
 
         n, k = X.shape
         nn = len(x_com)
@@ -927,18 +890,17 @@ class Branch_and_Bound(Driver):
         rhat_L = xhat_comL[k:]
         rhat_U = xhat_comU[k:]
 
-        dr_drhat = np.zeros([n, n])
-        for ii in range(n):
-            dr_drhat[ii, ii] = rU[ii, 0] - rL[ii, 0] #This is nxn matrix
+        dr_drhat = np.diag((rU-rL).flat)
 
         term0 = np.dot(R_inv, r) #This should be nx1 vector
-        term1 = ((1.0 - one.T.dot(term0))/(one.T.dot(np.dot(R_inv, one))))*np.dot(R_inv,one) #This should be nx1 vector
+        term1 = ((1.0 - one.T.dot(term0))/(one.T.dot(np.dot(R_inv, one))))*np.dot(R_inv, one) #This should be nx1 vector
         term = 2.0*SigmaSqr*(term0 + term1) #This should be nx1 vector
-        # dterm1a = (rhat.T.dot(R_inv) + rhat.T.dot(R_inv.T))
-        # dterm1b = 2.0*((1.0 - one.T.dot(term0))*np.sum(R_inv, 0)/(one.T.dot(np.dot(R_inv, one))))
-        # dterm1 = SigmaSqr*(dterm1a + dterm1b)
 
-        dterm1 = np.dot(dr_drhat,term) #This should be nx1 vector
+        #zdterm1a = (r.T.dot(R_inv) + r.T.dot(R_inv.T))
+        #zdterm1b = 2.0*((1.0 - one.T.dot(term0))*np.sum(R_inv, 0)/(one.T.dot(np.dot(R_inv, one))))
+        #zdterm1 = SigmaSqr*(zdterm1a.T + dr_drhat.dot(zdterm1b.T))
+
+        dterm1 = np.dot(dr_drhat, term) #This should be nx1 vector
         dterm2 = alpha*(2.0*rhat - rhat_L - rhat_U) #This should be nx1 vector
 
         dobj_dr = (dterm1 + dterm2).T #This should be 1xn vector
@@ -947,7 +909,6 @@ class Branch_and_Bound(Driver):
         sens_dict = OrderedDict()
         sens_dict['obj'] = OrderedDict()
         sens_dict['obj']['x'] = np.zeros((1, nn))
-        # sens_dict['obj']['x'][:, k:] = dobj_dr*(rU - rL).T
         sens_dict['obj']['x'][:, k:] = dobj_dr
 
         # Constraints
@@ -957,6 +918,8 @@ class Branch_and_Bound(Driver):
         sens_dict['con'] = OrderedDict()
         sens_dict['con']['x'] = Ain_hat
 
+        #print('obj deriv', sens_dict['obj']['x'] )
+        #print('con deriv', sens_dict['con']['x'])
         return sens_dict, fail
 
     def minimize_y(self, x_comL, x_comU, Ain_hat, bin_hat, surrogate):

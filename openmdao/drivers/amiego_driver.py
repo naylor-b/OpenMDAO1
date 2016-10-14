@@ -402,10 +402,10 @@ class AMIEGO_driver(Driver):
             c_end += 1
 
             # 1e-6 is the switchover from rel to abs.
-            if np.abs(best_obj)<= 1e-6:
+            if np.abs(best_obj)<= 1.0e-6:
                 term = ei_tol_abs
             else:
-                term = np.min(np.array([np.abs(ei_tol_rel*best_obj), ei_tol_abs]))
+                term = np.max(np.array([np.abs(ei_tol_rel*best_obj), ei_tol_abs]))
 
             if ei_max <= term or ec2 == 1 or tot_newpt_added >= max_pt_lim:
                 terminate = True

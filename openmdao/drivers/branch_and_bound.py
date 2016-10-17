@@ -30,7 +30,7 @@ from openmdao.core.driver import Driver
 from openmdao.core.mpi_wrap import debug
 from openmdao.surrogate_models.kriging import KrigingSurrogate
 from openmdao.test.util import set_pyoptsparse_opt
-from openmdao.util.concurrent import concurrent_eval_lb
+from openmdao.util.concurrent import concurrent_eval
 from openmdao.util.record_util import create_local_meta, update_local_meta
 
 # check that pyoptsparse is installed
@@ -412,8 +412,8 @@ class Branch_and_Bound(Driver):
             # Branch and Bound evaluation of a set of nodes, starting with the initial one.
             # When executed in serial, only a single node is evaluted.
             cases = [(arg, None) for arg in args]
-            results = concurrent_eval_lb(self.evaluate_node, cases,
-                                         comm, broadcast=True)
+            results = concurrent_eval(self.evaluate_node, cases,
+                                      comm, allgather=True)
 
             # Put all the new nodes into active set.
             for result in results:
@@ -494,7 +494,8 @@ class Branch_and_Bound(Driver):
             self.xopt = xopt
             self.fopt = fopt
 
-    def evaluate_node(self, xL_iter, xU_iter, par_node, LBD_prev, LBD, UBD, fopt, xopt, node_num):
+    def evaluate_node(self, xL_iter, xU_iter, par_node, LBD_prev, LBD, UBD,
+                      fopt, xopt, node_num):
         """ Branch and Bound step on a single node. This function
         encapsulates the portion of the code that runs in parallel."""
 
@@ -588,7 +589,7 @@ class Branch_and_Bound(Driver):
                                 yL_g, eflag_yL_g = self.minimize_y(x_comL, x_comU, Ain_hat,
                                                                    bin_hat, con_surrogate[mm])
                                 if eflag_yL_g:
-                                    EV[mm] = calc_conEV_norm([],
+                                    EV[mm] = calc_conEV_norm(None,
                                                              con_surrogate[mm],
                                                              gSSqr=-sU_g,
                                                              g_hat=yL_g)
@@ -598,7 +599,6 @@ class Branch_and_Bound(Driver):
                             else:
                                 S4_fail = True
                                 break
-
                     else:
                         S4_fail = True
                 else:

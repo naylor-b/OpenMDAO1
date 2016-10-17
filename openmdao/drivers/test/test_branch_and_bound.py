@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from openmdao.api import IndepVarComp, Group, Problem, ExecComp
+from openmdao.api import IndepVarComp, Group, Problem, ExecComp, KrigingSurrogate
 from openmdao.drivers.branch_and_bound import Branch_and_Bound
 from openmdao.test.branin import BraninInteger
 from openmdao.test.three_bar_truss import ThreeBarTruss
@@ -45,6 +45,8 @@ class TestBranchAndBounddriver(unittest.TestCase):
 
     def test_three_bar_truss_just_integer(self):
 
+        raise unittest.SkipTest("Standalone B&B not yet supported with constraints.")
+
         prob = Problem()
         root = prob.root = Group()
 
@@ -56,19 +58,20 @@ class TestBranchAndBounddriver(unittest.TestCase):
         prob.driver = Branch_and_Bound()
         prob.driver.options['use_surrogate'] = True
         #prob.driver.options['disp'] = False
-        prob.driver.options['local_search'] = True
+        #prob.driver.options['local_search'] = True
 
         prob.driver.add_desvar('mat1', lower=1, upper=4)
         prob.driver.add_desvar('mat2', lower=1, upper=4)
         prob.driver.add_desvar('mat3', lower=1, upper=4)
         prob.driver.add_objective('mass')
+        prob.driver.add_constraint('stress', upper=1.0)
 
-        npt = 5
-        samples = np.array([[1.0, 0.25, 0.75],
-                            [0.0, 0.75, 0.0],
-                            [0.75, 0.0, 0.25],
-                            [0.75, 1.0, 0.5],
-                            [0.25, 0.5, 1.0]])
+        samples = np.array([[1.0, 0.33, 0.66],
+                            [0.0, 0.66, 0.0],
+                            [0.66, 0.0, 0.33],
+                            [0.66, 1.0, 0.66],
+                            [0.33, 0.66, 1.0]])
+        npt = samples.shape[0]
         prob.driver.sampling = {'mat1' : samples[:, 0].reshape((npt, 1)),
                                 'mat2' : samples[:, 1].reshape((npt, 1)),
                                 'mat3' : samples[:, 2].reshape((npt, 1))}

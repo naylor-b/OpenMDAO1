@@ -1,9 +1,10 @@
 
-from __future__ import print_function
-
 import os
-import sys
 import traceback
+from openmdao.core.mpi_wrap import debug
+
+trace = os.environ.get('OPENMDAO_TRACE')
+
 
 def concurrent_eval_lb(func, cases, comm, broadcast=False):
     """
@@ -32,9 +33,17 @@ def concurrent_eval_lb(func, cases, comm, broadcast=False):
     """
     if comm is not None:
         if comm.rank == 0:  # master rank
+            if trace:
+                debug('Running Master Rank')
             results = _concurrent_eval_lb_master(cases, comm)
+            if trace:
+                debug('Master Rank Complete')
         else:
+            if trace:
+                debug('Running Worker Rank %d' % comm.rank)
             results = _concurrent_eval_lb_worker(func, comm)
+            if trace:
+                debug('Running Worker Rank %d Complete' % comm.rank)
 
         if broadcast:
             results = comm.bcast(results, root=0)
@@ -75,7 +84,11 @@ def _concurrent_eval_lb_master(cases, comm):
         except StopIteration:
             break
 
-        comm.isend(case, i, tag=1)
+        if trace:
+            debug('Master sending case', i)
+        comm.send(case, i, tag=1)
+        if trace:
+            debug('Master sent case', i)
         sent += 1
 
     # send the rest of the cases
@@ -100,19 +113,23 @@ def _concurrent_eval_lb_master(cases, comm):
                 pass
             else:
                 # send new case to the last worker that finished
-                comm.isend(case, worker, tag=1)
+                comm.send(case, worker, tag=1)
                 sent += 1
 
     # tell all workers to stop
     for rank in range(1, comm.size):
-        comm.isend((None, None), rank, tag=1)
+        comm.send((None, None), rank, tag=1)
 
     return results
 
 def _concurrent_eval_lb_worker(func, comm):
     while True:
         # wait on a case from the master
+        if trace:
+            debug('Worker Waiting on Case')
         args, kwargs = comm.recv(source=0, tag=1)
+        if trace:
+            debug('Worker Case Received')
 
         if args is None: # we're done
             break
@@ -130,60 +147,3 @@ def _concurrent_eval_lb_worker(func, comm):
 
         # tell the master we're done with that case
         comm.send((comm.rank, retval, err), 0, tag=2)
-
-
-if __name__ == '__main__':
-    import time
-
-    try:
-        from mpi4py import MPI
-    except ImportError:
-        MPI = None
-
-    def funct(job, option=None):
-        if job == 5:
-            raise RuntimeError("Job 5 had an (intentional) error!")
-        print("Running job %d" % job); sys.stdout.flush()
-        time.sleep(1)
-        if MPI:
-            rank = MPI.COMM_WORLD.rank
-        else:
-            rank = 0
-        return (job, option, rank)
-
-    if MPI:
-        comm = MPI.COMM_WORLD
-        rank = comm.rank
-        if comm.size == 1:
-            # don't bother with MPI since we only have one proc
-            comm = None
-    else:
-        comm = None
-        rank = 0
-
-    if len(sys.argv) > 1:
-        ncases = int(sys.argv[1])
-    else:
-        ncases = 10
-
-    cases = [([i], {'option': 'foo%d'%i}) for i in range(ncases)]
-
-    start = time.time()
-
-    results = concurrent_eval_lb(funct, cases, comm)
-
-    if comm is None or comm.rank == 0:
-        print("Results:"); sys.stdout.flush()
-        for r in results:
-            print(r); sys.stdout.flush()
-
-    if comm is not None:
-        comm.barrier()
-
-    if comm is None:
-        print("\nExecuted %d total cases in serial" % ncases); sys.stdout.flush()
-    elif comm.rank == 0:
-        print("\nExecuted %d total cases concurrently with %d workers" % (ncases, comm.size-1)); sys.stdout.flush()
-
-    if comm is None or comm.rank == 0:
-        print("Elapsed time: %s" % (time.time()-start)); sys.stdout.flush()

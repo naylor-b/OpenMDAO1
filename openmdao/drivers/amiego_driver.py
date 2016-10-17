@@ -166,6 +166,16 @@ class AMIEGO_driver(Driver):
         self.cont_opt.set_root(pathname, root)
         self.minlp.set_root(pathname, root)
 
+    def get_req_procs(self):
+        """
+        Returns
+        -------
+        tuple
+            A tuple of the form (min_procs, max_procs), indicating the
+            min and max processors usable by this `Driver`.
+        """
+        return self.minlp.get_req_procs()
+
     def run(self, problem):
         """Execute the AMIEGO driver.
 
@@ -331,6 +341,7 @@ class AMIEGO_driver(Driver):
 
             if disp:
                 print("EGOLF-Iter: %d" % self.iter_count)
+                print("The best solution so far: yopt = %0.4f" % best_obj)
 
             tot_newpt_added += c_end - c_start
             if tot_newpt_added != tot_pt_prev:
@@ -368,7 +379,6 @@ class AMIEGO_driver(Driver):
                     # point allowed within the pescribed hypersphere of any
                     # existing point
                     rad = 0.5
-                    cc = 0
                     for ii in range(len(x_i)):
                         dist = np.sum((x_i[ii] - x0I)**2)**0.5
                         if dist <= rad:
@@ -392,10 +402,10 @@ class AMIEGO_driver(Driver):
             c_end += 1
 
             # 1e-6 is the switchover from rel to abs.
-            if np.abs(best_obj)<= 1e-6:
+            if np.abs(best_obj)<= 1.0e-6:
                 term = ei_tol_abs
             else:
-                term = np.min(np.array([np.abs(ei_tol_rel*best_obj), ei_tol_abs]))
+                term = np.max(np.array([np.abs(ei_tol_rel*best_obj), ei_tol_abs]))
 
             if ei_max <= term or ec2 == 1 or tot_newpt_added >= max_pt_lim:
                 terminate = True

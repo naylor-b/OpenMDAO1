@@ -71,9 +71,12 @@ class KrigingSurrogate(SurrogateModel):
         Nugget smoothing parameter for smoothing noisy data. Represents the variance of the input values.
         If nugget is an ndarray, it must be of the same length as the number of training points.
         Default: 10. * Machine Epsilon
+    eval_rmse : bool
+        Flag indicating whether the Root Mean Squared Error (RMSE) should be computed. Set to False
+        by default.
     """
 
-    def __init__(self, nugget=10. * MACHINE_EPSILON):
+    def __init__(self, nugget=10. * MACHINE_EPSILON, eval_rmse=False):
         super(KrigingSurrogate, self).__init__()
 
         self.n_dims = 0       # number of independent
@@ -94,6 +97,7 @@ class KrigingSurrogate(SurrogateModel):
         self.Y_std = np.zeros(0)
 
         self.use_snopt = False
+        self.eval_rmse = eval_rmse
 
     def train(self, x, y, normalize=True):
         """
@@ -171,7 +175,7 @@ class KrigingSurrogate(SurrogateModel):
                 pass
                 #raise ValueError('Kriging Hyper-parameter optimization failed: {0}'.format(msg))
 
-            self.thetas = np.asarray(10**opt_x).reshape((self.n_dims, 1))
+            self.thetas = np.asarray(10**opt_x).flatten()
 
         else:
 
@@ -260,7 +264,7 @@ class KrigingSurrogate(SurrogateModel):
 
         return reduced_likelihood, params
 
-    def predict(self, x, eval_rmse=True, normalize=True):
+    def predict(self, x, normalize=True):
         """
         Calculates a predicted value of the response based on the current
         trained model for the supplied list of inputs.
@@ -269,8 +273,6 @@ class KrigingSurrogate(SurrogateModel):
         ----
         x : array-like
             Point at which the surrogate is evaluated.
-        eval_rmse : bool
-            Flag indicating whether the Root Mean Squared Error (RMSE) should be computed.
         normalize : bool
             Normalize the training data to lie on [-1, 1]. Default is True, but
             some applications like Branch and Bound require False.
@@ -305,10 +307,11 @@ class KrigingSurrogate(SurrogateModel):
         else:
             y = y_t
 
-        if eval_rmse:
+        if self.eval_rmse:
             one = np.ones([self.n_samples,1])
             mse  = self.SigmaSqr*(1.0 - np.dot(r.T,np.dot(self.R_inv,r)) + \
             ((1.0 - np.dot(one.T,np.dot(self.R_inv,r)))**2/np.dot(one.T,np.dot(self.R_inv,one))))
+
             # Forcing negative RMSE to zero if negative due to machine precision
             mse[mse < 0.] = 0.
             return y, np.sqrt(mse)
@@ -345,5 +348,5 @@ class FloatKrigingSurrogate(KrigingSurrogate):
     which are the mean of the model's prediction."""
 
     def predict(self, x):
-        dist = super(FloatKrigingSurrogate, self).predict(x, eval_rmse=False)
+        dist = super(FloatKrigingSurrogate, self).predict(x)
         return dist[0]  # mean value

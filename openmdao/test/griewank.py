@@ -36,11 +36,11 @@ class Greiwank(Component):
         Here xI is integer and xC is continuous"""
 
         xI = params['xI']
-        xC = params['xC']
-
-        f1I = np.sum(xI**2)/4000.0
-        f1C = np.sum(xC**2)/4000.0
-
+        xC = params['xC']        
+        
+        f1I = np.sum((xI**2/4000.0))
+        f1C = np.sum((xC**2/4000.0))
+        
         f2C = 1.0
         f2I = 1.0
 

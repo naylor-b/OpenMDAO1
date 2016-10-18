@@ -318,9 +318,21 @@ class AMIEGO_driver(Driver):
             con_surrogate = []
             for name, val in iteritems(cons):
                 val = np.array(val)
+
+                # Note, Branch and Bound defines constraints to be
+                # violated when positive, so we need to transform.
+                meta = self._cons[name]
+                upper = meta['upper']
+                lower = meta['lower']
+                if lower is None:
+                    val = val - upper
+                else:
+                    val = lower - val
+
                 for j in range(val.shape[1]):
                     con_surr = self.surrogate()
                     con_surr.use_snopt = True
+
                     con_surr.train(x_i_hat, val[:, j:j+1], normalize=False)
 
                     con_surr.y = val[:, j:j+1]

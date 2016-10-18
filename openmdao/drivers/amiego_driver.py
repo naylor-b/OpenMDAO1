@@ -319,8 +319,9 @@ class AMIEGO_driver(Driver):
             for name, val in iteritems(cons):
                 val = np.array(val)
 
-                # Note, Branch and Bound defines constraints to be
-                # violated when positive, so we need to transform.
+                # Note, Branch and Bound defines constraints to be violated
+                # when positive, so we need to transform from OpenMDAO's
+                # freeform.
                 meta = self._cons[name]
                 upper = meta['upper']
                 lower = meta['lower']

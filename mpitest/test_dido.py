@@ -167,15 +167,16 @@ class TestDido(MPITestCase):
 
         data = prob.check_total_derivatives(out_stream=None)
 
-        for key, val in data.items():
-            assert_rel_error(self, val['abs error'][0], 0.0, 1e-5)
-            assert_rel_error(self, val['abs error'][1], 0.0, 1e-5)
-            assert_rel_error(self, val['abs error'][2], 0.0, 1e-5)
-            assert_rel_error(self, val['rel error'][0], 0.0, 1e-5)
-            assert_rel_error(self, val['rel error'][1], 0.0, 1e-5)
-            assert_rel_error(self, val['rel error'][2], 0.0, 1e-5)
+        if not MPI or self.comm.rank == 0:
+            for key, val in data.items():
+                assert_rel_error(self, val['abs error'][0], 0.0, 1e-5)
+                assert_rel_error(self, val['abs error'][1], 0.0, 1e-5)
+                assert_rel_error(self, val['abs error'][2], 0.0, 1e-5)
+                assert_rel_error(self, val['rel error'][0], 0.0, 1e-5)
+                assert_rel_error(self, val['rel error'][1], 0.0, 1e-5)
+                assert_rel_error(self, val['rel error'][2], 0.0, 1e-5)
 
-        assert_rel_error(self, 3574.94, prob['total_area'], 0.1)
+            assert_rel_error(self, 3574.94, prob['total_area'], 0.1)
 
 if __name__ == '__main__':
     from openmdao.test.mpi_util import mpirun_tests

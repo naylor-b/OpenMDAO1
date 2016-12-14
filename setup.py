@@ -31,7 +31,7 @@ else:
 
 
 setup(name='openmdao',
-      version='1.7.1',
+      version='1.7.3',
       description="OpenMDAO v1 framework infrastructure",
       long_description="""\
       """,
@@ -53,7 +53,7 @@ setup(name='openmdao',
       author='OpenMDAO Team',
       author_email='openmdao@openmdao.org',
       url='http://openmdao.org',
-      download_url='http://github.com/OpenMDAO/OpenMDAO/tarball/1.7.1',
+      download_url='http://github.com/OpenMDAO/OpenMDAO/tarball/1.7.3',
       license='Apache License, Version 2.0',
       packages=[
           'openmdao',
@@ -82,7 +82,7 @@ setup(name='openmdao',
       ],
       package_data={
           'openmdao.units': ['unit_library.ini'],
-          'openmdao.devtools': ['*.template', '*.html'],
+          'openmdao.devtools': ['*.template', '*.html', '*.woff', '*.css', '*.js'],
           'openmdao.util': ['*.html'],
       },
       ext_modules=extensions,

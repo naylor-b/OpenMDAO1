@@ -43,6 +43,7 @@ from openmdao.recorders.base_recorder import BaseRecorder
 from openmdao.recorders.dump_recorder import DumpRecorder
 from openmdao.recorders.sqlite_recorder import SqliteRecorder
 from openmdao.recorders.inmem_recorder import InMemoryRecorder
+from openmdao.recorders.case_reader import CaseReader
 
 #solvers
 from openmdao.solvers.ln_direct import DirectSolver
@@ -79,3 +80,4 @@ from openmdao.util.constants import inf_bound
 
 #devtools
 from openmdao.devtools.partition_tree_n2 import view_tree
+from openmdao.devtools.partition_tree_n2 import view_model

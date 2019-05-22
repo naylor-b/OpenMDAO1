@@ -157,7 +157,7 @@ class pyOptSparseDriver(Driver):
         with problem.root._dircontext:
             problem.root.solve_nonlinear(metadata=self.metadata)
 
-        opt_prob = Optimization(self.options['title'], self._objfunc)
+        opt_prob = Optimization(self.options['title'], self._objfunc, comm=problem.comm)
 
         # Add all parameters
         param_meta = self.get_desvar_metadata()
